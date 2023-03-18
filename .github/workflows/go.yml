@@ -43,3 +43,40 @@ jobs:
       run: go install github.com/paypal/hera/worker/mysqlworker
     - name: System Test
       run: tests/unittest/testall.sh
+  
+  benchmark:
+    name: Run Go benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v1
+      - name: Run benchmarkt
+        run: go test -bench -v gihub.com/paypal/hera/worker/mysqlworker github.com/paypal/hera/utility/encoding/netstring github.com/paypal/hera/lib github.com/paypal/hera/common github.com/paypal/hera/cal | tee bench_output.txt
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: bench_output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          # Show alert with commit comment on detecting possible performance regression
+          alert-threshold: '200%'
+          comment-on-alert: true
+          fail-on-alert: true
+
+      - name: Store benchmark result - separate results repo
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: bench_output.txt
+          github-token: ${{ secrets.BENCHMARK_ACTION_BOT_TOKEN }}
+          auto-push: true
+          # Show alert with commit comment on detecting possible performance regression
+          alert-threshold: '200%'
+          comment-on-alert: true
+          fail-on-alert: true
+          gh-repository: 'github.com/benchmark-action/github-action-benchmark-results'
+
