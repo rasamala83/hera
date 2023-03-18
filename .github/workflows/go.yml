@@ -16,7 +16,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.15
+        go-version: 1.18
 
     - name: Build
       run: go build -v ./...
@@ -38,7 +38,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.15
+        go-version: 1.18
     - name: Build worker
       run: go install github.com/paypal/hera/worker/mysqlworker
     - name: System Test
@@ -49,9 +49,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v1
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
       - name: Run benchmarkt
-        run: go test -bench -v gihub.com/paypal/hera/worker/mysqlworker github.com/paypal/hera/utility/encoding/netstring github.com/paypal/hera/lib github.com/paypal/hera/common github.com/paypal/hera/cal | tee bench_output.txt
+        run: go test -bench -v github.com/paypal/hera/lib | tee bench_output.txt
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
