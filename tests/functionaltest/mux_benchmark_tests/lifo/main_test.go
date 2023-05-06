@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	_ "github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
 )

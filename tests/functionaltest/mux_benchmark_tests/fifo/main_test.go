@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	_ "github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -33,6 +34,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["lifo_scheduler_enabled"] = "false"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["database_type"] = "mysql"
+	appcfg["debug_mux"] = "true"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "8"
