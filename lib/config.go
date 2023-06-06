@@ -80,11 +80,11 @@ type Config struct {
 	// time_skew_threshold_error(15)
 	TimeSkewThresholdErrorSec int
 	// max_stranded_time_interval(2000)
-	StrandedWorkerTimeoutMs int
+	StrandedWorkerTimeoutMs         int
 	HighLoadStrandedWorkerTimeoutMs int
-	HighLoadSkipInitiateRecoverPct int
-	HighLoadPct int
-	InitLimitPct int
+	HighLoadSkipInitiateRecoverPct  int
+	HighLoadPct                     int
+	InitLimitPct                    int
 
 	// the worker scheduler policy
 	LifoScheduler bool
@@ -110,7 +110,7 @@ type Config struct {
 	HostnamePrefix       map[string]string
 	ShardingCrossKeysErr bool
 
-	CfgFromTns					bool
+	CfgFromTns                  bool
 	CfgFromTnsOverrideNumShards int // -1 no-override
 	CfgFromTnsOverrideTaf       int // -1 no-override, 0 override-false, 1 override-true
 	CfgFromTnsOverrideRWSplit   int // -1 no-override, readChildPct
@@ -140,6 +140,9 @@ type Config struct {
 	// to use OpenSSL (for testing) or crypto/tls
 	UseOpenSSL bool
 
+	//Use QUIC as transport layer
+	UseQUIC bool
+
 	ErrorCodePrefix       string
 	StateLogPrefix        string
 	ManagementTablePrefix string
@@ -156,8 +159,8 @@ type Config struct {
 	// when numWorkers changes, it will write to this channel, for worker manager to update
 	numWorkersCh chan int
 
-	EnableConnLimitCheck bool
-	EnableQueryBindBlocker bool
+	EnableConnLimitCheck         bool
+	EnableQueryBindBlocker       bool
 	QueryBindBlockerMinSqlPrefix int
 
 	// taf testing
@@ -169,7 +172,7 @@ type Config struct {
 	EnableDanglingWorkerRecovery bool
 
 	GoStatsInterval int
-	RandomStartMs int
+	RandomStartMs   int
 
 	// The max number of database connections to be established per second
 	MaxDbConnectsPerSec int
@@ -274,9 +277,8 @@ func InitConfig() error {
 	gAppConfig.StrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("max_stranded_time_interval", 2000)
 	gAppConfig.HighLoadStrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("high_load_max_stranded_time_interval", 600111)
 	gAppConfig.HighLoadSkipInitiateRecoverPct = cdb.GetOrDefaultInt("high_load_skip_initiate_recover_pct", 80)
-	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 130) // >100 disabled
+	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 130)   // >100 disabled
 	gAppConfig.InitLimitPct = cdb.GetOrDefaultInt("init_limit_pct", 125) // >100 disabled
-
 
 	gAppConfig.StateLogInterval = cdb.GetOrDefaultInt("state_log_interval", 1)
 	if gAppConfig.StateLogInterval <= 0 {
@@ -300,7 +302,7 @@ func InitConfig() error {
 			gAppConfig.ChildExecutable = "postgresworker"
 		}
 	} else {
-	// db type is not supported
+		// db type is not supported
 		return errors.New("database type must be either Oracle or MySQL")
 	}
 
@@ -425,9 +427,8 @@ func InitConfig() error {
 	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", "10.0"),
 		"%f", &gAppConfig.BindEvictionDecrPerSec)
 
-	gAppConfig.SkipEvictRegex= cdb.GetOrDefaultString("skip_eviction_host_prefix","")
-	gAppConfig.EvictRegex= cdb.GetOrDefaultString("eviction_host_prefix", "")
-
+	gAppConfig.SkipEvictRegex = cdb.GetOrDefaultString("skip_eviction_host_prefix", "")
+	gAppConfig.EvictRegex = cdb.GetOrDefaultString("eviction_host_prefix", "")
 
 	gAppConfig.BouncerEnabled = cdb.GetOrDefaultBool("bouncer_enabled", true)
 	gAppConfig.BouncerStartupDelay = cdb.GetOrDefaultInt("bouncer_startup_delay", 10)
@@ -436,6 +437,7 @@ func InitConfig() error {
 	gAppConfig.ProfileHTTPPort = cdb.GetOrDefaultString("profile_http_port", "6060")
 	gAppConfig.ProfileTelnetPort = cdb.GetOrDefaultString("profile_telnet_port", "3030")
 	gAppConfig.UseOpenSSL = cdb.GetOrDefaultBool("openssl", false)
+	gAppConfig.UseQUIC = cdb.GetOrDefaultBool("use_quic", false)
 	gAppConfig.MuxPidFile = cdb.GetOrDefaultString("mux_pid_file", "mux.pid")
 
 	gAppConfig.ErrorCodePrefix = cdb.GetOrDefaultString("error_code_prefix", "HERA")
