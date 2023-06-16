@@ -39,7 +39,7 @@ type heraLoopDriver struct {
 }
 
 // ConnHandlerFunc defines the signature of a fucntion that can be used as a callback by the loop driver
-type ConnHandlerFunc func(net.Conn)
+type ConnHandlerFunc func(conn ClientConn)
 
 var connHandler ConnHandlerFunc
 
@@ -50,13 +50,16 @@ func RegisterLoopDriver(f func(conn ClientConn)) {
 	sql.Register("heraloop", drvLoop)
 }
 
-/**
+/*
+*
 URL: <ShardID>:<PoolType>:<PoolID>
 TODO: add another parameter for debugging/troubleshooting, IDing the client
 */
 func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {
 	cli, srv := net.Pipe()
-	go connHandler(srv)
+	clientConn := ClientConn{}
+	clientConn.tcpConn = srv
+	go connHandler(clientConn)
 
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, "Hera loop driver driver, opening", url, ": ", cli)

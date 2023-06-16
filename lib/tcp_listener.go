@@ -30,7 +30,7 @@ type tcpListener struct {
 }
 
 // NewTCPListener creates a Listener attached to the address "service". It is a wrapper over net.Listener
-func NewTCPListener(service string) Listener {
+func NewTCPListener(service string) *tcpListener {
 	var err error
 	lsn := &tcpListener{}
 	lsn.lsn, err = net.Listen("tcp", service)
@@ -51,8 +51,11 @@ func NewTCPListener(service string) Listener {
 }
 
 // Accept is used to accept a connected. It simply calls net.Listenr.Accept()
-func (lsn *tcpListener) Accept() (net.Conn, error) {
-	return lsn.lsn.Accept()
+func (lsn *tcpListener) Accept() (ClientConn, error) {
+	clientConn := ClientConn{}
+	var err error
+	clientConn.tcpConn, err = lsn.lsn.Accept()
+	return clientConn, err
 }
 
 // Close closes the connection
@@ -62,9 +65,9 @@ func (lsn *tcpListener) Close() error {
 
 // Called after the connection is accepted and before it is handled. This function can be enhanced to
 // handle some type of authentication for example
-func (lsn *tcpListener) Init(conn net.Conn) (net.Conn, error) {
-	if conn == nil {
-		return nil, errors.New("Nil connection")
+func (lsn *tcpListener) Init(conn ClientConn) error {
+	if conn.tcpConn == nil {
+		return errors.New("Nil connection")
 	}
 
 	e := cal.NewCalEvent("ACCEPT", IPAddrStr(conn.RemoteAddr()), cal.TransOK, "")
@@ -76,5 +79,5 @@ func (lsn *tcpListener) Init(conn net.Conn) (net.Conn, error) {
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, "Authenticated OK")
 	}
-	return conn, nil
+	return nil
 }

@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/paypal/hera/cal"
@@ -43,7 +42,7 @@ type tafResponsePreproc struct {
 	// the request was either successfull, or had some error which is "not-retriable"
 	ok bool
 	// the client connection to forward the response got from the worker
-	conn net.Conn
+	conn ClientConn
 	// for CAL, in case !ok, the ORA error
 	ora string
 	// tells if a partial response was sent to the client. It is used to basically disable the failover if that was the case
@@ -328,7 +327,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 	worker, fbticket, err = fallbackPool.GetWorker(crd.sqlhash)
 	if err == nil {
 		var wait bool
-		wait, err = crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
+		wait, err = crd.doRequest(crd.ctx, worker, request, &crd.conn, nil)
 		if wait {
 			// this should not happen for real, because TAF queries are read only
 			if GetConfig().TestingEnableDMLTaf {
