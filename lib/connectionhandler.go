@@ -20,7 +20,6 @@ package lib
 import (
 	"context"
 	"io"
-	"net"
 	"strconv"
 
 	"github.com/paypal/hera/cal"
@@ -30,10 +29,10 @@ import (
 
 // Spawns a goroutine which blocks waiting for a message on conn. When a message is received it writes
 // to the channel and exit. It basically wrapps the net.Conn in a channel
-func wrapNewNetstring(conn net.Conn) <-chan *netstring.Netstring {
+func wrapNewNetstring(conn ClientConn) <-chan *netstring.Netstring {
 	ch := make(chan *netstring.Netstring, 1)
 	go func() {
-		ns, err := netstring.NewNetstring(conn)
+		ns, err := netstring.NewNetstring(&conn)
 		if err != nil {
 			if err == io.EOF {
 				if logger.GetLogger().V(logger.Debug) {
@@ -64,7 +63,7 @@ func wrapNewNetstring(conn net.Conn) <-chan *netstring.Netstring {
 // reading data from the connection. Once a complete netstring is read, the
 // netstring object (which can contain nested sub-netstrings) is passed on
 // to the coordinator for processing
-func HandleConnection(conn net.Conn) {
+func HandleConnection(conn ClientConn) {
 	//
 	// proxy just took a new connection. increment the idel connection count.
 	//
@@ -123,6 +122,5 @@ func HandleConnection(conn net.Conn) {
 		logger.GetLogger().Log(logger.Info, "======== Connection handler exits", addr)
 	}
 	conn.Close()
-	conn = nil
 	cancel()
 }

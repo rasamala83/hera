@@ -44,7 +44,7 @@ type ConnHandlerFunc func(net.Conn)
 var connHandler ConnHandlerFunc
 
 // RegisterLoopDriver installs the callback for the loop driver
-func RegisterLoopDriver(f ConnHandlerFunc) {
+func RegisterLoopDriver(f func(conn ClientConn)) {
 	connHandler = f
 	drvLoop := &heraLoopDriver{}
 	sql.Register("heraloop", drvLoop)

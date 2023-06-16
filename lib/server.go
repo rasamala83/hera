@@ -18,12 +18,10 @@
 package lib
 
 import (
-	"github.com/paypal/hera/cal"
-	"github.com/paypal/hera/utility/logger"
-
 	"bufio"
 	"fmt"
-	"net"
+	"github.com/paypal/hera/cal"
+	"github.com/paypal/hera/utility/logger"
 	"os"
 	"strings"
 	"time"
@@ -41,15 +39,15 @@ const (
 )
 
 // HandlerFunc defines the signature of the callback to handle the connection
-type HandlerFunc func(net.Conn)
+type HandlerFunc func(conn ClientConn)
 
 // Listener interface is used by the server to accept connections
 type Listener interface {
 	// Accept waits for and returns the next connection to the listener.
-	Accept() (net.Conn, error)
+	Accept() (ClientConn, error)
 
 	// Initialize the connection
-	Init(net.Conn) (net.Conn, error)
+	Init(conn ClientConn) error
 
 	// Close closes the listener.
 	// Any blocked Accept operations will be unblocked and return errors.
@@ -163,7 +161,7 @@ func (srv *server) Run() {
 			//
 			e := cal.NewCalEvent(cal.EventTypeError, "ACCEPT", cal.TxnStatus(cal.TransError, "ASFIO", "ACCEPT_FAILED", "-1"), "")
 			e.AddDataStr("fwk", "MUX")
-			if conn != nil {
+			if conn.tcpConn != nil || conn.quicConn != nil {
 				e.AddDataStr("raddr", conn.RemoteAddr().String())
 				e.AddDataStr("laddr", conn.LocalAddr().String())
 				conn.Close()
@@ -182,19 +180,19 @@ func (srv *server) Run() {
 }
 
 // authAndHandle calls the Listener Init. If successful it calls the handler, otherwise closes the connection
-func (srv *server) authAndHandle(c net.Conn, f HandlerFunc) {
-	conn, err := srv.listener.Init(c)
+func (srv *server) authAndHandle(conn2 ClientConn, f HandlerFunc) {
+	err := conn2.Init()
 	if err == nil {
-		f(conn)
+		f(conn2)
 	}
 
-	e := cal.NewCalEvent("CLOSE", IPAddrStr(c.RemoteAddr()), cal.TransOK, "")
+	e := cal.NewCalEvent("CLOSE", IPAddrStr(conn2.RemoteAddr()), cal.TransOK, "")
 	e.AddDataStr("fwk", "heramuxgo")
-	e.AddDataStr("raddr", c.RemoteAddr().String())
-	e.AddDataStr("laddr", c.LocalAddr().String())
+	e.AddDataStr("raddr", conn2.RemoteAddr().String())
+	e.AddDataStr("laddr", conn2.LocalAddr().String())
 	e.Completed()
 
-	c.Close()
+	conn2.Close()
 }
 
 /**
@@ -327,11 +325,6 @@ func (srv *server) maxConnReached() (bool, string) {
 }
 
 // logs the event and close the connection
-func (srv *server) bounce(_conn net.Conn) {
-	e := cal.NewCalEvent(cal.EventTypeWarning, "Bounce", cal.TxnStatus(cal.TransWarning, "SERVER", "BOUNCE", "-1"), "")
-	if _conn != nil {
-		e.AddDataStr("raddr", _conn.RemoteAddr().String())
-		_conn.Close()
-	}
-	e.Completed()
+func (srv *server) bounce(conn ClientConn) {
+	conn.bounce()
 }

@@ -14,7 +14,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
 	"github.com/quic-go/quic-go"
 )
@@ -74,11 +73,7 @@ func NewTLSListener(service string) Listener {
 
 	lsn.cfg = &tls.Config{Certificates: []tls.Certificate{cert}, DynamicRecordSizingDisabled: true}
 
-	if GetConfig().UseQUIC {
-		lsn.quicListener, err = quic.ListenAddr(service, lsn.cfg, nil)
-	} else {
-		lsn.tcpListener, err = net.Listen("tcp", service)
-	}
+	lsn.tcpListener, err = net.Listen("tcp", service)
 
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
@@ -100,69 +95,17 @@ func NewTLSListener(service string) Listener {
 	return lsn
 }
 
-func (lsn *tlsListener) Accept() (net.Conn, error) {
-	return lsn.tlsListener.Accept()
+func (lsn *tlsListener) Accept() (ClientConn, error) {
+	clientConn := ClientConn{}
+	var err error
+	clientConn.tcpConn, err = lsn.tlsListener.Accept()
+	return clientConn, err
 }
 
 func (lsn *tlsListener) Close() error {
 	return lsn.tlsListener.Close()
 }
 
-func (lsn *tlsListener) Init(conn net.Conn) (net.Conn, error) {
-	if conn == nil {
-		return nil, errors.New("Nil connection")
-	}
-
-	tlsconn := conn.(*tls.Conn)
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "Processing connection. Start handshake")
-	}
-
-	err := tlsconn.Handshake()
-
-	if err != nil {
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "Handshake error: ", err.Error())
-		}
-		tlsconn.Close()
-		return nil, err
-	}
-
-	e := cal.NewCalEvent("ACCEPT", IPAddrStr(conn.RemoteAddr()), cal.TransOK, "")
-	e.AddDataStr("fwk", "muxtls")
-	e.AddDataStr("raddr", conn.RemoteAddr().String())
-	e.AddDataStr("laddr", conn.LocalAddr().String())
-	e.Completed()
-
-	connState := tlsconn.ConnectionState()
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "Handshake OK. connState.SessionReused=", connState.DidResume)
-	}
-	return tlsconn, nil
-}
-
-func (lsn *tlsListener) QUICAccept() (quic.Connection, error) {
-	return lsn.quicListener.Accept(nil)
-}
-
-func (lsn *tlsListener) QUICClose() error {
-	return lsn.quicListener.Close()
-}
-
-func (lsn *tlsListener) InitQUICConn(quicConn quic.Connection) (quic.Connection, error) {
-	if quicConn == nil {
-		return nil, errors.New("nil QUIC connection")
-	}
-
-	e := cal.NewCalEvent("ACCEPT", IPAddrStr(quicConn.RemoteAddr()), cal.TransOK, "")
-	e.AddDataStr("fwk", "muxtls")
-	e.AddDataStr("raddr", quicConn.RemoteAddr().String())
-	e.AddDataStr("laddr", quicConn.LocalAddr().String())
-	e.Completed()
-
-	connState := quicConn.ConnectionState()
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "Handshake OK. connState.TLS version=", connState.TLS)
-	}
-	return quicConn, nil
+func (lsn *tlsListener) Init(conn ClientConn) error {
+	return conn.Init()
 }

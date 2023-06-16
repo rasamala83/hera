@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"regexp"
 	"strings"
@@ -42,7 +41,7 @@ import (
 // It is possible that a request will start a transaction, in which case the worker will staty allocated until the transaction
 // is completed (with COMMIT) or canceled (with ROLLBACK)
 type Coordinator struct {
-	conn          net.Conn                    // used to send back the response(s)
+	conn          ClientConn                  // used to send back the response(s)
 	clientchannel <-chan *netstring.Netstring // channel where client netstring arrives
 	ctx           context.Context
 	done          chan int
@@ -75,7 +74,7 @@ type Coordinator struct {
 }
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
-func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstring, conn net.Conn) *Coordinator {
+func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstring, conn ClientConn) *Coordinator {
 	coordinator := &Coordinator{clientchannel: clientchannel, conn: conn, ctx: ctx, done: make(chan int, 1), id: conn.RemoteAddr().String(), shard: &shardInfo{sessionShardID: -1}, prevShard: &shardInfo{sessionShardID: -1}}
 	var err error
 	coordinator.sqlParser, err = common.NewRegexSQLParser()
@@ -778,7 +777,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		}
 	}
 
-	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
+	wait, err := crd.doRequest(crd.ctx, worker, request, &crd.conn, nil)
 
 	if !xShardRead {
 		if wait {
@@ -941,7 +940,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			if corrID == nil {
 				corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
 			}
-			
+
 			var ns []*netstring.Netstring
 			if GetConfig().EnableCmdClientInfoToWorker {
 				logger.GetLogger().Log(logger.Verbose, len(crd.poolName), len(crd.clientPoolStack))
@@ -966,7 +965,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 						ns[i+2] = rnss[i]
 					}
 				}
-				cnt+= 2
+				cnt += 2
 			} else {
 				if !request.IsComposite() {
 					ns = make([]*netstring.Netstring, 2)
@@ -983,7 +982,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 				cnt++
 			}
 			plusAnyCorrId = netstring.NewNetstringEmbedded(ns)
-			
+
 		}
 		err := worker.Write(plusAnyCorrId, uint16(cnt))
 		if err != nil {
@@ -1215,7 +1214,7 @@ func (crd *Coordinator) respond(data []byte) error {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "Responded to client =", crd.id, ": ", DebugString(data))
 	}
-	return WriteAll(crd.conn, data)
+	return WriteAll(&crd.conn, data)
 }
 
 /**
@@ -1238,7 +1237,7 @@ func (crd *Coordinator) processError(err error) {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, crd.id, "error to client", string(ns.Serialized))
 		}
-		WriteAll(crd.conn, ns.Serialized)
+		WriteAll(&crd.conn, ns.Serialized)
 	}
 }
 

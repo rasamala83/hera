@@ -166,7 +166,8 @@ func Run() {
 	}
 	InitRacMaint(*namePtr)
 
-	srv := NewServer(lsn, HandleConnection)
+	var srv Server
+	srv = NewServer(lsn, HandleConnection)
 
 	go srv.Run()
 
