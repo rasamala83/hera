@@ -18,10 +18,8 @@
 package lib
 
 import (
-	"errors"
 	"net"
 
-	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -63,21 +61,8 @@ func (lsn *tcpListener) Close() error {
 	return lsn.lsn.Close()
 }
 
-// Called after the connection is accepted and before it is handled. This function can be enhanced to
+// Init Called after the connection is accepted and before it is handled. This function can be enhanced to
 // handle some type of authentication for example
 func (lsn *tcpListener) Init(conn ClientConn) error {
-	if conn.tcpConn == nil {
-		return errors.New("Nil connection")
-	}
-
-	e := cal.NewCalEvent("ACCEPT", IPAddrStr(conn.RemoteAddr()), cal.TransOK, "")
-	e.AddDataStr("fwk", "muxtcp")
-	e.AddDataStr("raddr", conn.RemoteAddr().String())
-	e.AddDataStr("laddr", conn.LocalAddr().String())
-	e.Completed()
-
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "Authenticated OK")
-	}
-	return nil
+	return conn.Init()
 }

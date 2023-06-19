@@ -73,7 +73,7 @@ func NewTLSListener(service string) Listener {
 
 	lsn.cfg = &tls.Config{Certificates: []tls.Certificate{cert}, DynamicRecordSizingDisabled: true}
 
-	lsn.tcpListener, err = net.Listen("tcp", service)
+	lsn.tlsListener, err = net.Listen("tcp", service)
 
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {

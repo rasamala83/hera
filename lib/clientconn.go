@@ -26,7 +26,7 @@ import (
 	"net"
 )
 
-//ClientConn Represents either TCP based or QUIC based connection
+// ClientConn Represents either TCP based or QUIC based connection
 type ClientConn struct {
 	quicConn quic.Connection
 	tcpConn  net.Conn
@@ -53,30 +53,31 @@ func (clientConn *ClientConn) Init() error {
 		if clientConn.tcpConn == nil {
 			return errors.New("Nil connection")
 		}
-		tlsconn := clientConn.tcpConn.(*tls.Conn)
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, "Processing connection. Start handshake")
-		}
-
-		err := tlsconn.Handshake()
-
-		if err != nil {
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "Handshake error: ", err.Error())
+		if GetConfig().KeyFile != "" {
+			tlsconn := clientConn.tcpConn.(*tls.Conn)
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "Processing connection. Start handshake")
 			}
-			tlsconn.Close()
-			return err
+
+			err := tlsconn.Handshake()
+
+			if err != nil {
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, "Handshake error: ", err.Error())
+				}
+				tlsconn.Close()
+				return err
+			}
+			connState := tlsconn.ConnectionState()
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, "Handshake OK. connState.SessionReused=", connState.DidResume)
+			}
 		}
 		e := cal.NewCalEvent("ACCEPT", IPAddrStr(clientConn.RemoteAddr()), cal.TransOK, "")
 		e.AddDataStr("fwk", "muxtls")
 		e.AddDataStr("raddr", clientConn.RemoteAddr().String())
 		e.AddDataStr("laddr", clientConn.LocalAddr().String())
 		e.Completed()
-
-		connState := tlsconn.ConnectionState()
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "Handshake OK. connState.SessionReused=", connState.DidResume)
-		}
 		return nil
 	}
 }
@@ -100,7 +101,7 @@ func (clientConn *ClientConn) LocalAddr() net.Addr {
 	return clientConn.tcpConn.LocalAddr()
 }
 
-//Close Release connection from server
+// Close Release connection from server
 func (clientConn *ClientConn) Close() error {
 	if GetConfig().UseQUIC {
 		return clientConn.quicConn.CloseWithError(quic.ApplicationErrorCode(quic.NoError), "Sever closed the connection")
@@ -108,7 +109,7 @@ func (clientConn *ClientConn) Close() error {
 	return clientConn.tcpConn.Close()
 }
 
-//Read data from connection and write to clientchannel
+// Read data from connection and write to clientchannel
 func (clientConn *ClientConn) Read(data []byte) (n int, err error) {
 	if GetConfig().UseQUIC {
 		dataStream, _ := clientConn.quicConn.OpenStream()
@@ -118,7 +119,7 @@ func (clientConn *ClientConn) Read(data []byte) (n int, err error) {
 	return clientConn.tcpConn.Read(data)
 }
 
-//Write data bytes to connection from server
+// Write data bytes to connection from server
 func (clientConn *ClientConn) Write(data []byte) (int, error) {
 	if GetConfig().UseQUIC {
 		dataStream, _ := clientConn.quicConn.OpenStream()

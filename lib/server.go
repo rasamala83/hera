@@ -271,7 +271,7 @@ func (srv *server) bounceRequired(_startTime int64, _startupDelay int, _pollInte
 }
 
 /*
-	Check if there is capacity to handle the new connection
+Check if there is capacity to handle the new connection
 */
 func (srv *server) canAccept() (bool, BouncerReasonCode, string) {
 	//
