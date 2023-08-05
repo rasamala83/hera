@@ -551,8 +551,7 @@ func TestShardingWithNoShardKey(t *testing.T) {
 	setupShardMap(t)
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithNoShardKey begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	//hostname, _ := os.Hostname()
-	hostname := "localhost"
+	hostname, _ := os.Hostname()
 	db, err := sql.Open("hera", hostname+":31003")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
