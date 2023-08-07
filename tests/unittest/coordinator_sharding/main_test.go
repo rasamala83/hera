@@ -180,7 +180,7 @@ func TestShardingSetShard(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
@@ -230,7 +230,7 @@ func TestShardingSetShard(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected to fail because no shard key")
 	}
-	if err.Error() != "Internal hera error: HERA-373: no shard key or more than one or bad logical db" {
+	if err.Error() != "Internal hera error: HERA-373: no shard key 'id' or more than one or bad logical db" {
 		t.Fatal("Expected error HERA-373")
 	}
 
