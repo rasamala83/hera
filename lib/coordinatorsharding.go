@@ -389,7 +389,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 						evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
 						evt.AddDataStr("shard_key", GetConfig().ShardKeyName)
 						evt.Completed()
-						ns := netstring.NewNetstringFrom(common.RcError, []byte(fmt.Sprintf(ErrNoShardKey.Error(), GetConfig().ShardKeyName)))
+						ns := netstring.NewNetstringFrom(common.RcError, []byte(fmt.Sprintf("%s, shard key=%s", ErrNoShardKey.Error(), GetConfig().ShardKeyName)))
 						crd.respond(ns.Serialized)
 						return false /*don't hangup*/, ErrNoShardKey
 					}
@@ -484,7 +484,7 @@ func (crd *Coordinator) verifyValidShard() (bool, error) {
 			crd.shard.shardRecs[0] = &ShardMapRecord{logical: 0}
 			crd.shard.shardID = 0
 		} else {
-			ns := netstring.NewNetstringFrom(common.RcError, []byte(fmt.Sprintf(ErrNoShardKey.Error(), GetConfig().ShardKeyName)))
+			ns := netstring.NewNetstringFrom(common.RcError, []byte(fmt.Sprintf("%s, shard key=%s", ErrNoShardKey.Error(), GetConfig().ShardKeyName)))
 			crd.respond(ns.Serialized)
 			hangup := ((len(crd.shard.shardValues) > 0) && ((crd.shard.shardRecs[0].flags & ShardMapRecordFlagsBadLogical) != 0))
 			return hangup, ErrNoShardKey
@@ -501,7 +501,7 @@ func (crd *Coordinator) verifyValidShard() (bool, error) {
 		evt.AddDataStr("shard_key", GetConfig().ShardKeyName)
 		evt.Completed()
 
-		ns := netstring.NewNetstringFrom(common.RcError, []byte(fmt.Sprintf(ErrNoShardKey.Error(), GetConfig().ShardKeyName)))
+		ns := netstring.NewNetstringFrom(common.RcError, []byte(fmt.Sprintf("%s, shard key=%s", ErrNoShardKey.Error(), GetConfig().ShardKeyName)))
 		crd.respond(ns.Serialized)
 		hangup := ((len(crd.shard.shardValues) > 0) && ((crd.shard.shardRecs[0].flags & ShardMapRecordFlagsBadLogical) != 0))
 		return hangup, ErrNoShardKey

@@ -230,7 +230,7 @@ func TestShardingSetShard(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected to fail because no shard key")
 	}
-	if err.Error() != "Internal hera error: HERA-373: no shard key 'id' or more than one or bad logical db" {
+	if err.Error() != "Internal hera error: HERA-373: no shard key or more than one or bad logical db, shard_key=id" {
 		t.Fatal("Expected error HERA-373")
 	}
 
