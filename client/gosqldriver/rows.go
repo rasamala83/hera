@@ -42,7 +42,7 @@ type rows struct {
 	completed      bool
 }
 
-var columnInfo = []string{"Name", "Type", "Width", "Precision", "Scala"}
+var columnInfo = []string{"Name", "Type", "Width", "Precision", "Scale"}
 
 // TODO: fetch chunk size
 func newRows(hera *heraConnection, cols int, fetchChunkSize []byte) (*rows, error) {
