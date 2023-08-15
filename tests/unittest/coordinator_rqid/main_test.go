@@ -79,29 +79,29 @@ func TestCoordinatorRqId(t *testing.T) {
 	// cleanup and insert one row in the table
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		t.Fatalf("Error getting connection %s\n", err.Error())
+		t.Errorf("Error getting connection %s\n", err.Error())
 	}
 	tx, _ := conn.BeginTx(ctx, nil)
 	stmt, _ := tx.PrepareContext(ctx, "/*TestCoordinatorRqId*/delete from "+tableName)
 	_, err = stmt.Exec()
 	if err != nil {
-		t.Fatalf("Error preparing test (delete table) %s\n", err.Error())
+		t.Errorf("Error preparing test (delete table) %s\n", err.Error())
 	}
 	stmt, _ = tx.PrepareContext(ctx, "/*TestCoordinatorRqId*/insert into "+tableName+" (id, int_val, str_val) VALUES(?, ?, ?)")
 	_, err = stmt.Exec(1, time.Now().Unix(), "val 1")
 	if err != nil {
-		t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
+		t.Errorf("Error preparing test (create row in table) %s\n", err.Error())
 	}
 	err = tx.Commit()
 	if err != nil {
-		t.Fatalf("Error commit %s\n", err.Error())
+		t.Errorf("Error commit %s\n", err.Error())
 	}
 
 	conn, err = db.Conn(ctx)
 	stmt, _ = conn.PrepareContext(ctx, "/*TestCoordinatorRqId*/Select id, int_val from "+tableName+" where id=?")
 	rows, _ := stmt.Query(1)
 	if !rows.Next() {
-		t.Fatalf("Expected 1 row")
+		t.Errorf("Expected 1 row")
 	}
 
 	rows.Close()
@@ -113,19 +113,22 @@ func TestCoordinatorRqId(t *testing.T) {
 	out, err := testutil.BashCmd("grep 'EOR code: 0' hera.log | wc -l")
 	if (err != nil) || (len(out) == 0) || (out[0] != '2') {
 		err = nil
-		t.Fatalf("Expected 2 'EOR 0'")
+		t.Logf("Expected 2 'EOR 0'")
+		t.Errorf("Expected 2 'EOR 0'")
 	}
 
 	out, err = testutil.BashCmd("grep 'wrqId: 13 ): EOR code: 0 , rqId:  13' hera.log | wc -l")
 	if (err != nil) || (len(out) == 0) || (out[0] != '1') {
 		err = nil
-		t.Fatalf("Expected 'wrqId: 13 ): EOR code: 0 , rqId:  13'")
+		t.Logf("Expected 'wrqId: 13 ): EOR code: 0 , rqId:  13'")
+		t.Errorf("Expected 'wrqId: 13 ): EOR code: 0 , rqId:  13'")
 	}
 
 	out, err = testutil.BashCmd("grep 'wrqId: 19 ): EOR code: 0 , rqId:  19' hera.log | wc -l")
 	if (err != nil) || (len(out) == 0) || (out[0] != '1') {
 		err = nil
-		t.Fatalf("Expected 'wrqId: 19 ): EOR code: 0 , rqId:  19'")
+		t.Logf("Expected 'wrqId: 19 ): EOR code: 0 , rqId:  19'")
+		t.Errorf("Expected 'wrqId: 19 ): EOR code: 0 , rqId:  19'")
 	}
 
 	logger.GetLogger().Log(logger.Debug, "TestCoordinatorRqId done  -------------------------------------------------------------")
