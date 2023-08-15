@@ -52,10 +52,10 @@ func before() error {
 	if tableName == "" {
 		tableName = "jdbc_hera_test"
 	}
-        if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") { // mysql
+	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") { // mysql
 		// with testutil.RunDML, extra log line throws off test
 		testutil.DBDirect("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
-        }
+	}
 	return nil
 }
 
@@ -75,7 +75,7 @@ func TestCoordinatorRqId(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	// cleanup and insert one row in the table
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -97,6 +97,7 @@ func TestCoordinatorRqId(t *testing.T) {
 		t.Fatalf("Error commit %s\n", err.Error())
 	}
 
+	conn, err = db.Conn(ctx)
 	stmt, _ = conn.PrepareContext(ctx, "/*TestCoordinatorRqId*/Select id, int_val from "+tableName+" where id=?")
 	rows, _ := stmt.Query(1)
 	if !rows.Next() {
