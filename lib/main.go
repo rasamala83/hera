@@ -95,6 +95,31 @@ func Run() {
 	//
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
+
+	tnsnames, err := FindTns()
+	// Rapid cutover is enabled when the following both conditions are met:
+	// 1. TWO_TASK_CUTOVER is defined. e.g. TWO_TASK_CUTOVER=CLOC_CUTOVER
+	// 2. The CLOC_CUTOVER is defined in tnsnames.ora
+	// maybe we should have another condition as master control.
+	// 3. occ.cdb has cutover_enabled = true.
+	// sharding and taf are mutual exclusive to cutover feature
+
+	if !GetConfig().EnableSharding && !GetConfig().EnableTAF {
+		logicdb := os.Getenv("TWO_TASK_CUTOVER")
+		if logicdb != "" {
+			_, ok := tnsnames[logicdb]
+			if ok && GetConfig().ReadonlyPct > 0 {
+				logicdb = os.Getenv("TWO_TASK_OCC_CUTOVER")
+				_, ok = tnsnames[logicdb]
+			}
+
+			if ok {
+				logger.GetLogger().Log(logger.Alert, "two_task_cutover name and value found in tnsnames. Enable cutover feature")
+				GetConfig().EnableCutover = true
+			}
+		}
+	}
+
 	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
@@ -164,7 +189,11 @@ func Run() {
 			FullShutdown()
 		}
 	}
+
 	InitRacMaint(*namePtr)
+	if GetConfig().EnableCutover {
+		InitCutoverCfg(*namePtr)
+	}
 
 	srv := NewServer(lsn, HandleConnection)
 

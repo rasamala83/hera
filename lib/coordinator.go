@@ -62,6 +62,10 @@ type Coordinator struct {
 	shard     *shardInfo
 	prevShard *shardInfo
 
+	//for cutover support so the coordinator knows where to dispatch.
+	prevCoInfo *ActiveCOInfo
+	curCoInfo  *ActiveCOInfo
+
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
 	worker        *WorkerClient // if it is in transaction/in cursor, the worker attached
 	inTransaction bool          // if the worker is in transaction
@@ -144,8 +148,6 @@ func (crd *Coordinator) Run() {
 			crd.nss = nil
 			handle, _ := crd.handleMux(ns)
 			if !handle {
-				// not handled by mux, it means it is a worker command
-
 				// if the current worker is not in transaction we recover the current worker and dispatch to a new worker
 				// the reason is that for R/W split it is possible that the new query needs to go to a write worker
 				wk := crd.worker
@@ -316,6 +318,12 @@ func (crd *Coordinator) Run() {
 }
 
 func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
+	// if state is not cutover in progress, we will not change dispatch logic
+	// at non-cutover states, we will only ensure the worker integrity sanity check
+	// why TAF has its own DispatchTAFSession? it's because it can be retrying the same request
+	// instead of pre-determined condition like shard(key), cutover(state)
+	// Therefore I think cutover preprocess should be able to apply idea similar to sharding.
+
 	if GetConfig().EnableTAF && (crd.worker == nil) {
 		taferr := crd.DispatchTAFSession(request)
 		crd.processError(taferr)
@@ -413,9 +421,21 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 							crd.conn.Close()
 						}
 					}
+				} else if GetConfig().EnableCutover {
+					hangup, err := crd.PreprocessCutover(nss)
+					if err != nil {
+						handled = true
+						if logger.GetLogger().V(logger.Info) {
+							logger.GetLogger().Log(logger.Debug, crd.id, "Error preprocessing cutover, handup:", err.Error(), hangup)
+						}
+						if hangup {
+							crd.conn.Close()
+						}
+					}
 				}
 				return handled, err
 			}
+
 			handled, err := crd.processMuxCommand(ns)
 			if !handled {
 				if nss[0].Cmd == common.CmdClientCalCorrelationID {
@@ -468,6 +488,10 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 		}
 		crd.respond([]byte("41:2 fetch requested but no statement exists,"))
 	case common.CmdPrepare, common.CmdPrepareV2, common.CmdPrepareSpecial:
+		return false, nil
+	// DB by role: source or target
+	case common.CmdSetDBbyRole:
+		//ToDo
 		return false, nil
 	// sharding commands
 	case common.CmdSetShardID:
@@ -941,7 +965,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			if corrID == nil {
 				corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
 			}
-			
+
 			var ns []*netstring.Netstring
 			if GetConfig().EnableCmdClientInfoToWorker {
 				logger.GetLogger().Log(logger.Verbose, len(crd.poolName), len(crd.clientPoolStack))
@@ -966,7 +990,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 						ns[i+2] = rnss[i]
 					}
 				}
-				cnt+= 2
+				cnt += 2
 			} else {
 				if !request.IsComposite() {
 					ns = make([]*netstring.Netstring, 2)
@@ -983,7 +1007,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 				cnt++
 			}
 			plusAnyCorrId = netstring.NewNetstringEmbedded(ns)
-			
+
 		}
 		err := worker.Write(plusAnyCorrId, uint16(cnt))
 		if err != nil {

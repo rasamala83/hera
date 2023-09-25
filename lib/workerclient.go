@@ -89,6 +89,7 @@ type BindPair struct {
 // WorkerClient represents a worker process
 type WorkerClient struct {
 	ID            int              // the worker identifier, from 0 to max worker count
+	ConnTwoTask   PoolByTwoTask    // indicate the worker belonging to two_task or two_task_cutover
 	Type          HeraWorkerType   // the type of worker (ex write, read); all workers from the same type are grouped in a pool
 	Status        HeraWorkerStatus // the worker state, like init, accept, etc
 	workerConn    net.Conn         // the connection over which it communicates with the worker process
@@ -125,9 +126,9 @@ type WorkerClient struct {
 	// for bind eviction
 	sqlBindNs atomic.Value // *netstring.Netstring
 
-	// for SQL eviction and throttle by host prefix 
-	clientHostPrefix atomic.Value //  string 
-	clientApp atomic.Value // string
+	// for SQL eviction and throttle by host prefix
+	clientHostPrefix atomic.Value //  string
+	clientApp        atomic.Value // string
 	//
 	// time since hera_start in ms when the current prepare statement is sent to worker.
 	// reset to 0 after eor meaning no sql running (same as start_time_offset_ms in c++).
@@ -184,8 +185,8 @@ func envUpsert(attr *syscall.ProcAttr, key string, val string) {
 }
 
 // NewWorker creates a new workerclient instance (pointer)
-func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleName string, thr Throttler) *WorkerClient {
-	worker := &WorkerClient{ID: wid, Type: wType, Status: wsUnset, instID: instID, shardID: shardID, moduleName: moduleName, thr: thr}
+func NewWorker(wid int, connPool PoolByTwoTask, wType HeraWorkerType, instID int, shardID int, moduleName string, thr Throttler) *WorkerClient {
+	worker := &WorkerClient{ID: wid, ConnTwoTask: connPool, Type: wType, Status: wsUnset, instID: instID, shardID: shardID, moduleName: moduleName, thr: thr}
 	maxReqs := GetMaxRequestsPerChild()
 	if maxReqs >= 4 {
 		worker.maxReqCount = maxReqs - uint32(rand.Intn(int(maxReqs/4)))
@@ -233,9 +234,27 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 	}
 
+	if GetConfig().EnableCutover {
+		if GetConfig().EnableSharding {
+			GetConfig().EnableCutover = false // is it even possible to get here? but let's make sharding enablement takes precedence.
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "Cutover does not support sharding")
+			}
+		}
+
+		if worker.Type == wtypeStdBy {
+			GetConfig().EnableCutover = false // is it even possible to get here? not support taf
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "Cutover does not support sharding")
+			}
+		}
+	}
+
 	var twoTask string
 	switch worker.Type {
 	case wtypeStdBy:
+		// DB cutover doesn't support standby; standby only for readonly pools
+		// Critical-r1 pattern is exception. Main connections will be SOR, which can go through cutover.
 		if GetConfig().EnableSharding {
 			envUpsert(&attr, envCalClientSession, fmt.Sprintf("CLIENT_SESSION_TAF_%d", worker.shardID))
 			if GetConfig().EnableTAF {
@@ -286,13 +305,23 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_%d", dbHostName, worker.shardID))
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
-			envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R")
-			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R", dbHostName))
-			envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER %d", worker.ID))
+			if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2Task {
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R")
+				envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R", dbHostName))
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER %d", worker.ID))
+			} else {
+				// standard setup
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R_CUTOVER")
+				envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_CUTOVER", dbHostName))
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER %d CUTOVER", worker.ID))
+			}
 		}
 		envUpsert(&attr, envHeraName, worker.moduleName)
 
 		twoTaskEnv := fmt.Sprintf("TWO_TASK_READ_%d", worker.shardID)
+		if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2TaskCutover {
+			twoTaskEnv += "_CUTOVER"
+		}
 		twoTask = os.Getenv(twoTaskEnv)
 		if twoTask == "" {
 			if worker.shardID != 0 {
@@ -304,9 +333,14 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			if logger.GetLogger().V(logger.Info) {
 				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
 			}
-			twoTaskEnv = "TWO_TASK_READ"
+			if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2Task {
+				twoTaskEnv = "TWO_TASK_READ_CUTOVER"
+			} else {
+				twoTaskEnv = "TWO_TASK_READ"
+			}
 			twoTask = os.Getenv(twoTaskEnv)
 		}
+
 		if twoTask != "" {
 			envUpsert(&attr, envTwoTask, twoTask)
 		} else {
@@ -325,13 +359,23 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_%d", dbHostName, worker.shardID))
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
-			envUpsert(&attr, envCalClientSession, "CLIENT_SESSION")
-			envUpsert(&attr, envDbHostName, dbHostName)
-			envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER %d", worker.ID))
+			if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2TaskCutover {
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_CUTOVER")
+				envUpsert(&attr, envDbHostName, dbHostName)
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER %d CUTOVER", worker.ID))
+			} else {
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION")
+				envUpsert(&attr, envDbHostName, dbHostName)
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER %d", worker.ID))
+			}
 		}
 		envUpsert(&attr, envHeraName, worker.moduleName)
-
-		twoTaskEnv := fmt.Sprintf("TWO_TASK_%d", worker.shardID)
+		var twoTaskEnv string
+		if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2TaskCutover {
+			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d_CUTOVER", worker.shardID)
+		} else {
+			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d", worker.shardID)
+		}
 		twoTask = os.Getenv(twoTaskEnv)
 		if twoTask == "" {
 			if worker.shardID != 0 {
@@ -344,10 +388,14 @@ func (worker *WorkerClient) StartWorker() (err error) {
 				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
 			}
 			twoTaskEnv = envTwoTask
+			if GetConfig().EnableCutover {
+				twoTaskEnv += "_CUTOVER"
+			}
 			twoTask = os.Getenv(twoTaskEnv)
 		} else {
 			envUpsert(&attr, envTwoTask, twoTask)
 		}
+
 		if twoTask == "" {
 			logger.GetLogger().Log(logger.Alert, "TWO_TASK is not defined")
 			et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
@@ -385,7 +433,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			}
 		}
 	}
-
 
 	socketPair, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
 	if err != nil {
@@ -542,6 +589,21 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		logger.GetLogger().Log(logger.Info, "Got control message from worker (", worker.ID, ",", worker.pid, ",", worker.racID, ",", worker.dbUname, ")")
 	}
 
+	// if we are at cutover, we need to check pool integrity
+	if GetConfig().EnableCutover {
+		cocfg := GetCutoverCfg()
+		if os.Getenv(envTwoTask) == "" {
+			// something wrong
+			logger.GetLogger().Log(logger.Alert, "two_task env is not defined at workerclient start")
+		}
+
+		if cocfg.DbUnameBy2task[os.Getenv(envTwoTask)] != worker.dbUname && cocfg.Phase != "enable" {
+			// this is not good, this client can't be in service
+			errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %s, %s, %s", cocfg.DbUnameBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
+			return errors.New(errmsg)
+		}
+	}
+
 	worker.setState(wsAcpt)
 
 	pool, err := GetWorkerBrokerInstance().GetWorkerPool(worker.Type, worker.instID, worker.shardID)
@@ -573,7 +635,7 @@ func (worker *WorkerClient) Close() {
  */
 func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool, prior HeraWorkerStatus) <-chan time.Time {
 	dice := rand.Intn(100)
-	freePct := 100*p.activeQ.Len()/p.desiredSize
+	freePct := 100 * p.activeQ.Len() / p.desiredSize
 	var rv <-chan time.Time
 
 	// only skip and slow when on db-side (state==busy)

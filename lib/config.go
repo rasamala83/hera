@@ -29,7 +29,7 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-//The Config contains all the static configuration
+// The Config contains all the static configuration
 type Config struct {
 	CertChainFile   string
 	KeyFile         string // leave blank for no SSL
@@ -80,11 +80,11 @@ type Config struct {
 	// time_skew_threshold_error(15)
 	TimeSkewThresholdErrorSec int
 	// max_stranded_time_interval(2000)
-	StrandedWorkerTimeoutMs int
+	StrandedWorkerTimeoutMs         int
 	HighLoadStrandedWorkerTimeoutMs int
-	HighLoadSkipInitiateRecoverPct int
-	HighLoadPct int
-	InitLimitPct int
+	HighLoadSkipInitiateRecoverPct  int
+	HighLoadPct                     int
+	InitLimitPct                    int
 
 	// the worker scheduler policy
 	LifoScheduler bool
@@ -110,7 +110,7 @@ type Config struct {
 	HostnamePrefix       map[string]string
 	ShardingCrossKeysErr bool
 
-	CfgFromTns					bool
+	CfgFromTns                  bool
 	CfgFromTnsOverrideNumShards int // -1 no-override
 	CfgFromTnsOverrideTaf       int // -1 no-override, 0 override-false, 1 override-true
 	CfgFromTnsOverrideRWSplit   int // -1 no-override, readChildPct
@@ -132,6 +132,11 @@ type Config struct {
 	TAFBinDuration       int
 	TAFAllowSlowEveryX   int
 	TAFNormallySlowCount int
+
+	// Enable cutver - create source and target connections
+	EnableCutover            bool
+	CutoverCfgReloadInterval int
+	CutoverPostfix           string
 
 	// for testing, enabling profile
 	EnableProfile     bool
@@ -156,8 +161,8 @@ type Config struct {
 	// when numWorkers changes, it will write to this channel, for worker manager to update
 	numWorkersCh chan int
 
-	EnableConnLimitCheck bool
-	EnableQueryBindBlocker bool
+	EnableConnLimitCheck         bool
+	EnableQueryBindBlocker       bool
 	QueryBindBlockerMinSqlPrefix int
 
 	// taf testing
@@ -169,7 +174,7 @@ type Config struct {
 	EnableDanglingWorkerRecovery bool
 
 	GoStatsInterval int
-	RandomStartMs int
+	RandomStartMs   int
 
 	// The max number of database connections to be established per second
 	MaxDbConnectsPerSec int
@@ -274,9 +279,8 @@ func InitConfig() error {
 	gAppConfig.StrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("max_stranded_time_interval", 2000)
 	gAppConfig.HighLoadStrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("high_load_max_stranded_time_interval", 600111)
 	gAppConfig.HighLoadSkipInitiateRecoverPct = cdb.GetOrDefaultInt("high_load_skip_initiate_recover_pct", 80)
-	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 130) // >100 disabled
+	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 130)   // >100 disabled
 	gAppConfig.InitLimitPct = cdb.GetOrDefaultInt("init_limit_pct", 125) // >100 disabled
-
 
 	gAppConfig.StateLogInterval = cdb.GetOrDefaultInt("state_log_interval", 1)
 	if gAppConfig.StateLogInterval <= 0 {
@@ -300,7 +304,7 @@ func InitConfig() error {
 			gAppConfig.ChildExecutable = "postgresworker"
 		}
 	} else {
-	// db type is not supported
+		// db type is not supported
 		return errors.New("database type must be either Oracle or MySQL")
 	}
 
@@ -360,8 +364,9 @@ func InitConfig() error {
 	if gAppConfig.EnableTAF {
 		InitTAF(gAppConfig.NumOfShards)
 	}
-	// TODO:
-	gAppConfig.NumStdbyDbs = 1
+	// DB Cutover
+	gAppConfig.EnableCutover = cdb.GetOrDefaultBool("enable_cutover", false)
+	gAppConfig.CutoverCfgReloadInterval = cdb.GetOrDefaultInt("cutover_cfg_reload_interval", 2)
 
 	var numWorkers int
 	numWorkers = 6
@@ -425,9 +430,8 @@ func InitConfig() error {
 	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", "10.0"),
 		"%f", &gAppConfig.BindEvictionDecrPerSec)
 
-	gAppConfig.SkipEvictRegex= cdb.GetOrDefaultString("skip_eviction_host_prefix","")
-	gAppConfig.EvictRegex= cdb.GetOrDefaultString("eviction_host_prefix", "")
-
+	gAppConfig.SkipEvictRegex = cdb.GetOrDefaultString("skip_eviction_host_prefix", "")
+	gAppConfig.EvictRegex = cdb.GetOrDefaultString("eviction_host_prefix", "")
 
 	gAppConfig.BouncerEnabled = cdb.GetOrDefaultBool("bouncer_enabled", true)
 	gAppConfig.BouncerStartupDelay = cdb.GetOrDefaultInt("bouncer_startup_delay", 10)

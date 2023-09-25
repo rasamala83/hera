@@ -85,10 +85,14 @@ type WorkerPool struct {
 	workers []*WorkerClient
 	// Throtle workers lifecycle
 	thr Throttler
+
+	// dictate the pool following two_task or two_task_cutover contract
+	pool2t     PoolByTwoTask
+	tgtDbUname string
 }
 
 // Init creates the pool by creating the workers and making all the initializations
-func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID int, moduleName string) error {
+func (pool *WorkerPool) Init(wType HeraWorkerType, cutover2task PoolByTwoTask, size int, instID int, shardID int, moduleName string) error {
 	pool.Type = wType
 	pool.activeQ = NewQueue()
 	//pool.poolCond = &sync.Cond{L: &sync.Mutex{}}
@@ -99,6 +103,11 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID
 	pool.currentSize = 0
 	pool.desiredSize = size
 	pool.moduleName = moduleName
+	if GetConfig().EnableCutover {
+		pool.pool2t = cutover2task
+	} else {
+		pool.pool2t = P2TUndefined
+	}
 	pool.workers = make([]*WorkerClient, size)
 	pool.thr = NewThrottler(uint32(GetConfig().MaxDbConnectsPerSec), fmt.Sprintf("%d_%d_%d", wType, shardID, instID))
 	for i := 0; i < size; i++ {
@@ -114,12 +123,13 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID
 
 // spawnWorker starts a worker and spawn a routine waiting for the "ready" message
 func (pool *WorkerPool) spawnWorker(wid int) error {
-	worker := NewWorker(wid, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
+
+	worker := NewWorker(wid, pool.pool2t, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
 	worker.setState(wsSchd)
 	millis := rand.Intn(GetConfig().RandomStartMs)
 	if logger.GetLogger().V(logger.Alert) {
-		logger.GetLogger().Log(logger.Alert, wid, "randomized start ms",millis)
+		logger.GetLogger().Log(logger.Alert, wid, "randomized start ms", millis)
 	}
 	time.Sleep(time.Millisecond * time.Duration(millis))
 
@@ -131,7 +141,7 @@ func (pool *WorkerPool) spawnWorker(wid int) error {
 		}
 		millis := rand.Intn(3000)
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, initCnt, "is too many in init state. waiting to start",wid)
+			logger.GetLogger().Log(logger.Alert, initCnt, "is too many in init state. waiting to start", wid)
 		}
 		time.Sleep(time.Millisecond * time.Duration(millis))
 	}
@@ -233,8 +243,10 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 // GetWorker gets the active worker if available. backlog with timeout if not.
 //
 // @param sqlhash to check for soft eviction against a blacklist of slow queries.
-//        if getworker needs to exam the incoming sql, there does not seem to be another elegant
-//        way to do this except to pass in the sqlhash as a parameter.
+//
+//	if getworker needs to exam the incoming sql, there does not seem to be another elegant
+//	way to do this except to pass in the sqlhash as a parameter.
+//
 // @param timeoutMs[0] timeout in milliseconds. default to adaptive queue timeout.
 func (pool *WorkerPool) GetWorker(sqlhash int32, timeoutMs ...int) (worker *WorkerClient, t string, err error) {
 	if logger.GetLogger().V(logger.Debug) {
@@ -559,10 +571,10 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 	}
 	if skipRecycle {
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:=", pool.desiredSize)
+			logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=", pool.moduleName, "shard_id=", pool.ShardID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:=", pool.desiredSize)
 		}
 		calMsg := fmt.Sprintf("Recycle(worker_pid)=%d, module_name=%s,shard_id=%d", worker.pid, worker.moduleName, worker.shardID)
-		evt := cal.NewCalEvent("SKIP_RECYCLE_WORKER","ReturnWorker", cal.TransOK, calMsg)
+		evt := cal.NewCalEvent("SKIP_RECYCLE_WORKER", "ReturnWorker", cal.TransOK, calMsg)
 		evt.Completed()
 	}
 
@@ -689,6 +701,11 @@ func (pool *WorkerPool) GetHealthyWorkersCount() int32 {
 	return atomic.LoadInt32(&(pool.numHealthyWorkers))
 }
 
+// CutoverIntegrityCheck is called by the CutoverCfg. It shares the local dbuname (Main worker pool) and remote dbuname (LDR workerpool). The workerpool must ensure the information is matched
+func (pool *WorkerPool) IntegrityCheck(CutoverCfg) {
+
+}
+
 // RacMaint is called when rac maintenance is needed. It marks the workers for restart, spreading
 // to an interval in order to avoid connection storm to the database
 func (pool *WorkerPool) RacMaint(racReq racAct) {
@@ -735,6 +752,32 @@ func (pool *WorkerPool) RacMaint(racReq racAct) {
 	}
 }
 
+func (pool *WorkerPool) UpdateDbUname(newDbUname string) error {
+	if pool.tgtDbUname == newDbUname {
+		return nil
+	}
+	pool.tgtDbUname = newDbUname
+	if GetCutoverCfg().Phase != EnabledPhase {
+		// going through the worker list
+		now := time.Now().Unix()
+		pool.poolCond.L.Lock()
+		for i := 0; i < pool.currentSize; i++ {
+			if pool.workers[i].dbUname != pool.tgtDbUname {
+
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, "Rac maint activating, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now)
+				}
+				// we need to quit the request asap.
+
+				// force the worker to quit
+				err := pool.workers[i].Terminate()
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // checkWorkerLifespan is called periodically to check if any worker lifetime has expired and terminates it
 func (pool *WorkerPool) checkWorkerLifespan() {
 	var skipcnt uint32
@@ -768,12 +811,12 @@ func (pool *WorkerPool) checkWorkerLifespan() {
 		pool.poolCond.L.Lock()
 		for i := 0; i < pool.currentSize; i++ {
 			if (pool.workers[i] != nil) && (pool.workers[i].exitTime != 0) && (pool.workers[i].exitTime <= now) {
-				if pool.GetHealthyWorkersCount() < (int32(pool.desiredSize*GetConfig().MaxDesiredHealthyWorkerPct/100)) { // Should it be a config value
+				if pool.GetHealthyWorkersCount() < (int32(pool.desiredSize * GetConfig().MaxDesiredHealthyWorkerPct / 100)) { // Should it be a config value
 					if logger.GetLogger().V(logger.Alert) {
-						logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:", pool.desiredSize)
+						logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=", pool.moduleName, "shard_id=", pool.ShardID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 					}
 					calMsg := fmt.Sprintf("module_name=%s,shard_id=%d", pool.moduleName, pool.ShardID)
-					evt := cal.NewCalEvent("SKIP_RECYCLE_WORKER","checkWorkerLifespan", cal.TransOK, calMsg)
+					evt := cal.NewCalEvent("SKIP_RECYCLE_WORKER", "checkWorkerLifespan", cal.TransOK, calMsg)
 					evt.Completed()
 					break
 				}
@@ -814,7 +857,7 @@ func (pool *WorkerPool) checkWorkerLifespan() {
 		pool.poolCond.L.Unlock()
 		for _, w := range workers {
 			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "checkworkerlifespan - Lifespan exceeded, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID ,"HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:", pool.desiredSize)
+				logger.GetLogger().Log(logger.Info, "checkworkerlifespan - Lifespan exceeded, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 			}
 			w.Terminate()
 		}
