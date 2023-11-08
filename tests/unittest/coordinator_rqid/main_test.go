@@ -122,10 +122,10 @@ func TestCoordinatorRqId(t *testing.T) {
 		t.Fatalf("Expected 'wrqId: 13 ): EOR code: 0 , rqId:  13'")
 	}
 
-	out, err = testutil.BashCmd("grep 'wrqId: 21 ): EOR code: 0 , rqId:  21' hera.log | wc -l")
+	out, err = testutil.BashCmd("grep 'wrqId: 19 ): EOR code: 0 , rqId:  19' hera.log | wc -l")
 	if (err != nil) || (len(out) == 0) || (out[0] != '1') {
 		err = nil
-		t.Fatalf("Expected 'wrqId: 21 ): EOR code: 0 , rqId:  21'")
+		t.Fatalf("Expected 'wrqId: 19 ): EOR code: 0 , rqId:  19'")
 	}
 
 	logger.GetLogger().Log(logger.Debug, "TestCoordinatorRqId done  -------------------------------------------------------------")
