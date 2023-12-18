@@ -51,7 +51,7 @@ var moduleName string
 var gCacheCfg atomic.Value
 
 func getCacheCfgSQL() string {
-	return fmt.Sprintf("SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'", GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, moduleName)
+	return fmt.Sprintf("SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'", GetConfig().StateLogPrefix, "hera", GetConfig().StateLogPrefix, moduleName)
 }
 
 func getCacheCfg() *CacheCfg {
