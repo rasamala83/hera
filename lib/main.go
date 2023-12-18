@@ -124,6 +124,7 @@ func Run() {
 		InitQueryBindBlocker(*namePtr)
 	}
 
+
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "Waiting for at least one database connection")
 	}
@@ -165,6 +166,27 @@ func Run() {
 		}
 	}
 	InitRacMaint(*namePtr)
+
+	if GetConfig().EnableCaching {
+		logger.GetLogger().Log(logger.Verbose, "enable_caching is set to true...")
+		err = InitCachingCfg(*namePtr)
+		logger.GetLogger().Log(logger.Verbose, "After InitCachingCfg in main...")
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize caching config:", err)
+			}
+			// FullShutdown() -- Do not shut down during initial phase
+		}
+		logger.GetLogger().Log(logger.Verbose, "GetJunoClient in main...")
+		_, err = GetJunoClient()
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize juno client:", err)
+			}
+			FullShutdown()
+		}
+		logger.GetLogger().Log(logger.Verbose, "GetJunoClient in main successful...")
+	}
 
 	srv := NewServer(lsn, HandleConnection)
 

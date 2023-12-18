@@ -359,6 +359,10 @@ Loop:
 func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	// TODO: refactor Query/QueryContext to reuse code
 	// TODO: honor the context timeout and return when it is canceled
+	if err := st.hera.watchCancel(ctx); err != nil {
+		return nil, err
+	}
+
 	sk := 0
 	if len(st.hera.shardKeyPayload) > 0 {
 		sk = 1
@@ -411,6 +415,7 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 	cmd := netstring.NewNetstringEmbedded(nss)
 	err := st.hera.execNs(cmd)
 	if err != nil {
+		st.hera.finish()
 		return nil, err
 	}
 
