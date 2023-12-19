@@ -288,8 +288,8 @@ func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, req
 	// var key string
 	logger.GetLogger().Log(logger.Verbose, "Incoming request.Serialized:", string(request.Serialized))
 	getCacheCfg().lock.Lock()
+	defer getCacheCfg().lock.Unlock()
 	rec, ok := getCacheCfg().cacheCfgRecords[uint32(crd.sqlhash)]
-	getCacheCfg().lock.Unlock()
 	logger.GetLogger().Log(logger.Verbose, uint32(crd.sqlhash), "CachingEnabled for ", reqType, ":", ok)
 	if ok {
 		logger.GetLogger().Log(logger.Verbose, "cacheRecord:", "sqlHash", rec.sqlHash, "sqlText", rec.sqlText, "ttl", rec.ttl, "cache enabled", rec.cachingEnabled)

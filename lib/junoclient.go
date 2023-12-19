@@ -143,13 +143,13 @@ func (cli *JunoClient) Set(key []byte, value []byte, ttl uint32) error {
 		evt.AddDataInt("rawSize", int64(len(value)))
 		evt.Completed()
 		logger.GetLogger().Log(logger.Verbose, "Set: Compression enabled, compressedSize:", len(compressedValue), "rawSize:", len(value))
-		ctx, err := cli.junoClient.Set(key, compressedValue, client.WithTTL(ttl))
+		ctx, err := cli.junoClient.Create(key, compressedValue, client.WithTTL(ttl))
 		if err == nil {
 			GetInfo(ctx)
 		}
 		return err
 	} else {
-		ctx, err := cli.junoClient.Set(key, value, client.WithTTL(ttl))
+		ctx, err := cli.junoClient.Create(key, value, client.WithTTL(ttl))
 		if err == nil {
 			GetInfo(ctx)
 		}

@@ -44,7 +44,7 @@ type CacheRecord struct {
 
 type CacheCfg struct {
 	cacheCfgRecords map[uint32]*CacheRecord
-	lock sync.Mutex
+	lock *sync.Mutex
 }
 
 var moduleName string
@@ -57,9 +57,9 @@ func getCacheCfgSQL() string {
 func getCacheCfg() *CacheCfg {
 	cfg := gCacheCfg.Load()
 	if cfg == nil {
-		out := CacheCfg{cacheCfgRecords:make(map[uint32]*CacheRecord)}
-		gCacheCfg.Store(&out)
-		return &out
+		out := &CacheCfg{cacheCfgRecords:make(map[uint32]*CacheRecord), lock: &sync.Mutex{}}
+		gCacheCfg.Store(out)
+		return out
 	}
 	return cfg.(*CacheCfg)
 }
@@ -94,7 +94,7 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 	}
 	defer rows.Close()
 
-	cfgLoad := CacheCfg{cacheCfgRecords:make(map[uint32]*CacheRecord)}
+	cfgLoad := &CacheCfg{cacheCfgRecords:make(map[uint32]*CacheRecord), lock: &sync.Mutex{}}
 	logger.GetLogger().Log(logger.Verbose, "No errors. Begin loading rows...")
 	rowCount := 0
 	for rows.Next() {
@@ -124,7 +124,7 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 	}
 	logger.GetLogger().Log(logger.Warning, fmt.Sprintf("Loaded %d sqlhashes, %d cacheCfg entries", len(cfgLoad.cacheCfgRecords), rowCount))
 	
-	gCacheCfg.Store(&cfgLoad)
+	gCacheCfg.Store(cfgLoad)
 	return err
 }
 
