@@ -158,12 +158,12 @@ func InitCachingCfg(modName string) error {
 	go func() {
 		for {
 			logger.GetLogger().Log(logger.Verbose, "Inside Routine to periodically load CacheConfig")
-			temp := getCacheCfg()
-			logger.GetLogger().Log(logger.Info, fmt.Sprintf("cacheCfgRecord size inside routine: %d", len(temp.cacheCfgRecords)))
-			for k, v := range temp.cacheCfgRecords {
-				logger.GetLogger().Log(logger.Info, fmt.Sprintf("Key SQLHash:%d", k))
-				logger.GetLogger().Log(logger.Info, fmt.Sprintf("Value:%s", v.sqlText))
-			}
+			// temp := getCacheCfg()
+			// logger.GetLogger().Log(logger.Info, fmt.Sprintf("cacheCfgRecord size inside routine: %d", len(temp.cacheCfgRecords)))
+			// for k, v := range temp.cacheCfgRecords {
+			// 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("Key SQLHash:%d", k))
+			// 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("Value:%s", v.sqlText))
+			// }
 			time.Sleep(time.Second * time.Duration(GetConfig().CachingCfgReloadInterval))
 			if db != nil {
 				db.Close()
