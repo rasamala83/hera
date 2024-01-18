@@ -597,9 +597,9 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			logger.GetLogger().Log(logger.Alert, "two_task env is not defined at workerclient start")
 		}
 
-		if cocfg.DbUnameBy2task[os.Getenv(envTwoTask)] != worker.dbUname && cocfg.Phase != "enable" {
+		if cocfg.DbBy2task[os.Getenv(envTwoTask)] != worker.dbUname && cocfg.Phase != "enable" {
 			// this is not good, this client can't be in service
-			errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %s, %s, %s", cocfg.DbUnameBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
+			errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %s, %s, %s", cocfg.DbBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
 			return errors.New(errmsg)
 		}
 	}

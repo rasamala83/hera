@@ -29,6 +29,7 @@ const (
 	EvtNAmeTafBklg = "BKLG"
 
 	EvtTypeSharding           = "SHARDING"
+	EvtTypeCutover            = "CUTOVER"
 	EvtTypeMux                = "HERAMUX"
 	EvtNameBadShardID         = "bad_shard_id"
 	EvtNameUnkKey             = "unknown_key_name"

@@ -87,12 +87,12 @@ type WorkerPool struct {
 	thr Throttler
 
 	// dictate the pool following two_task or two_task_cutover contract
-	pool2t     PoolByTwoTask
+	p2task     PoolByTwoTask
 	tgtDbUname string
 }
 
 // Init creates the pool by creating the workers and making all the initializations
-func (pool *WorkerPool) Init(wType HeraWorkerType, cutover2task PoolByTwoTask, size int, instID int, shardID int, moduleName string) error {
+func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task PoolByTwoTask, size int, instID int, shardID int, moduleName string) error {
 	pool.Type = wType
 	pool.activeQ = NewQueue()
 	//pool.poolCond = &sync.Cond{L: &sync.Mutex{}}
@@ -103,10 +103,10 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, cutover2task PoolByTwoTask, s
 	pool.currentSize = 0
 	pool.desiredSize = size
 	pool.moduleName = moduleName
-	if GetConfig().EnableCutover {
-		pool.pool2t = cutover2task
+	if GetConfig().EnableCutover && pool2task != P2TUndefined {
+		pool.p2task = pool2task
 	} else {
-		pool.pool2t = P2TUndefined
+		pool.p2task = P2TUndefined
 	}
 	pool.workers = make([]*WorkerClient, size)
 	pool.thr = NewThrottler(uint32(GetConfig().MaxDbConnectsPerSec), fmt.Sprintf("%d_%d_%d", wType, shardID, instID))
@@ -124,7 +124,7 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, cutover2task PoolByTwoTask, s
 // spawnWorker starts a worker and spawn a routine waiting for the "ready" message
 func (pool *WorkerPool) spawnWorker(wid int) error {
 
-	worker := NewWorker(wid, pool.pool2t, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
+	worker := NewWorker(wid, pool.p2task, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
 	worker.setState(wsSchd)
 	millis := rand.Intn(GetConfig().RandomStartMs)

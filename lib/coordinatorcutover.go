@@ -53,9 +53,9 @@ func compActCOInfo(cur ActiveCOInfo, new ActiveCOInfo) int {
 func newCutoverInfo(cocfg *CutoverCfg) ActiveCOInfo {
 	newcoinfo := ActiveCOInfo{
 		TwoTask:  cocfg.ActiveTwoTask,
-		DbUname:  cocfg.DbUnameBy2task[cocfg.ActiveTwoTask],
+		DbUname:  cocfg.DbBy2task[cocfg.ActiveTwoTask],
 		Phase:    cocfg.Phase,
-		RWstatus: cocfg.RWstatusByDbUname[cocfg.ActiveTwoTask],
+		RWstatus: cocfg.RWstatusByDb[cocfg.ActiveTwoTask],
 	}
 	return newcoinfo
 }

@@ -114,7 +114,7 @@ func Run() {
 			}
 
 			if ok {
-				logger.GetLogger().Log(logger.Alert, "two_task_cutover name and value found in tnsnames. Enable cutover feature")
+				logger.GetLogger().Log(logger.Alert, "two_task_cutover KV found in tnsnames. Successfully enable cutover feature")
 				GetConfig().EnableCutover = true
 			}
 		}
