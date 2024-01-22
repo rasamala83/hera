@@ -485,8 +485,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	//
 	// arguments
 	//
-	var argv []string
-	argv = make([]string, 3, 3)
+	argv := make([]string, 3, 3)
 	argv[0] = workerPath
 	argv[1] = "--config"
 	argv[2] = "hera.txt"
@@ -599,7 +598,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 
 		if cocfg.DbBy2task[os.Getenv(envTwoTask)] != worker.dbUname && cocfg.Phase != "enable" {
 			// this is not good, this client can't be in service
-			errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %s, %s, %s", cocfg.DbBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
+			errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %d, %d, %s", cocfg.DbBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
 			return errors.New(errmsg)
 		}
 	}

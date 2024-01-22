@@ -25,7 +25,7 @@ const (
 	Pool2Task PoolByTwoTask = iota
 	Pool2TaskCutover
 	MaxDbInCutover
-	P2TUndefined
+	UndefP2T
 )
 
 const (
@@ -340,12 +340,12 @@ func getLogSQL() string {
 func writeDbLog(cfg CutoverCfg, ctx context.Context, db *sql.DB) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		return fmt.Errorf("Error (conn) write cutover cfg to Db: %s", err.Error())
+		return fmt.Errorf("error (conn) write cutover cfg to Db: %s", err.Error())
 	}
 	defer conn.Close()
 	stmt, err := conn.PrepareContext(ctx, getLogSQL())
 	if err != nil {
-		return fmt.Errorf("Error (stmt) loading cutover cfg: %s", err.Error())
+		return fmt.Errorf("error (stmt) loading cutover cfg: %s", err.Error())
 	}
 
 	result, err := stmt.Exec(cfg.ActiveTwoTask, cfg.Phase, cfg.DbBy2task[cfg.ActiveTwoTask],
@@ -356,7 +356,7 @@ func writeDbLog(cfg CutoverCfg, ctx context.Context, db *sql.DB) error {
 	logger.GetLogger().Log(logger.Debug, "inserted log ", cfg.RWstatusByDb[cfg.DbBy2task[cfg.ActiveTwoTask]], ", ", cfg.UpdateTime)
 
 	if err != nil {
-		fmt.Errorf("Error (query) loading cutover cfg: %s", err.Error())
+		return fmt.Errorf("Error (query) loading cutover cfg: %s", err.Error())
 	}
 	return nil
 }

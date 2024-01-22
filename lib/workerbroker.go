@@ -143,7 +143,7 @@ func (broker *WorkerBroker) init() error {
 			case ShardIdFor2TaskCutover:
 				broker.poolCfgs[s][wtypeRO].p2t = Pool2TaskCutover
 			default:
-				broker.poolCfgs[s][wtypeRO].p2t = P2TUndefined
+				broker.poolCfgs[s][wtypeRO].p2t = UndefP2T
 			}
 		}
 		broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s)
@@ -161,7 +161,7 @@ func (broker *WorkerBroker) init() error {
 			case ShardIdFor2TaskCutover:
 				broker.poolCfgs[s][wtypeRW].p2t = Pool2TaskCutover
 			default:
-				broker.poolCfgs[s][wtypeRW].p2t = P2TUndefined
+				broker.poolCfgs[s][wtypeRW].p2t = UndefP2T
 			}
 		}
 

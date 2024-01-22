@@ -57,7 +57,8 @@ type WorkerPool struct {
 
 	currentSize int // the number of workers in the pool
 	desiredSize int // the desired number of workers in the pool, usually equal to currentSize, different for a
-	// brief period when the pool is dynamically resized
+
+	tranSize int // brief period when the pool is dynamically resized in cutover
 
 	moduleName string // basically the application name as it comes from the command line
 	// the number of worker not in INIT state, atomically maintained
@@ -102,12 +103,13 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task PoolByTwoTask, size
 	pool.ShardID = shardID
 	pool.currentSize = 0
 	pool.desiredSize = size
+	pool.tranSize = size
 	pool.moduleName = moduleName
-	if GetConfig().EnableCutover && pool2task != P2TUndefined {
+	pool.p2task = UndefP2T
+	if GetConfig().EnableCutover {
 		pool.p2task = pool2task
-	} else {
-		pool.p2task = P2TUndefined
 	}
+
 	pool.workers = make([]*WorkerClient, size)
 	pool.thr = NewThrottler(uint32(GetConfig().MaxDbConnectsPerSec), fmt.Sprintf("%d_%d_%d", wType, shardID, instID))
 	for i := 0; i < size; i++ {
