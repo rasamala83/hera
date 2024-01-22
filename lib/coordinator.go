@@ -63,8 +63,9 @@ type Coordinator struct {
 	prevShard *shardInfo
 
 	//for cutover support so the coordinator knows where to dispatch.
-	prevCoInfo *ActiveCOInfo
-	curCoInfo  *ActiveCOInfo
+	//prevCoInfo     *ActiveCOInfo
+	curCoInfo      *ActiveCOInfo
+	coInternalPool PoolByTwoTask // Set by internal queries
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
 	worker        *WorkerClient // if it is in transaction/in cursor, the worker attached
@@ -495,7 +496,12 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 		return false, nil
 	// sharding commands
 	case common.CmdSetShardID:
-		err := crd.processSetShardID(request.Payload)
+		var err error
+		if GetConfig().EnableCutover {
+			err = crd.processSetCoShardID(request.Payload)
+		} else {
+			err = crd.processSetShardID(request.Payload)
+		}
 		if err == nil {
 			// send OK
 			crd.respond([]byte("1:5,"))
@@ -679,6 +685,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	GetBindEvict().lock.Lock()
 	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
 	GetBindEvict().lock.Unlock()
+
+	if GetCutoverCfg().Phase == CutoverPhase { // diable throttle during cutover
+		ok = false
+		// we probably should "empty the hashmap"
+	}
+
 	if ok {
 		wType := wtypeRW
 		cfg := GetNumWorkers(crd.shard.shardID)
@@ -734,7 +746,13 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 
 	if worker == nil {
 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
-			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
+
+			if GetConfig().EnableCutover && crd.isInternal {
+				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, int(Pool2Task))
+			} else {
+				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
+			}
+
 			if err != nil {
 				return err
 			}
@@ -750,7 +768,11 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				return err
 			}
 		} else {
-			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
+			if GetConfig().EnableCutover && crd.isInternal {
+				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, int(Pool2Task))
+			} else {
+				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
+			}
 			if err != nil {
 				return err
 			}
