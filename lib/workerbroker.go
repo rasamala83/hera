@@ -102,13 +102,13 @@ func GetWorkerBrokerInstance() *WorkerBroker {
 func (broker *WorkerBroker) init() error {
 	broker.stopped = make(chan struct{})
 	broker.maxShardSize = GetConfig().NumOfShards
-	if (broker.maxShardSize == 0) || !(GetConfig().EnableSharding) {
+	if broker.maxShardSize == 0 {
 		broker.maxShardSize = 1
 	}
 
 	if GetConfig().EnableCutover {
-		broker.maxShardSize = MaxNumOfDbInCutover // during cutover it must be two db
-		GetConfig().NumOfShards = MaxNumOfDbInCutover
+		broker.maxShardSize = int(MaxDbInCutover)     // during cutover it must be two db
+		GetConfig().NumOfShards = int(MaxDbInCutover) // overwrite config
 	}
 	//
 	// MAX_NUM_STANDBY = 10
@@ -138,12 +138,12 @@ func (broker *WorkerBroker) init() error {
 		broker.poolCfgs[s][wtypeRO] = new(WorkerPoolCfg)
 		if GetConfig().EnableCutover {
 			switch s {
-			case ShardIdFor2Task:
-				broker.poolCfgs[s][wtypeRO].p2t = Pool2Task
-			case ShardIdFor2TaskCutover:
-				broker.poolCfgs[s][wtypeRO].p2t = Pool2TaskCutover
+			case int(ShId2Task):
+				broker.poolCfgs[s][wtypeRO].p2t = ShId2Task
+			case int(ShId2TaskCutover):
+				broker.poolCfgs[s][wtypeRO].p2t = ShId2TaskCutover
 			default:
-				broker.poolCfgs[s][wtypeRO].p2t = UndefP2T
+				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset
 			}
 		}
 		broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s)
@@ -156,12 +156,12 @@ func (broker *WorkerBroker) init() error {
 		broker.poolCfgs[s][wtypeRW].instCnt = 1
 		if GetConfig().EnableCutover {
 			switch s {
-			case ShardIdFor2Task:
-				broker.poolCfgs[s][wtypeRW].p2t = Pool2Task
-			case ShardIdFor2TaskCutover:
-				broker.poolCfgs[s][wtypeRW].p2t = Pool2TaskCutover
+			case int(ShId2Task):
+				broker.poolCfgs[s][wtypeRW].p2t = ShId2Task
+			case int(ShId2TaskCutover):
+				broker.poolCfgs[s][wtypeRW].p2t = ShId2TaskCutover
 			default:
-				broker.poolCfgs[s][wtypeRW].p2t = UndefP2T
+				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset
 			}
 		}
 

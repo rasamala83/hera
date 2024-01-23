@@ -305,7 +305,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_%d", dbHostName, worker.shardID))
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
-			if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2Task {
+			if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2Task {
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R")
 				envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R", dbHostName))
 				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER %d", worker.ID))
@@ -319,7 +319,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		envUpsert(&attr, envHeraName, worker.moduleName)
 
 		twoTaskEnv := fmt.Sprintf("TWO_TASK_READ_%d", worker.shardID)
-		if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2TaskCutover {
+		if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
 			twoTaskEnv += "_CUTOVER"
 		}
 		twoTask = os.Getenv(twoTaskEnv)
@@ -333,7 +333,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			if logger.GetLogger().V(logger.Info) {
 				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
 			}
-			if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2Task {
+			if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2Task {
 				twoTaskEnv = "TWO_TASK_READ_CUTOVER"
 			} else {
 				twoTaskEnv = "TWO_TASK_READ"
@@ -359,7 +359,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_%d", dbHostName, worker.shardID))
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
-			if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2TaskCutover {
+			if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_CUTOVER")
 				envUpsert(&attr, envDbHostName, dbHostName)
 				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER %d CUTOVER", worker.ID))
@@ -371,7 +371,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 		envUpsert(&attr, envHeraName, worker.moduleName)
 		var twoTaskEnv string
-		if GetConfig().EnableCutover && worker.ConnTwoTask == Pool2TaskCutover {
+		if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
 			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d_CUTOVER", worker.shardID)
 		} else {
 			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d", worker.shardID)

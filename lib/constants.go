@@ -78,6 +78,7 @@ var (
 	ErrNoScuttleIdPredicate,
 	ErrCrossKeysDML,
 	ErrQueryBindBlocker,
+	ErrNotInternal,
 	ErrOther,
 	ErrReqParseFail error
 )
@@ -137,10 +138,4 @@ const (
 
 const (
 	SrcPrefixAppKey string = "srcPrefixApp"
-)
-
-const (
-	ShardIdFor2Task        = 0
-	ShardIdFor2TaskCutover = 1
-	MaxNumOfDbInCutover    = 2
 )

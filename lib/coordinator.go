@@ -498,6 +498,7 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 	case common.CmdSetShardID:
 		var err error
 		if GetConfig().EnableCutover {
+			// internal query log goes to both pool
 			err = crd.processSetCoShardID(request.Payload)
 		} else {
 			err = crd.processSetShardID(request.Payload)
@@ -748,7 +749,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
 
 			if GetConfig().EnableCutover && crd.isInternal {
-				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, int(Pool2Task))
+				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, int(ShId2Task))
 			} else {
 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
 			}
@@ -769,7 +770,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		} else {
 			if GetConfig().EnableCutover && crd.isInternal {
-				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, int(Pool2Task))
+				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, int(ShId2Task))
 			} else {
 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
 			}

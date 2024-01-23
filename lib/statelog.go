@@ -71,11 +71,9 @@ type ConnStateInfo struct {
 	perStateCnt []int
 }
 
-//
 // StateLog is exposed as a singleton. all stateful resources are protected behind a
 // message channel that sychronizes incoming messages. user should not call any of
 // the internal functions that are not threadsafe.
-//
 type StateLog struct {
 	//
 	// array of maps for different workertypes with each value holding a two dimension
@@ -436,6 +434,11 @@ func (sl *StateLog) init() error {
 	if sl.maxShardSize == 0 || !(GetConfig().EnableSharding) {
 		sl.maxShardSize = 1
 	}
+
+	if GetConfig().EnableCutover {
+		sl.maxShardSize = int(MaxDbInCutover)
+	}
+
 	sl.maxStndbySize = GetConfig().NumStdbyDbs
 	if sl.maxStndbySize > 10 {
 		sl.maxStndbySize = 10

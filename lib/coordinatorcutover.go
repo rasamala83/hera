@@ -133,7 +133,7 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 		return nil
 	}
 	if !GetConfig().EnableCutover { // no need to pass
-		crd.coInternalPool = UndefP2T
+		crd.coInternalPool = ShIdUnset
 		return nil
 	}
 
@@ -143,6 +143,10 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 	}
 
 	//crd.shard.sessionShardID = int(sh)
+	if !crd.isInternal {
+		return ErrNotInternal
+	}
+
 	crd.coInternalPool = PoolByTwoTask(sh)
 	if crd.inTransaction && (crd.worker != nil) {
 		// in transaction, piggy back on the shard variable

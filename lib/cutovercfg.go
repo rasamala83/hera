@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/paypal/hera/cal"
+	"github.com/paypal/hera/client/gosqldriver"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -22,10 +23,10 @@ type PoolByTwoTask int
 // max support 2 db at this time.
 // > 2 is as undefined
 const (
-	Pool2Task PoolByTwoTask = iota
-	Pool2TaskCutover
-	MaxDbInCutover
-	UndefP2T
+	ShId2Task        PoolByTwoTask = 0
+	ShId2TaskCutover PoolByTwoTask = 1
+	MaxDbInCutover   PoolByTwoTask = 2
+	ShIdUnset        PoolByTwoTask = 3
 )
 
 const (
@@ -44,7 +45,7 @@ type CutoverRecord struct {
 	wstatus     sql.NullString
 	rstatus     sql.NullString
 	phase       string
-	expiration  int
+	//expiration  int
 }
 
 var moduleName string
@@ -92,74 +93,74 @@ func compCfgStr(name1 string, name2 string) bool {
 // Assumption:
 // DB will not suspend the session process. Is the two database will have the same data in this table.
 func InitCutoverCfg(poolname string) error {
-	if GetConfig().EnableCutover {
+	if !GetConfig().EnableCutover {
+		return nil
+	}
+	ctx := context.Background()
+	var db *sql.DB
+	var err error
+	moduleName = poolname
+	twoTaskName = os.Getenv("TWO_TASK")
+	twoTaskCutoverName = os.Getenv("TWO_TASK_CUTOVER")
+	// 1. start by connecting to primary pool (TWO_TASK).
+	// 2. query to fetch shard (only allow 1 shard for now)  info and dbuname
+	// 3. The instruction should have been populated.
+	i := 0
+	for ; i < 60; i++ {
 
-		ctx := context.Background()
-		var db *sql.DB
-		var err error
-		moduleName = poolname
-		twoTaskName = os.Getenv("TWO_TASK")
-		twoTaskCutoverName = os.Getenv("TWO_TASK_CUTOVER")
-		// 1. start by connecting to primary pool (TWO_TASK).
-		// 2. query to fetch shard (only allow 1 shard for now)  info and dbuname
-		// 3. The instruction should have been populated.
-		i := 0
-		for ; i < 60; i++ {
+		if db != nil {
+			db.Close()
+		}
 
+		// always send cfg query to two_task connections
+		db, err = cutoverOpenDb(ShId2Task)
+		if err == nil {
+			err = loadCutoverCfg(ctx, db)
+			if err != nil {
+				evt := cal.NewCalEvent(EvtTypeCutover, "init load cfg error", cal.TransOK, err.Error())
+				evt.Completed()
+			} else {
+				evt := cal.NewCalEvent(EvtTypeCutover, "init load cfg", cal.TransOK, "successful")
+				evt.Completed()
+				break
+			}
+		} else {
+			evt := cal.NewCalEvent(EvtTypeCutover, "init load opendb error", cal.TransOK, err.Error())
+			evt.Completed()
+		}
+		time.Sleep(time.Second)
+	}
+
+	if i == 60 {
+		return errors.New("failed to load cutovercfg from two_task pool, no more retry")
+	}
+
+	// spawn the routine to load config
+	go func() {
+		for {
+			time.Sleep(time.Second * time.Duration(GetConfig().CutoverCfgReloadInterval))
 			if db != nil {
 				db.Close()
 			}
 
-			// always send cfg query to two_task connections
-			db, err = cutoverOpenDb(Pool2Task)
+			// always get the record via two_task connections instead of two_task_cutover
+			db, err = cutoverOpenDb(ShId2Task)
 			if err == nil {
 				err = loadCutoverCfg(ctx, db)
 				if err != nil {
-					evt := cal.NewCalEvent(EvtTypeCutover, "init load cfg error", cal.TransOK, err.Error())
+					logger.GetLogger().Log(logger.Warning, "Error <", err, "> loading the cutovercfg from workerpool", GetCutoverCfg().DbBy2task[os.Getenv("TWO_TASK")])
+					evt := cal.NewCalEvent(EvtTypeCutover, "load cfgerror", cal.TransOK, err.Error())
 					evt.Completed()
 				} else {
-					evt := cal.NewCalEvent(EvtTypeCutover, "init load cfg", cal.TransOK, "successful")
+					evt := cal.NewCalEvent(EvtTypeCutover, "loadcfg", cal.TransOK, "success")
 					evt.Completed()
-					break
 				}
 			} else {
-				evt := cal.NewCalEvent(EvtTypeCutover, "init load opendb error", cal.TransOK, err.Error())
+				evt := cal.NewCalEvent(EvtTypeCutover, "load opendb error", cal.TransOK, err.Error())
 				evt.Completed()
 			}
-			time.Sleep(time.Second)
 		}
-
-		if i == 60 {
-			return errors.New("failed to load cutovercfg from two_task pool, no more retry")
-		}
-
-		// spawn the routine to load config
-		go func() {
-			for {
-				time.Sleep(time.Second * time.Duration(GetConfig().CutoverCfgReloadInterval))
-				if db != nil {
-					db.Close()
-				}
-
-				// always get the record via two_task connections instead of two_task_cutover
-				db, err = cutoverOpenDb(Pool2Task)
-				if err == nil {
-					err = loadCutoverCfg(ctx, db)
-					if err != nil {
-						logger.GetLogger().Log(logger.Warning, "Error <", err, "> loading the cutovercfg from workerpool", GetCutoverCfg().DbBy2task[os.Getenv("TWO_TASK")])
-						evt := cal.NewCalEvent(EvtTypeCutover, "load cfgerror", cal.TransOK, err.Error())
-						evt.Completed()
-					} else {
-						evt := cal.NewCalEvent(EvtTypeCutover, "loadcfg", cal.TransOK, "success")
-						evt.Completed()
-					}
-				} else {
-					evt := cal.NewCalEvent(EvtTypeCutover, "load opendb error", cal.TransOK, err.Error())
-					evt.Completed()
-				}
-			}
-		}()
-	}
+	}()
 	return nil
 }
 
@@ -336,13 +337,24 @@ func getLogSQL() string {
 		GetConfig().ManagementTablePrefix, GetConfig().CutoverPostfix)
 }
 
-// looks like we only support bind by position
-func writeDbLog(cfg CutoverCfg, ctx context.Context, db *sql.DB) error {
+// Best efforts log writing. Insert to both database connection pools two_task and two_task_cutover
+func WriteCutoverLog(cfg CutoverCfg) error {
+
+	ctx := context.Background()
+	var db *sql.DB
+	var err error
+	//moduleName = poolname
+	//twoTaskName = os.Getenv("TWO_TASK")
+
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return fmt.Errorf("error (conn) write cutover cfg to Db: %s", err.Error())
 	}
 	defer conn.Close()
+
+	tomux := gosqldriver.InnerConn(conn)
+	tomux.SetShardID(int(ShId2Task))
+
 	stmt, err := conn.PrepareContext(ctx, getLogSQL())
 	if err != nil {
 		return fmt.Errorf("error (stmt) loading cutover cfg: %s", err.Error())
@@ -356,7 +368,7 @@ func writeDbLog(cfg CutoverCfg, ctx context.Context, db *sql.DB) error {
 	logger.GetLogger().Log(logger.Debug, "inserted log ", cfg.RWstatusByDb[cfg.DbBy2task[cfg.ActiveTwoTask]], ", ", cfg.UpdateTime)
 
 	if err != nil {
-		return fmt.Errorf("Error (query) loading cutover cfg: %s", err.Error())
+		return fmt.Errorf("error (log query) insert error: %s", err.Error())
 	}
 	return nil
 }

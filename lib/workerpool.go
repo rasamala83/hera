@@ -105,7 +105,7 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task PoolByTwoTask, size
 	pool.desiredSize = size
 	pool.tranSize = size
 	pool.moduleName = moduleName
-	pool.p2task = UndefP2T
+	pool.p2task = ShIdUnset
 	if GetConfig().EnableCutover {
 		pool.p2task = pool2task
 	}

@@ -192,7 +192,13 @@ func Run() {
 
 	InitRacMaint(*namePtr)
 	if GetConfig().EnableCutover {
-		InitCutoverCfg(*namePtr)
+		err = InitCutoverCfg(*namePtr)
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err)
+			}
+			FullShutdown()
+		}
 	}
 
 	srv := NewServer(lsn, HandleConnection)
