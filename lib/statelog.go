@@ -537,6 +537,9 @@ func (sl *StateLog) init() error {
 	}
 	sl.mStateHeader = buf.String()
 
+	// cutover
+	// workertype title will need to replace sh with cutover
+	//
 	for idx, val := range typeTitlePrefix {
 		typeTitlePrefix[idx] = GetConfig().StateLogPrefix + val
 	}
@@ -545,7 +548,16 @@ func (sl *StateLog) init() error {
 	}
 	for s := 0; s < sl.maxShardSize; s++ {
 		for t := wtypeRW; t < wtypeTotalCount; t++ {
-			var suffix = ".sh" + strconv.Itoa(s)
+			var suffix string
+			if GetConfig().EnableCutover {
+				if s == int(ShId2Task) {
+					suffix = ".2t"
+				} else if s == int(ShId2TaskCutover) {
+					suffix = ".2tc"
+				}
+			} else {
+				suffix = ".sh" + strconv.Itoa(s)
+			}
 			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
 
 			for i := 0; i < instCnt; i++ {

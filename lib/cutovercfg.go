@@ -267,6 +267,29 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	} else {
 		if checkCfgChange(*precfg, newcfg) {
 			gCutoverCfg.Store(&newcfg)
+			// we notify workerpool when the two_task to dbname mapping is changed.
+			// In that case the workerpool integrity can be checked and recycle "incorrect" workers immediately.
+			//
+
+			var wpool *WorkerPool
+			wpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, int(ShId2Task))
+			wpool.ChangeDbUname(newcfg.DbBy2task[twoTaskName])
+			wpool = nil
+			wpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, int(ShId2Task))
+			if wpool != nil {
+				wpool.ChangeDbUname(newcfg.DbBy2task[twoTaskName])
+			}
+
+			//
+			wpool = nil
+			wpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, int(ShId2TaskCutover))
+			wpool.ChangeDbUname(newcfg.DbBy2task[twoTaskCutoverName])
+			wpool = nil
+			wpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, int(ShId2TaskCutover))
+			if wpool != nil {
+				wpool.ChangeDbUname(newcfg.DbBy2task[twoTaskCutoverName])
+			}
+
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Verbose, "cutovercfg loaded:", GetConfig().MaxScuttleBuckets, "buckets")
 			}

@@ -87,9 +87,12 @@ type WorkerPool struct {
 	// Throtle workers lifecycle
 	thr Throttler
 
-	// dictate the pool following two_task or two_task_cutover contract
-	p2task     PoolByTwoTask
-	tgtDbUname string
+	// Cutover feaeture
+	// p2task: a pool is created specifically either for two_task or two_task_cutover connections
+	// dbUname: set by 1) when workerpool is created 2) when cutovercfg is changed
+	p2task  PoolByTwoTask
+	phase   string
+	dbUname string
 }
 
 // Init creates the pool by creating the workers and making all the initializations
@@ -703,11 +706,6 @@ func (pool *WorkerPool) GetHealthyWorkersCount() int32 {
 	return atomic.LoadInt32(&(pool.numHealthyWorkers))
 }
 
-// CutoverIntegrityCheck is called by the CutoverCfg. It shares the local dbuname (Main worker pool) and remote dbuname (LDR workerpool). The workerpool must ensure the information is matched
-func (pool *WorkerPool) IntegrityCheck(CutoverCfg) {
-
-}
-
 // RacMaint is called when rac maintenance is needed. It marks the workers for restart, spreading
 // to an interval in order to avoid connection storm to the database
 func (pool *WorkerPool) RacMaint(racReq racAct) {
@@ -752,32 +750,6 @@ func (pool *WorkerPool) RacMaint(racReq racAct) {
 		evt = cal.NewCalEvent("DB_UNAME", dbUname, cal.TransOK, "")
 		evt.Completed()
 	}
-}
-
-func (pool *WorkerPool) UpdateDbUname(newDbUname string) error {
-	if pool.tgtDbUname == newDbUname {
-		return nil
-	}
-	pool.tgtDbUname = newDbUname
-	if GetCutoverCfg().Phase != EnabledPhase {
-		// going through the worker list
-		now := time.Now().Unix()
-		pool.poolCond.L.Lock()
-		for i := 0; i < pool.currentSize; i++ {
-			if pool.workers[i].dbUname != pool.tgtDbUname {
-
-				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, "Rac maint activating, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now)
-				}
-				// we need to quit the request asap.
-
-				// force the worker to quit
-				err := pool.workers[i].Terminate()
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // checkWorkerLifespan is called periodically to check if any worker lifetime has expired and terminates it
@@ -907,4 +879,59 @@ func (pool *WorkerPool) decBacklogCnt() {
 		e.Completed()
 		atomic.StoreInt32(&(pool.backlogCnt), 0)
 	}
+}
+
+func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
+	if pool == nil {
+		return nil
+	}
+
+	now := time.Now().Unix()
+	cnt := 0
+	var workers []*WorkerClient
+	pool.poolCond.L.Lock()
+	for i := 0; i < pool.currentSize; i++ {
+		if pool.workers[i] != nil {
+			if pool.workers[i].dbUname != newDbUname {
+				// Could we do skip checking the backoff feature? by setting exitTime, the recycle can be intefered by other reasons and result in delay.
+				//pool.workers[i].exitTime = now
+
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, "Cutover enforce dbuname integrity, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now, pool.currentSize)
+				}
+				cnt++
+			}
+		}
+	}
+	pool.poolCond.L.Unlock()
+	for _, w := range workers {
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "enforceIntegrity dbuname mismatched, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
+		}
+		// immediate terminate
+		if pool.phase == CutoverPhase || pool.phase == PrePhase {
+			w.Terminate()
+		} else {
+			//log warning
+			logger.GetLogger().Log(logger.Warning, "worker dbuname not match target db while cutover phase not at Pre or Cutover")
+			e := cal.NewCalEvent(EvtTypeCutover, "uname_not_match_not_enforced", cal.TransOK, "")
+			e.Completed()
+		}
+	}
+}
+
+// workerpool integrity ensured in ways
+// 1. when cfg change, it invokes the function to check all workers' info
+// 2. workerpool will track the current setting, and enforce in case any worker is restarted/recycled outside condition 1.
+func (pool *WorkerPool) ChangeCutoverInfo(newDbUname string, newPhase string) error {
+	// nothing changed.
+	if pool.phase == newPhase && pool.dbUname == newDbUname {
+		return nil
+	}
+	err := pool.enforceIntegrity(newDbUname)
+	pool.phase = newPhase
+	pool.dbUname = newDbUname
+
+	return err
+
 }
