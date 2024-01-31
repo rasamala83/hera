@@ -1,15 +1,15 @@
 package main
 
 import (
-	
-	"os"
-	"testing"
-	"database/sql"
 	"context"
-	"time"
+	"database/sql"
 	"fmt"
 	"github.com/paypal/hera/tests/unittest/testutil"
 	"github.com/paypal/hera/utility/logger"
+	"os"
+	"strings"
+	"testing"
+	"time"
 )
 
 var mx testutil.Mux
@@ -28,11 +28,10 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["db_heartbeat_interval"] = "10"
 	appcfg["enable_caching"] = "true"
 	appcfg["caching_cfg_reload_interval"] = "60"
-
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
-	opscfg["opscfg.default.server.max_lifespan_per_child"]="5"
+	opscfg["opscfg.default.server.max_lifespan_per_child"] = "5"
 
 	appcfg["child.executable"] = "mysqlworker"
 
@@ -43,9 +42,21 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
-
 func TestMain(m *testing.M) {
-	os.Exit(testutil.UtilMain(m, cfg, nil))
+	os.Exit(testutil.UtilMain(m, cfg, before))
+}
+
+func before() error {
+	tableName = os.Getenv("TABLE_NAME")
+	if tableName == "" {
+		tableName = "hera_sql_caching"
+	}
+	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
+		testutil.DBDirect("create table hera_sql_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
+			"bind_variables varchar(1000),TTL_sec BIGINT,enable_shadow_test varchar(1),tableName varchar(30),"+
+			"invalidation_clause varchar(1000),caching_enabled varchar(1),remarks varchar(4000),hera_module varchar(100))", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
+	}
+	return nil
 }
 
 func TestTTLCacheEnabledMissingCacheCfgTable(t *testing.T) {
@@ -53,8 +64,8 @@ func TestTTLCacheEnabledMissingCacheCfgTable(t *testing.T) {
 
 	// testutil.RunMysql("DROP TABLE hera_sql_caching")
 	testutil.RunDML("DROP TABLE hera_sql_caching")
-	
-	time.Sleep(3*time.Second)
+
+	time.Sleep(3 * time.Second)
 	shard := 0
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
 	if err != nil {
@@ -64,13 +75,18 @@ func TestTTLCacheEnabledMissingCacheCfgTable(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	conn, err := db.Conn(ctx);
+	defer cancel()
+	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
-	
-	rows, _ := conn.QueryContext(ctx, "SELECT version()")
-	
+
+	rows, err := conn.QueryContext(ctx, "SELECT version()")
+
+	if err != nil {
+		t.Fatalf("expected 1 row but received an unexpected error %v", err)
+	}
+
 	if !rows.Next() {
 		t.Fatalf("Expected 1 row")
 	}
@@ -106,7 +122,6 @@ func TestTTLCacheEnabledMissingCacheCfgTable(t *testing.T) {
 		t.Fatalf("Error: should not see CACHE_SESSION when cacheCfg is empty")
 	}
 
-	cancel()
 	conn.Close()
 
 	logger.GetLogger().Log(logger.Debug, "TestTTLCacheEnabledMissingCacheCfgTable done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")

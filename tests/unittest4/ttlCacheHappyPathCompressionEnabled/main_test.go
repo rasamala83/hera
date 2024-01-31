@@ -1,15 +1,15 @@
 package main
 
 import (
-	
-	"os"
-	"testing"
-	"database/sql"
 	"context"
-	"time"
+	"database/sql"
 	"fmt"
 	"github.com/paypal/hera/tests/unittest/testutil"
 	"github.com/paypal/hera/utility/logger"
+	"os"
+	"strings"
+	"testing"
+	"time"
 )
 
 var mx testutil.Mux
@@ -20,6 +20,16 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg := make(map[string]string)
 	// appcfg["x-mysql"] = "manual" // disable test framework spawning mysql server
 	// best to chose an "unique" port in case golang runs tests in paralel
+	cacheHost, ok := os.LookupEnv("CACHE_HOST")
+	if !ok {
+		cacheHost = "localhost"
+	}
+	cacheCertsPath, ok := os.LookupEnv("CACHE_CERTS_PATH")
+	if !ok {
+		cacheCertsPath, _ = os.Getwd()
+	}
+	appcfg["cache_cert_file_path"] = cacheCertsPath
+	appcfg["cache_endpoint"] = fmt.Sprintf("%s:5080", cacheHost)
 	appcfg["bind_port"] = "31002"
 	appcfg["log_level"] = "5"
 	appcfg["log_file"] = "hera.log"
@@ -28,14 +38,13 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["db_heartbeat_interval"] = "10"
 	appcfg["enable_caching"] = "true"
 	appcfg["caching_cfg_reload_interval"] = "60"
-	appcfg["cache_endpoint"] = "10.176.9.146:5080"
 	appcfg["cache_by_corrid"] = "false"
+	appcfg["cache_response_timeout_ms"] = "3000"
 	appcfg["cache_enable_compression"] = "true"
-
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
-	opscfg["opscfg.default.server.max_lifespan_per_child"]="5"
+	opscfg["opscfg.default.server.max_lifespan_per_child"] = "5"
 
 	appcfg["child.executable"] = "mysqlworker"
 
@@ -46,10 +55,23 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
-
 func TestMain(m *testing.M) {
-	os.Exit(testutil.UtilMain(m, cfg, nil))
+	os.Exit(testutil.UtilMain(m, cfg, before))
 }
+
+func before() error {
+	tableName = os.Getenv("TABLE_NAME")
+	if tableName == "" {
+		tableName = "hera_sql_caching"
+	}
+	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
+		testutil.DBDirect("create table hera_sql_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
+			"bind_variables varchar(1000),TTL_sec BIGINT,enable_shadow_test varchar(1),tableName varchar(30),"+
+			"invalidation_clause varchar(1000),caching_enabled varchar(1),remarks varchar(4000),hera_module varchar(100))", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
+	}
+	return nil
+}
+
 // GET (Cache MISS) + SET
 func TestTTLCacheHappyPath(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestTTLCacheHappyPath begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
@@ -57,7 +79,7 @@ func TestTTLCacheHappyPath(t *testing.T) {
 	testutil.RunDML("DELETE from hera_sql_caching")
 	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, hera_module) VALUES  ('1', '1883341761', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', '', 'hera-test')")
 
-	time.Sleep(5*time.Second)
+	time.Sleep(5 * time.Second)
 
 	if testutil.RegexCountFile("Loaded 1 sqlhashes, 1 cacheCfg entries", "hera.log") < 1 {
 		t.Fatalf("Error: should have loaded the cacheCfg entry...")
@@ -76,18 +98,19 @@ func TestTTLCacheHappyPath(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	conn, err := db.Conn(ctx);
+	defer cancel()
+	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
-	
+
 	rows, _ := conn.QueryContext(ctx, "SELECT 'def' from dual")
-	
+
 	if !rows.Next() {
 		t.Fatalf("Expected 1 row")
 	}
 	rows.Close()
-
+	time.Sleep(3 * time.Second)
 	if testutil.RegexCountFile("1883341761 CachingEnabled for  GET : true", "hera.log") < 1 {
 		t.Fatalf("Error: should have entered this block")
 	}
@@ -137,25 +160,23 @@ func TestTTLCacheHappyPath(t *testing.T) {
 		t.Fatalf("Error: should see SET when cacheCfgRecord is enabled for caching")
 	}
 
-	if testutil.RegexCountFile("Set: Compression enabled", "hera.log") < 1 { 
+	if testutil.RegexCountFile("Set: Compression enabled", "hera.log") < 1 {
 		t.Fatalf("Error: should set the compressed value when compression is enabled")
 	}
 
-	if testutil.RegexCountFile("Encode.*SET.*compressedSize.*", "cal.log") < 1 { 
+	if testutil.RegexCountFile("Encode.*SET.*compressedSize.*", "cal.log") < 1 {
 		t.Fatalf("Error: should see the event when compression is enabled")
 	}
 
-	cancel()
 	conn.Close()
 
 	logger.GetLogger().Log(logger.Debug, "TestTTLCacheHappyPath done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 }
 
-
 func TestTTLCacheHit(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestTTLCacheHit begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	time.Sleep(2*time.Second)
+	time.Sleep(2 * time.Second)
 
 	shard := 0
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
@@ -166,18 +187,19 @@ func TestTTLCacheHit(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	conn, err := db.Conn(ctx);
+	defer cancel()
+	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
-	
+
 	rows, _ := conn.QueryContext(ctx, "SELECT 'def' from dual")
-	
+
 	if !rows.Next() {
 		t.Fatalf("Expected 1 row")
 	}
 	rows.Close()
-
+	time.Sleep(3 * time.Second)
 	if testutil.RegexCountFile("1883341761 CachingEnabled for  GET : true", "hera.log") < 2 {
 		t.Fatalf("Error: should have entered this block")
 	}
@@ -190,11 +212,11 @@ func TestTTLCacheHit(t *testing.T) {
 		t.Fatalf("Error: should have entered getRecordFromCache when caching is enabled")
 	}
 
-	if testutil.RegexCountFile("Get: Compression enabled", "hera.log") < 1 { 
+	if testutil.RegexCountFile("Get: Compression enabled", "hera.log") < 1 {
 		t.Fatalf("Error: should return the decompressed response")
 	}
 
-	if testutil.RegexCountFile("Decode.*GET.*respSize.*", "cal.log") < 1 { 
+	if testutil.RegexCountFile("Decode.*GET.*respSize.*", "cal.log") < 1 {
 		t.Fatalf("Error: should see the event when compression is enabled")
 	}
 
@@ -206,12 +228,9 @@ func TestTTLCacheHit(t *testing.T) {
 		t.Fatalf("Error: should be a cache HIT")
 	}
 
-
 	if testutil.RegexCountFile("coordinator dispatchrequest", "hera.log") < 4 {
 		t.Fatalf("Error: should have dispatched the request to database")
 	}
-
-	cancel()
 	conn.Close()
 
 	logger.GetLogger().Log(logger.Debug, "TestTTLCacheHit done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")

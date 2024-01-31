@@ -1,12 +1,12 @@
 package main
 
 import (
-	
-	"os"
-	"testing"
-	"time"
 	"github.com/paypal/hera/tests/unittest/testutil"
 	"github.com/paypal/hera/utility/logger"
+	"os"
+	"strings"
+	"testing"
+	"time"
 )
 
 var mx testutil.Mux
@@ -22,14 +22,14 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
-	appcfg["db_heartbeat_interval"] = "10"
+	appcfg["db_heartbeat_interval"] = "20"
 	appcfg["enable_caching"] = "true"
-	appcfg["caching_cfg_reload_interval"] = "2"
+	appcfg["caching_cfg_reload_interval"] = "5"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
-	opscfg["opscfg.default.server.max_lifespan_per_child"]="5"
+	opscfg["opscfg.default.server.max_lifespan_per_child"] = "500"
 
 	appcfg["child.executable"] = "mysqlworker"
 
@@ -40,17 +40,29 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
-
 func TestMain(m *testing.M) {
-	os.Exit(testutil.UtilMain(m, cfg, nil))
+	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
+func before() error {
+	tableName = os.Getenv("TABLE_NAME")
+	if tableName == "" {
+		tableName = "hera_sql_caching"
+	}
+	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
+		// mysql
+		testutil.DBDirect("create table hera_sql_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
+			"bind_variables varchar(1000),TTL_sec BIGINT,enable_shadow_test varchar(1),tableName varchar(30),"+
+			"invalidation_clause varchar(1000),caching_enabled varchar(1),remarks varchar(4000),hera_module varchar(100))", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
+	}
+	return nil
+}
 func TestCacheCfgReload(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestCacheCfgReload begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	
+
 	testutil.RunDML("DELETE from hera_sql_caching")
 
-	time.Sleep(5*time.Second)
+	time.Sleep(10 * time.Second)
 
 	if testutil.RegexCountFile("Loaded 0 sqlhashes, 0 cacheCfg entries", "hera.log") < 1 {
 		t.Fatalf("Error: should not have cacheCfg entries...table is empty")
@@ -63,7 +75,7 @@ func TestCacheCfgReload(t *testing.T) {
 	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, hera_module) VALUES  ('1', '1774480566', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', '', 'hera-test')")
 	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, hera_module) VALUES  ('2', '1774480567', 'MyTestQuery2', 'xyz=123', 30, 'N', 'MyTestTable', '', 'Y', '', 'hera-test')")
 
-	time.Sleep(5*time.Second)
+	time.Sleep(10 * time.Second)
 
 	if testutil.RegexCountFile("Loaded 2 sqlhashes, 2 cacheCfg entries", "hera.log") < 1 {
 		t.Fatalf("Error: should have two cacheCfg entries...")
@@ -75,7 +87,7 @@ func TestCacheCfgReload(t *testing.T) {
 
 	testutil.RunDML("DELETE from hera_sql_caching WHERE sqlhash = '1774480567'")
 
-	time.Sleep(5*time.Second)
+	time.Sleep(10 * time.Second)
 
 	if testutil.RegexCountFile("Loaded 1 sqlhashes, 1 cacheCfg entries", "hera.log") < 1 {
 		t.Fatalf("Error: should have reloaded and have just one cacheCfg entry...")

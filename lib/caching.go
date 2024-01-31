@@ -20,31 +20,32 @@ package lib
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"errors"
-	"time"
-	"sync/atomic"
+	"fmt"
 	"github.com/paypal/hera/utility/logger"
 	"sync"
+	"sync/atomic"
+	"time"
 )
+
 // Cache config record to store the hera_sql_caching entries
 type CacheRecord struct {
-	query_id string
-	sqlHash uint32
-	sqlText string
-	binds string
-	ttl uint32
-	enableShadowTest string
-	tableName string
+	query_id           string
+	sqlHash            uint32
+	sqlText            string
+	binds              string
+	ttl                uint32
+	enableShadowTest   string
+	tableName          string
 	invalidationClause string
-	cachingEnabled string
-	remarks string
-	module string
+	cachingEnabled     string
+	remarks            string
+	module             string
 }
 
 type CacheCfg struct {
 	cacheCfgRecords map[uint32]*CacheRecord
-	lock *sync.Mutex
+	lock            *sync.Mutex
 }
 
 var moduleName string
@@ -57,11 +58,11 @@ func getCacheCfgSQL() string {
 func getCacheCfg() *CacheCfg {
 	cfg := gCacheCfg.Load()
 	if cfg == nil {
-		out := &CacheCfg{cacheCfgRecords:make(map[uint32]*CacheRecord), lock: &sync.Mutex{}}
+		out := &CacheCfg{cacheCfgRecords: make(map[uint32]*CacheRecord), lock: &sync.Mutex{}}
 		gCacheCfg.Store(out)
 		return out
 	}
-	return cfg.(*CacheCfg)
+	return cfg.(*CacheCfg) //Assertion to type case
 }
 
 func loadCacheCfg(ctx context.Context, db *sql.DB) error {
@@ -94,7 +95,7 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 	}
 	defer rows.Close()
 
-	cfgLoad := &CacheCfg{cacheCfgRecords:make(map[uint32]*CacheRecord), lock: &sync.Mutex{}}
+	cfgLoad := &CacheCfg{cacheCfgRecords: make(map[uint32]*CacheRecord), lock: &sync.Mutex{}}
 	logger.GetLogger().Log(logger.Verbose, "No errors. Begin loading rows...")
 	rowCount := 0
 	for rows.Next() {
@@ -106,7 +107,7 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 			logger.GetLogger().Log(logger.Alert, "Error (rows scan) loading cache config", err)
 			return fmt.Errorf("Error (rows scan) loading cache config: %s", err.Error())
 		}
-		
+
 		if bindVariables.Valid {
 			rec.binds = bindVariables.String
 		}
@@ -123,7 +124,7 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	logger.GetLogger().Log(logger.Warning, fmt.Sprintf("Loaded %d sqlhashes, %d cacheCfg entries", len(cfgLoad.cacheCfgRecords), rowCount))
-	
+
 	gCacheCfg.Store(cfgLoad)
 	return err
 }
@@ -157,13 +158,15 @@ func InitCachingCfg(modName string) error {
 	}
 	go func() {
 		for {
-			logger.GetLogger().Log(logger.Verbose, "Inside Routine to periodically load CacheConfig")
-			// temp := getCacheCfg()
-			// logger.GetLogger().Log(logger.Info, fmt.Sprintf("cacheCfgRecord size inside routine: %d", len(temp.cacheCfgRecords)))
-			// for k, v := range temp.cacheCfgRecords {
-			// 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("Key SQLHash:%d", k))
-			// 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("Value:%s", v.sqlText))
-			// }
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "Inside Routine to periodically load CacheConfig")
+				temp := getCacheCfg()
+				logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("cacheCfgRecord size inside routine: %d", len(temp.cacheCfgRecords)))
+				for k, v := range temp.cacheCfgRecords {
+					logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("Key SQLHash:%d", k))
+					logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("Value:%s", v.sqlText))
+				}
+			}
 			time.Sleep(time.Second * time.Duration(GetConfig().CachingCfgReloadInterval))
 			if db != nil {
 				db.Close()
@@ -180,7 +183,7 @@ func InitCachingCfg(modName string) error {
 			}
 		}
 	}()
-	
+
 	return nil
 
 }

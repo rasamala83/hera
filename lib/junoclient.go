@@ -25,6 +25,7 @@ import (
 	junocal "juno/pkg/logging/cal/config"
 	"juno/pkg/util"
 	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -34,12 +35,12 @@ import (
 )
 
 var tlsConfig *tls.Config
-var mutex     sync.Mutex
+var mutex sync.Mutex
 
 var junoclientOnce sync.Once
 
 type JunoClient struct {
-	junoClient client.IClient
+	junoClient      client.IClient
 	junoClientReady bool
 }
 
@@ -52,17 +53,17 @@ func GetTLSConfig() *tls.Config {
 		return tlsConfig
 	}
 
-	cert, err := tls.LoadX509KeyPair(GetConfig().CacheCertFilePath + "server.crt", GetConfig().CacheCertFilePath + "server.pem")
+	cert, err := tls.LoadX509KeyPair(path.Join(GetConfig().CacheCertFilePath, "server.crt"), path.Join(GetConfig().CacheCertFilePath, "server.pem"))
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error in junoclient::GetTLSConfig", err)
 	}
 
-	caCert, err := os.ReadFile(GetConfig().CacheCertFilePath + "ca.crt")
+	caCert, err := os.ReadFile(path.Join(GetConfig().CacheCertFilePath, "ca.crt"))
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error in junoclient::GetTLSConfig", err)
 	}
 	// rootCAs := x509.NewCertPool()
-    // rootCAs.AppendCertsFromPEM(caCert)
+	// rootCAs.AppendCertsFromPEM(caCert)
 	rootCAs, _ := x509.SystemCertPool()
 	if rootCAs == nil {
 		rootCAs = x509.NewCertPool()
@@ -70,7 +71,7 @@ func GetTLSConfig() *tls.Config {
 	rootCAs.AppendCertsFromPEM(caCert)
 
 	tlsConfig = &tls.Config{
-		ServerName: "Juno-test-server",
+		ServerName:             "Juno-test-server",
 		RootCAs:                rootCAs,
 		Certificates:           []tls.Certificate{cert},
 		InsecureSkipVerify:     true,
@@ -109,7 +110,7 @@ func GetJunoClient() (*JunoClient, error) {
 
 func (cli *JunoClient) init() error {
 	logger.GetLogger().Log(logger.Info, "Init() JunoClient with endpoint", GetConfig().CacheEndPoint)
-	cfg := client.Config {
+	cfg := client.Config{
 		Appname:           cal.GetCalClientInstance().GetPoolName(),
 		Namespace:         GetConfig().CacheNamespace,
 		DefaultTimeToLive: GetConfig().CacheDefaultTTL, // seconds
@@ -125,7 +126,7 @@ func (cli *JunoClient) init() error {
 		},
 	}
 
-	cfg.Server.Addr = GetConfig().CacheEndPoint 
+	cfg.Server.Addr = GetConfig().CacheEndPoint
 	cfg.Server.SSLEnabled = GetConfig().CacheSSLEnabled // SSL
 	var err error
 	cli.junoClient, err = client.NewWithTLS(cfg, GetTLSConfig)
@@ -175,4 +176,3 @@ func (cli *JunoClient) Get(key []byte) ([]byte, error) {
 		return resp, err
 	}
 }
-
