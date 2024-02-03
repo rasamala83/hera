@@ -18,6 +18,13 @@ type CutoverCfg struct {
 	RWstatusByDbUname map[string]int    //dbuname --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
 }
 */
+
+// Active shard means the shard either take R, W, or RW sql.
+// If no shard is active, the ActiveCOInfo should container empty strings.
+// Each coordinator will pull the CutoverCfg to check if there is any update.
+// The information is stored in a structure ActiveCOInfo as for which shard and RW, R, or W
+//
+// Or, should we let the cutoverCfg to "push" the change to the coordinator? is it possible and better? where does the coordinator is tracked?
 type ActiveCOInfo struct {
 	TwoTask  string // FOO or FOO_CUTOVER is the active
 	Phase    string // current cutover phase
@@ -32,13 +39,17 @@ func copyActCOInfo(destInfo *ActiveCOInfo, srcInfo ActiveCOInfo) {
 	destInfo.DbUname = srcInfo.DbUname
 }
 
-// compare the two struct. 0 if same, 1 if activetwotask differs, 2 if dbuname differs, 4 if phase differs, 8 if RWStatus differs.
+// Compare existing ActiveCOInfo with new cfg.
+// (00000) identical
+// (00001) 1 if twotask changes (shard id changes)
+// (00010) 2 if dbuname changes
+// (00100) 4 if phase changes (may force shard id )
+// (01000) 8 if RWStatus changes
 func compActCOInfo(cur ActiveCOInfo, new ActiveCOInfo) int {
 	flag := 0
 	if cur.TwoTask != new.TwoTask {
 		flag |= 0x0001
 	}
-
 	if cur.DbUname != new.DbUname {
 		flag |= 0x0002
 	}
@@ -51,7 +62,7 @@ func compActCOInfo(cur ActiveCOInfo, new ActiveCOInfo) int {
 	return flag
 }
 
-// construct a new cutoverInfo from CutoverCfg.
+// Build the ActiveCOInfo from CutoverCfg.
 func newCutoverInfo(cocfg *CutoverCfg) ActiveCOInfo {
 	newcoinfo := ActiveCOInfo{
 		TwoTask:  cocfg.ActiveTwoTask,
@@ -63,10 +74,16 @@ func newCutoverInfo(cocfg *CutoverCfg) ActiveCOInfo {
 }
 
 /*
-PreprocessCutover is to detect change that coordinator needs to change for the next dispatch
-1. active db change
-2. rw status change
-3. cutover phase change
+PreprocessCutover is to detect the change that will require breaking existing transaction
+// (00000) identical
+// (00001) 1 if (active) twotask changes (shard id changes), terminate ongoing txn
+// (00010) 2 if dbuname changes (doesn't affect shard id)
+// (00100) 4 if phase changes (may force shard id )
+// (01000) 8 if RWStatus changes. any type (of R or W) is stopped, terminate ongoing txn
+
+coordinator cares about
+a. which workerpool to dispatch such request
+b. some phase has default behavior and different policy
 */
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
 	if logger.GetLogger().V(logger.Verbose) {
@@ -75,20 +92,28 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 
 	curCOCfg := GetCutoverCfg()
 	newCOInfo := newCutoverInfo(curCOCfg)
-	diff := compActCOInfo(*crd.curCoInfo, newCOInfo)
+	diff := compActCOInfo(*crd.curCOInfo, newCOInfo)
 
 	if crd.inTransaction {
-		// if crd is in transaction we should hang up if read/write stops or active db has changed.
-		//		0 if same, 1 if activetwotask differs, 2 if dbuname differs, 4 if phase differs, 8 if RWStatus differs.
-
 		if diff != 0 {
 
-			// check if it's single change
+			if (diff & 0x0004) > 0 { // phase change
+				if newCOInfo.Phase == EnabledPhase || newCOInfo.Phase == PrePhase {
+					// we will always use TwoTask shard for dispatch
+					crd.curCOInfo.TwoTask = twoTaskName
+				} else if newCOInfo.Phase == BroomPhase {
+					crd.curCOInfo.TwoTask = twoTaskCutoverName
+				} else { // other case we follow general rules
+					crd.curCOInfo.TwoTask = newCOInfo.TwoTask
+				}
+			}
+
+			// following is single changes
 			switch diff {
 			case 0x0001:
-				// diff two_task changes where to dispatch next. We need to terminate the intransaction.
+				//  need to terminate the intransaction if any
 			case 0x0002:
-				// diff dbuname, integrity is handled by workerpool
+				// diff dbuname, integrity is handled by workerpool in a separate way, is there anything we can do here?
 			case 0x0004:
 				// diff phase
 				// preprocess upon phase change, what does this mean?
@@ -96,7 +121,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				// diff rwstatus
 				// if this has a stop to read or write, we will take action by stopping the intransaction
 				// rw status, 1 R, 2 W, 3 RW, 0 NRNW
-				if crd.curCoInfo.RWstatus > newCOInfo.RWstatus {
+				if crd.curCOInfo.RWstatus > newCOInfo.RWstatus {
 					if newCOInfo.RWstatus&0x0001 == 0 {
 						// stop READ
 						if crd.isRead {
@@ -117,7 +142,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		// not in transactions.
 		// we will just load the new cfg and update the crd flags as needed.
 		if diff != 0 {
-			copyActCOInfo(crd.curCoInfo, newCOInfo)
+			copyActCOInfo(crd.curCOInfo, newCOInfo)
 		}
 		// TODO: why is this needed
 		crd.prevShard.sessionShardID = crd.shard.sessionShardID
@@ -126,7 +151,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	return false, nil
 }
 
-// This is for internal queries. read cfg and write logs
+// This is only for internal queries. read cfg always use two_task, write uses both
 func (crd *Coordinator) processSetCoShardID(val []byte) error {
 	sh, err := strconv.ParseInt(string(val), 10, 32)
 	if err != nil {

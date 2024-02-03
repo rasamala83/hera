@@ -64,7 +64,7 @@ type Coordinator struct {
 
 	//for cutover support so the coordinator knows where to dispatch.
 	//prevCoInfo     *ActiveCOInfo
-	curCoInfo      *ActiveCOInfo
+	curCOInfo      *ActiveCOInfo
 	coInternalPool PoolByTwoTask // Set by internal queries
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached

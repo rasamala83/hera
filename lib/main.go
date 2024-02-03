@@ -95,27 +95,31 @@ func Run() {
 	//
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
-
 	tnsnames, err := FindTns()
-	// Rapid cutover is enabled when the following both conditions are met:
+	// Rapid cutover is enabled when meeting the following both conditions at start-up
+	// Also, cutover feature is mutually exclusive to sharding and taf.
+	//
 	// 1. TWO_TASK_CUTOVER is defined. e.g. TWO_TASK_CUTOVER=CLOC_CUTOVER
 	// 2. The CLOC_CUTOVER is defined in tnsnames.ora
 	// maybe we should have another condition as master control.
-	// 3. occ.cdb has cutover_enabled = true.
-	// sharding and taf are mutual exclusive to cutover feature
-
-	if !GetConfig().EnableSharding && !GetConfig().EnableTAF {
-		logicdb := os.Getenv("TWO_TASK_CUTOVER")
-		if logicdb != "" {
-			_, ok := tnsnames[logicdb]
-			if ok && GetConfig().ReadonlyPct > 0 {
-				logicdb = os.Getenv("TWO_TASK_OCC_CUTOVER")
-				_, ok = tnsnames[logicdb]
-			}
-
-			if ok {
-				logger.GetLogger().Log(logger.Alert, "two_task_cutover KV found in tnsnames. Successfully enable cutover feature")
-				GetConfig().EnableCutover = true
+	// (?) 3. occ.cdb has cutover_enabled = true.
+	GetConfig().EnableCutover = false
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, "FindTns() failed. Skip checking for cutover enablement")
+	} else {
+		if !GetConfig().EnableSharding && !GetConfig().EnableTAF {
+			logicdbId := os.Getenv("TWO_TASK_CUTOVER")
+			if logicdbId != "" {
+				_, ok := tnsnames[logicdbId]
+				if ok && GetConfig().ReadonlyPct > 0 { // r/w split enabled
+					logicdbId = os.Getenv("TWO_TASK_OCC_CUTOVER")
+					_, ok = tnsnames[logicdbId]
+				}
+				if ok {
+					// condition meet
+					logger.GetLogger().Log(logger.Alert, "successfully enable cutover feature")
+					GetConfig().EnableCutover = true
+				}
 			}
 		}
 	}
@@ -133,13 +137,14 @@ func Run() {
 
 	GetStateLog().SetStartTime(time.Now())
 
-	go func() {
+	// retiring opscfg plan for formal cleanup later.
+	/* go func() {
 		sleep := time.Duration(GetConfig().ConfigReloadTimeMs)
 		for {
 			time.Sleep(time.Millisecond * sleep)
 			CheckOpsConfigChange()
 		}
-	}()
+	}() */
 
 	CheckEnableProfiling()
 	GoStats()

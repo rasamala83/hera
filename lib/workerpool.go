@@ -93,6 +93,7 @@ type WorkerPool struct {
 	p2task  PoolByTwoTask
 	phase   string
 	dbUname string
+	ccfgVer int // cutover cfg version
 }
 
 // Init creates the pool by creating the workers and making all the initializations
@@ -893,9 +894,7 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 	for i := 0; i < pool.currentSize; i++ {
 		if pool.workers[i] != nil {
 			if pool.workers[i].dbUname != newDbUname {
-				// Could we do skip checking the backoff feature? by setting exitTime, the recycle can be intefered by other reasons and result in delay.
-				//pool.workers[i].exitTime = now
-
+				pool.workers[i].exitTime = now // should we set this ?
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, "Cutover enforce dbuname integrity, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now, pool.currentSize)
 				}
@@ -918,6 +917,7 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 			e.Completed()
 		}
 	}
+	return nil
 }
 
 // workerpool integrity ensured in ways
@@ -931,6 +931,7 @@ func (pool *WorkerPool) ChangeCutoverInfo(newDbUname string, newPhase string) er
 	err := pool.enforceIntegrity(newDbUname)
 	pool.phase = newPhase
 	pool.dbUname = newDbUname
+	//pool.ccfgVer =
 
 	return err
 

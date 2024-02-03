@@ -106,10 +106,6 @@ func (broker *WorkerBroker) init() error {
 		broker.maxShardSize = 1
 	}
 
-	if GetConfig().EnableCutover {
-		broker.maxShardSize = int(MaxDbInCutover)     // during cutover it must be two db
-		GetConfig().NumOfShards = int(MaxDbInCutover) // overwrite config
-	}
 	//
 	// MAX_NUM_STANDBY = 10
 	//
@@ -120,6 +116,11 @@ func (broker *WorkerBroker) init() error {
 	MaxWorkerSize := <-GetConfig().NumWorkersCh()
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "num_standby_dbs", maxStndbySize, "max_worker", MaxWorkerSize)
+	}
+
+	if GetConfig().EnableCutover {
+		broker.maxShardSize = int(MaxDbInCutover)     // during cutover it must be two db
+		GetConfig().NumOfShards = int(MaxDbInCutover) // overwrite config
 	}
 
 	//
@@ -136,19 +137,23 @@ func (broker *WorkerBroker) init() error {
 		broker.poolCfgs[s] = make(map[HeraWorkerType]*WorkerPoolCfg, wtypeTotalCount)
 		//
 		broker.poolCfgs[s][wtypeRO] = new(WorkerPoolCfg)
+		broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s)
+		if broker.poolCfgs[s][wtypeRO].maxWorkerCnt > 0 {
+			broker.poolCfgs[s][wtypeRO].instCnt = 1
+		}
+
 		if GetConfig().EnableCutover {
 			switch s {
 			case int(ShId2Task):
 				broker.poolCfgs[s][wtypeRO].p2t = ShId2Task
 			case int(ShId2TaskCutover):
 				broker.poolCfgs[s][wtypeRO].p2t = ShId2TaskCutover
+				// at init, cutover pool will be sized to 10% of configured connections.
+				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s) / 10
 			default:
 				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset
+				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
-		}
-		broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s)
-		if broker.poolCfgs[s][wtypeRO].maxWorkerCnt > 0 {
-			broker.poolCfgs[s][wtypeRO].instCnt = 1
 		}
 
 		broker.poolCfgs[s][wtypeRW] = new(WorkerPoolCfg)
@@ -160,8 +165,12 @@ func (broker *WorkerBroker) init() error {
 				broker.poolCfgs[s][wtypeRW].p2t = ShId2Task
 			case int(ShId2TaskCutover):
 				broker.poolCfgs[s][wtypeRW].p2t = ShId2TaskCutover
+				broker.poolCfgs[s][wtypeRO].p2t = ShId2TaskCutover
+				// at init, cutover pool will be sized to 10% of configured connections.
+				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumWWorkers(s) / 10
 			default:
 				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset
+				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
 		}
 
