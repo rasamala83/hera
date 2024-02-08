@@ -88,16 +88,15 @@ type WorkerPool struct {
 	thr Throttler
 
 	// Cutover feaeture
-	// p2task: a pool is created specifically either for two_task or two_task_cutover connections
 	// dbUname: set by 1) when workerpool is created 2) when cutovercfg is changed
-	p2task  PoolByTwoTask
-	phase   string
-	dbUname string
-	ccfgVer int // cutover cfg version
+	p2task  ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
+	phase   string         // the phase is updated by the cutovercfg
+	dbUname string         // the dbuname is updated by the cutovercfg
 }
 
 // Init creates the pool by creating the workers and making all the initializations
-func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task PoolByTwoTask, size int, instID int, shardID int, moduleName string) error {
+
+func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, size int, instID int, shardID int, moduleName string) error {
 	pool.Type = wType
 	pool.activeQ = NewQueue()
 	//pool.poolCond = &sync.Cond{L: &sync.Mutex{}}
@@ -894,7 +893,8 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 	for i := 0; i < pool.currentSize; i++ {
 		if pool.workers[i] != nil {
 			if pool.workers[i].dbUname != newDbUname {
-				pool.workers[i].exitTime = now // should we set this ?
+				//pool.workers[i].exitTime = now // should we set this ?
+				workers = append(workers, pool.workers[i])
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, "Cutover enforce dbuname integrity, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now, pool.currentSize)
 				}
@@ -907,11 +907,22 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, "enforceIntegrity dbuname mismatched, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 		}
-		// immediate terminate
-		if pool.phase == CutoverPhase || pool.phase == PrePhase {
+		// determine graceful recycle or immediate termination
+		// Immdiate recycle:
+		// Cutover phase: both two_task and two_task_cutover shards
+		// Pre phase: two_task_cutover shard
+		// Complete phase: two_task shard
+		//
+		// Enable and Broom state, the connections may all go to same database so no immediate termination.
+		if pool.phase == CutoverPh {
+			w.Terminate()
+		} else if pool.phase == PrePh && pool.p2task == ShId2TaskCutover {
+			w.Terminate()
+		} else if pool.phase == CompletePh && pool.p2task == ShId2Task {
 			w.Terminate()
 		} else {
-			//log warning
+			w.exitTime = now // should we set some random number just in case?
+			//log warning and gracefully recycle
 			logger.GetLogger().Log(logger.Warning, "worker dbuname not match target db while cutover phase not at Pre or Cutover")
 			e := cal.NewCalEvent(EvtTypeCutover, "uname_not_match_not_enforced", cal.TransOK, "")
 			e.Completed()
@@ -924,15 +935,19 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 // 1. when cfg change, it invokes the function to check all workers' info
 // 2. workerpool will track the current setting, and enforce in case any worker is restarted/recycled outside condition 1.
 func (pool *WorkerPool) ChangeCutoverInfo(newDbUname string, newPhase string) error {
-	// nothing changed.
-	if pool.phase == newPhase && pool.dbUname == newDbUname {
+	if pool.phase == newPhase && pool.dbUname == newDbUname { // nothing changed.
 		return nil
 	}
-	err := pool.enforceIntegrity(newDbUname)
-	pool.phase = newPhase
-	pool.dbUname = newDbUname
-	//pool.ccfgVer =
+	if pool.phase != newPhase {
+		// phase change, what does it means?
+		pool.phase = newPhase
+	}
 
+	var err error
+	if pool.dbUname != newDbUname {
+		pool.dbUname = newDbUname
+		err = pool.enforceIntegrity(newDbUname)
+	}
 	return err
 
 }

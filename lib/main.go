@@ -178,11 +178,22 @@ func Run() {
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
+
 	var lsn Listener
 	if GetConfig().KeyFile != "" {
 		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
 	} else {
 		lsn = NewTCPListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
+	}
+
+	if GetConfig().EnableCutover {
+		err = InitCutoverCfg(*namePtr)
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err)
+			}
+			FullShutdown()
+		}
 	}
 
 	if GetConfig().EnableSharding {
@@ -196,15 +207,6 @@ func Run() {
 	}
 
 	InitRacMaint(*namePtr)
-	if GetConfig().EnableCutover {
-		err = InitCutoverCfg(*namePtr)
-		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err)
-			}
-			FullShutdown()
-		}
-	}
 
 	srv := NewServer(lsn, HandleConnection)
 

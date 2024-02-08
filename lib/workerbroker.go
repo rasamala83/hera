@@ -41,9 +41,9 @@ const (
 
 // WorkerPoolCfg is a configuration structure to keep setups for each type of worker pool
 type WorkerPoolCfg struct {
-	maxWorkerCnt int           // each instance of a worker type has the same max worker count.
-	instCnt      int           // number of instances (e.g. standbys) in a type of worker pool.
-	p2t          PoolByTwoTask // used for cutover purpose
+	maxWorkerCnt int            // each instance of a worker type has the same max worker count.
+	instCnt      int            // number of instances (e.g. standbys) in a type of worker pool.
+	p2t          ShardByTwoTask // used for cutover purpose
 }
 
 // WorkerBroker is managing the workers, starting the worker pools, and restarting workers when needed
@@ -98,6 +98,8 @@ func GetWorkerBrokerInstance() *WorkerBroker {
  * private method to set up different worker pools
  *
  * @TODO pull types and sizes from config
+ * 2/1/2024 with cutover enabled, we can't flex up to full yet.
+ * We don't know which phase it is in.
  */
 func (broker *WorkerBroker) init() error {
 	broker.stopped = make(chan struct{})
@@ -129,7 +131,6 @@ func (broker *WorkerBroker) init() error {
 	broker.workerpools = make([](map[HeraWorkerType][]*WorkerPool), broker.maxShardSize)
 	broker.poolCfgs = make([](map[HeraWorkerType]*WorkerPoolCfg), broker.maxShardSize)
 	var workercnt int
-
 	for s := 0; s < broker.maxShardSize; s++ {
 		//
 		// setup broker configuration, inst and worker size can be loaded from cdb
@@ -142,16 +143,21 @@ func (broker *WorkerBroker) init() error {
 			broker.poolCfgs[s][wtypeRO].instCnt = 1
 		}
 
+		minWorker := GetNumRWorkers(s) / 4
+
 		if GetConfig().EnableCutover {
+			// as the worker pool is setting up configs, we don't know the state of cutover
+			// safer approach is to flex up at 20%. Next change is either flex up to full or reduce to 2 conn depending
+			// on what phase it is
+			broker.poolCfgs[s][wtypeRO].maxWorkerCnt = minWorker
 			switch s {
 			case int(ShId2Task):
 				broker.poolCfgs[s][wtypeRO].p2t = ShId2Task
 			case int(ShId2TaskCutover):
 				broker.poolCfgs[s][wtypeRO].p2t = ShId2TaskCutover
-				// at init, cutover pool will be sized to 10% of configured connections.
-				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s) / 10
+
 			default:
-				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset
+				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset // ??
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
 		}
@@ -160,16 +166,14 @@ func (broker *WorkerBroker) init() error {
 		broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s)
 		broker.poolCfgs[s][wtypeRW].instCnt = 1
 		if GetConfig().EnableCutover {
+			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = minWorker
 			switch s {
 			case int(ShId2Task):
 				broker.poolCfgs[s][wtypeRW].p2t = ShId2Task
 			case int(ShId2TaskCutover):
 				broker.poolCfgs[s][wtypeRW].p2t = ShId2TaskCutover
-				broker.poolCfgs[s][wtypeRO].p2t = ShId2TaskCutover
-				// at init, cutover pool will be sized to 10% of configured connections.
-				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumWWorkers(s) / 10
 			default:
-				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset
+				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset // ??
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
 		}
@@ -419,12 +423,16 @@ func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, sha
 }
 
 /*
-changeMaxWorkers is called when the dynamic config changed, it calls resizePool() for all the pools
+changeMaxWorkers is called when the dynamic size change during cutover phases PRE and BROOM. it calls to resize specific shard's pool
+ENABLE -> Resize TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER to MIN
+PRE -> Resize TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER to MIN
+CUTOVER -> Resize TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER to STANDARD opscfg config
+BROOM -> Resize TWO_TASK, TWO_TASK_READ to MIN
+(no longer valid) changeMaxWorkers is called when the dynamic config changed, it calls resizePool() for all the pools
 */
 func (broker *WorkerBroker) changeMaxWorkers() {
 	wW := GetNumWWorkers(0)
 	rW := GetNumRWorkers(0)
-
 	for i := 0; i < GetConfig().NumOfShards; i++ {
 		broker.resizePool(wtypeRW, wW, i)
 		if rW != 0 {
@@ -441,6 +449,7 @@ func (broker *WorkerBroker) changeMaxWorkers() {
 			break
 		}
 	}
+
 }
 
 // Stopped is called when we are done, it sends a message to the "stopped" channel, which is read by the main mux routine

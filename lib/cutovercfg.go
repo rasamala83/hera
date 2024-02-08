@@ -16,7 +16,7 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-type PoolByTwoTask int
+type ShardByTwoTask int
 
 // rapid overloaded the sharding setting
 // two_task pool as shard 0
@@ -24,18 +24,26 @@ type PoolByTwoTask int
 // max support 2 db at this time.
 // > 2 is as undefined
 const (
-	ShId2Task        PoolByTwoTask = 0
-	ShId2TaskCutover PoolByTwoTask = 1
-	MaxDbInCutover   PoolByTwoTask = 2
-	ShIdUnset        PoolByTwoTask = 3
+	ShId2Task        ShardByTwoTask = 0
+	ShId2TaskCutover ShardByTwoTask = 1
+	MaxDbInCutover   ShardByTwoTask = 2
+	ShIdUnset        ShardByTwoTask = 3
 )
 
 const (
-	EnabledPhase  = "enable"
-	PrePhase      = "pre"
-	CutoverPhase  = "cutover"
-	CompletePhase = "complete"
-	BroomPhase    = "broom"
+	EnabledPh  = "enable"
+	PrePh      = "pre"
+	CutoverPh  = "cutover"
+	CompletePh = "complete"
+	BroomPh    = "broom"
+)
+
+const (
+	EnablePhId   = 1
+	PrePhId      = 2
+	CutoverPhId  = 3
+	CompletePhId = 4
+	BroomPhId    = 5
 )
 
 const (
@@ -57,8 +65,10 @@ type CutoverRecord struct {
 var moduleName string
 
 // 2task names once initialized will never change
-var twoTaskName string        // e.g.  MONEY
-var twoTaskCutoverName string // e.g.  MONEY_CUTOVER
+var twoTaskName string         // e.g.  MONEY
+var twoTaskCutoverName string  // e.g.  MONEY_CUTOVER
+var twoTaskRName string        //e.g. MONEY_OCC
+var twoTaskRCutoverName string // e.g. MONEY_OCC_CUTOVER
 
 // a comphrehensive version of the state
 type CutoverCfg struct {
@@ -82,18 +92,31 @@ func GetCutoverCfg() *CutoverCfg {
 }
 
 // validate if the phase is unregonized.
-func validatePhase(phase string) bool {
-	if phase == EnabledPhase || phase == PrePhase || phase == CutoverPhase || phase == CompletePhase || phase == BroomPhase {
-		return true
+func validatePhase(phase string) int {
+	switch phase {
+	case EnabledPh:
+		return EnablePhId
+	case PrePh:
+		return PrePhId
+	case CutoverPh:
+		return CutoverPhId
+	case CompletePh:
+		return CompletePhId
+	case BroomPh:
+		return BroomPhId
+	default:
+		logger.GetLogger().Log(logger.Warning, "config phase is invalid", phase)
+		return 0
 	}
-	return false
+
 }
 
-// compare two string case insensitive, return true if the same
-func compCfgStr(name1 string, name2 string) bool {
-	n1 := strings.ToLower(strings.TrimSpace(name1))
-	n2 := strings.ToLower(strings.TrimSpace(name1))
-	return (n1 == n2 && validatePhase(name1))
+// return true if two phases are the same otherwise false.
+func isCfgSame(ph1 string, ph2 string) bool {
+	n1 := strings.ToLower(strings.TrimSpace(ph1))
+	n2 := strings.ToLower(strings.TrimSpace(ph1))
+	same := (n1 == n2)
+	return same
 }
 
 // main.go calls this InitCutoverCfg.
@@ -107,8 +130,33 @@ func InitCutoverCfg(poolname string) error {
 	var db *sql.DB
 	var err error
 	moduleName = poolname
-	twoTaskName = os.Getenv("TWO_TASK")
-	twoTaskCutoverName = os.Getenv("TWO_TASK_CUTOVER")
+	twoTaskName = os.Getenv("TWO_TASK_0")
+	if twoTaskName == "" {
+		twoTaskName = os.Getenv("TWO_TASK_0")
+	}
+	twoTaskCutoverName = os.Getenv("TWO_TASK_CUTOVER_0")
+	if twoTaskCutoverName == "" {
+		twoTaskCutoverName = os.Getenv("TWO_TASK_CUTOVER")
+	}
+
+	if twoTaskName == "" || twoTaskCutoverName == "" {
+		return fmt.Errorf("error can't proceed due to env not completed [%s] [%s]", twoTaskName, twoTaskRCutoverName)
+	}
+	if GetConfig().ReadonlyPct > 0 {
+		twoTaskRName = os.Getenv("TWO_TASK_READ_0")
+		if twoTaskRName == "" {
+			twoTaskRName = os.Getenv("TWO_TASK_READ")
+		}
+		twoTaskRCutoverName = os.Getenv("TWO_TASK_READ_CUTOVER_0")
+		if twoTaskRCutoverName == "" {
+			twoTaskRCutoverName = os.Getenv("TWO_TASK_READ_CUTOVER")
+		}
+		if twoTaskRCutoverName == "" || twoTaskCutoverName == "" {
+			// can't proceed
+			return fmt.Errorf("error can't proceed due to env not completed [%s] [%s]", twoTaskRName, twoTaskRCutoverName)
+		}
+	}
+
 	// 1. start by connecting to primary pool (TWO_TASK).
 	// 2. query to fetch shard (only allow 1 shard for now)  info and dbuname
 	// 3. The instruction should have been populated.
@@ -183,12 +231,13 @@ func InitCutoverCfg(poolname string) error {
 // cutover_phase: enable, pre, cutover, complete, broom
 // expiration: time stamp or status
 func getCutoverSQL() string {
-	return fmt.Sprintf("select occ_name, dbuname, occ_two_task, write_status, read_status, cutover_phase from %s_cutover_%s where poolname = '%s' and occ_two_task IN ('%s', '%s)",
+	sqltxt := fmt.Sprintf("select occ_name, dbuname, occ_two_task, write_status, read_status, cutover_phase from %s_cutover_%s where poolname = '%s' and occ_two_task IN ('%s', '%s)",
 		GetConfig().ManagementTablePrefix,
 		GetConfig().CutoverPostfix,
 		moduleName,
 		twoTaskName,
 		twoTaskCutoverName)
+	return sqltxt
 }
 
 func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
@@ -237,17 +286,30 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	}
 
 	// chehcking phase is consistent
-	if !compCfgStr(records[0].phase, records[1].phase) {
-		return fmt.Errorf("error cutover cfg inconsistent or invalid phase %s, %s", records[0].phase, records[1].phase)
+	same := isCfgSame(records[0].phase, records[1].phase)
+	if !same {
+		return fmt.Errorf("error cutovercfg query result has inconsistent phase %s, %s", records[0].phase, records[1].phase)
 	}
-	// The two rows can't have same two_task name, maybe we need to check or use table constraint
 
-	// ok to proceed
+	ph := validatePhase(records[0].phase)
+	if ph == 0 {
+		return fmt.Errorf("error cutover cfg query result has invalid phase")
+	}
+
+	// maybe we should check for occ_two_task as well.
+	same = isCfgSame(records[0].occ2task, records[1].occ2task)
+	if same {
+		return fmt.Errorf("error cutovercfg query result has same two_task [%s, %s] [%s, %s]",
+			records[0].occ2task, records[0].dbUname,
+			records[0].occ2task, records[0].dbUname)
+	}
+	// now ok to proceed further
+
 	newcfg.Phase = records[0].phase
 	active := 0
 	for i := 0; i < 2; i++ {
 		newcfg.DbBy2task[strings.ToUpper(records[i].occ2task)] = records[i].dbUname
-
+		newcfg.RWstatusByDb[records[i].dbUname] = 0
 		if records[i].rstatus.Valid && records[i].rstatus.String[0] == 'Y' {
 			newcfg.RWstatusByDb[records[i].dbUname] |= 0x0001
 		}
@@ -268,15 +330,34 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	}
 
 	if precfg == nil {
-		//this means at init
+		//this means we are at init
 		if newcfg.ActiveTwoTask != "" {
-			gCutoverCfg.Store(&newcfg)
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Verbose, "cutovercfg init and loaded")
 			}
+			// TODO we need to notify workersize change based on the Phase we are in
+			GetConfig().NumWorkersCh()
+			// maybe we can define
+			// Enable,Pre: 1 - two_task 100%, two_task_cutover 25%
+			// Cutover : 2 - two_task 100%, two_task_cutover 100%
+			// Broom: 3 - two_task 25%, two_task_cutover 100%
+			// and write to the channel
+			gAppConfig.numWorkersCh <- ph
+
+			// publish the cfg
+			gCutoverCfg.Store(&newcfg)
+
+			// ensure the change-triggered action are done as well
+			//
+
 		}
 	} else {
-		if checkCfgChange(*precfg, newcfg) {
+		if !checkCfgChange(*precfg, newcfg) {
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Alert, "cutovercfg load has no change")
+			}
+		} else {
+
 			// gCutoverCfg.Store(&newcfg)
 			// 1. Coordinator could pick up the new cfg after gCutoverCfg.Store(&newcfg)
 			// 2. we notify workerpool when the two_task to dbname mapping is changed.
@@ -286,12 +367,16 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 			// or shall we delay Store call?
 			//
 			// only works for wtypeRW and wtypeRO in cutover
-			for t := 0; t < (int(wtypeTotalCount) - 1); t++ {
+			maxt := int(wtypeRW)
+			if GetConfig().ReadonlyPct > 0 {
+				maxt += 1
+			}
+			for t := 0; t <= maxt; t++ {
 				for shid := 0; shid < int(MaxDbInCutover); shid++ {
 					var wpool *WorkerPool
 					wpool, err = GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 					if err != nil {
-						logger.GetLogger().Log(logger.Alert, "cutovercfg error to udpate workerpool ", t, shid)
+						logger.GetLogger().Log(logger.Alert, "error cutovercfg failed to udpate workerpool ", t, shid)
 					} else {
 						if wpool != nil {
 							if shid == int(ShId2Task) {
@@ -374,7 +459,7 @@ func checkCfgChange(curcfg CutoverCfg, newcfg CutoverCfg) bool {
 
 // initialize the golang's database/sql object used to read the database configuration. The connection is created using the loopdriver,
 // a sql driver used internally for ease of programming: the config load routines use standard database/sql interface.
-func cutoverOpenDb(wkpool PoolByTwoTask) (*sql.DB, error) {
+func cutoverOpenDb(wkpool ShardByTwoTask) (*sql.DB, error) {
 	if wkpool > 1 {
 		return nil, errors.New("rapid cutover not support more than 2 database")
 	}

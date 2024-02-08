@@ -98,10 +98,10 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		if diff != 0 {
 
 			if (diff & 0x0004) > 0 { // phase change
-				if newCOInfo.Phase == EnabledPhase || newCOInfo.Phase == PrePhase {
+				if newCOInfo.Phase == EnabledPh || newCOInfo.Phase == PrePh {
 					// we will always use TwoTask shard for dispatch
 					crd.curCOInfo.TwoTask = twoTaskName
-				} else if newCOInfo.Phase == BroomPhase {
+				} else if newCOInfo.Phase == BroomPh {
 					crd.curCOInfo.TwoTask = twoTaskCutoverName
 				} else { // other case we follow general rules
 					crd.curCOInfo.TwoTask = newCOInfo.TwoTask
@@ -172,7 +172,7 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 		return ErrNotInternal
 	}
 
-	crd.coInternalPool = PoolByTwoTask(sh)
+	crd.coInternalPool = ShardByTwoTask(sh)
 	if crd.inTransaction && (crd.worker != nil) {
 		// in transaction, piggy back on the shard variable
 		if crd.coInternalPool != crd.workerpool.p2task {

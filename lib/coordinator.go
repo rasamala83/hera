@@ -65,7 +65,7 @@ type Coordinator struct {
 	//for cutover support so the coordinator knows where to dispatch.
 	//prevCoInfo     *ActiveCOInfo
 	curCOInfo      *ActiveCOInfo
-	coInternalPool PoolByTwoTask // Set by internal queries
+	coInternalPool ShardByTwoTask // Set by internal queries
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
 	worker        *WorkerClient // if it is in transaction/in cursor, the worker attached
@@ -687,7 +687,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
 	GetBindEvict().lock.Unlock()
 
-	if GetCutoverCfg().Phase == CutoverPhase { // diable throttle during cutover
+	if GetCutoverCfg().Phase == CutoverPh { // diable throttle during cutover
 		ok = false
 		// we probably should "empty the hashmap"
 	}

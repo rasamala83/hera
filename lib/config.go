@@ -29,6 +29,11 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
+type Resize struct {
+	maxWorker int
+	shid      ShardByTwoTask
+}
+
 // The Config contains all the static configuration
 type Config struct {
 	CertChainFile   string
@@ -656,4 +661,43 @@ func GetNumWWorkers(shard int) int {
 		}
 	}
 	return num
+}
+
+// We don't need to specify the PoolByTwoTask(shard id) because
+// if it's PRE -> we always run minimal two_task_cutover pool
+// if it's BROOM -> we always run miniaml two_task pool
+// This handling will be in the process in workerbroker
+func CutoverPhaseResize(min bool, shid ShardByTwoTask) {
+	cfg := config.GetOpsConfig()
+	numWorkers, err := cfg.GetInt(ConfigMaxWorkers)
+	if min {
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "Error reading max_connections when running minimal cutover size", err.Error())
+			}
+		} else {
+			if int(shid) < int(MaxDbInCutover) {
+				//gAppConfig.numWorkersCh <- numWorkers
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, "running minimal max_connections")
+				}
+				gAppConfig.numWorkersCh <- int(shid)
+			} else {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "error running minimal max_connections", shid)
+				}
+			}
+		}
+	} else {
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "Error reading max_connections when running normal cutover size", err.Error())
+			}
+		} else {
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "Changing max_connections from", gOpsConfig.numWorkers, "to", numWorkers)
+			}
+			gAppConfig.numWorkersCh <- numWorkers
+		}
+	}
 }

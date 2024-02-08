@@ -89,7 +89,7 @@ type BindPair struct {
 // WorkerClient represents a worker process
 type WorkerClient struct {
 	ID            int              // the worker identifier, from 0 to max worker count
-	ConnTwoTask   PoolByTwoTask    // indicate the worker belonging to two_task or two_task_cutover
+	ConnTwoTask   ShardByTwoTask   // indicate the worker belonging to two_task (non-cutover)or two_task_cutover
 	Type          HeraWorkerType   // the type of worker (ex write, read); all workers from the same type are grouped in a pool
 	Status        HeraWorkerStatus // the worker state, like init, accept, etc
 	workerConn    net.Conn         // the connection over which it communicates with the worker process
@@ -185,7 +185,7 @@ func envUpsert(attr *syscall.ProcAttr, key string, val string) {
 }
 
 // NewWorker creates a new workerclient instance (pointer)
-func NewWorker(wid int, connPool PoolByTwoTask, wType HeraWorkerType, instID int, shardID int, moduleName string, thr Throttler) *WorkerClient {
+func NewWorker(wid int, connPool ShardByTwoTask, wType HeraWorkerType, instID int, shardID int, moduleName string, thr Throttler) *WorkerClient {
 	worker := &WorkerClient{ID: wid, ConnTwoTask: connPool, Type: wType, Status: wsUnset, instID: instID, shardID: shardID, moduleName: moduleName, thr: thr}
 	maxReqs := GetMaxRequestsPerChild()
 	if maxReqs >= 4 {
@@ -231,22 +231,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			}
 		} else {
 			return errors.New("Invalid module name, must be like hera-<name> ")
-		}
-	}
-
-	if GetConfig().EnableCutover {
-		if GetConfig().EnableSharding {
-			GetConfig().EnableCutover = false // is it even possible to get here? but let's make sharding enablement takes precedence.
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "Cutover does not support sharding")
-			}
-		}
-
-		if worker.Type == wtypeStdBy {
-			GetConfig().EnableCutover = false // is it even possible to get here? not support taf
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "Cutover does not support sharding")
-			}
 		}
 	}
 
@@ -318,9 +302,11 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 		envUpsert(&attr, envHeraName, worker.moduleName)
 
-		twoTaskEnv := fmt.Sprintf("TWO_TASK_READ_%d", worker.shardID)
+		twoTaskEnv := ""
 		if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
-			twoTaskEnv += "_CUTOVER"
+			twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_CUTOVER_%d", worker.shardID) // should this be "_CUTOVER_%d" ? looks yes, see fallback handling below
+		} else {
+			twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_%d", worker.shardID)
 		}
 		twoTask = os.Getenv(twoTaskEnv)
 		if twoTask == "" {
@@ -370,7 +356,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			}
 		}
 		envUpsert(&attr, envHeraName, worker.moduleName)
-		var twoTaskEnv string
+		twoTaskEnv := ""
 		if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
 			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d_CUTOVER", worker.shardID)
 		} else {
@@ -588,17 +574,17 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		logger.GetLogger().Log(logger.Info, "Got control message from worker (", worker.ID, ",", worker.pid, ",", worker.racID, ",", worker.dbUname, ")")
 	}
 
-	// if we are at cutover, we need to check pool integrity
+	// if we are at cutover, we need to check pool integrity, but is it here?
 	if GetConfig().EnableCutover {
-		cocfg := GetCutoverCfg()
+		coCfg := GetCutoverCfg()
 		if os.Getenv(envTwoTask) == "" {
 			// something wrong
 			logger.GetLogger().Log(logger.Alert, "two_task env is not defined at workerclient start")
 		}
 
-		if cocfg.DbBy2task[os.Getenv(envTwoTask)] != worker.dbUname && cocfg.Phase != "enable" {
-			// this is not good, this client can't be in service
-			errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %d, %d, %s", cocfg.DbBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
+		if coCfg.DbBy2task[os.Getenv(envTwoTask)] != worker.dbUname && coCfg.Phase != "enable" {
+			// this is not good, this workers can't be in service
+			errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %d, %d, %s", coCfg.DbBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
 			return errors.New(errmsg)
 		}
 	}
