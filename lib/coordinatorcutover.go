@@ -148,7 +148,6 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		crd.prevShard.sessionShardID = crd.shard.sessionShardID
 		return false, nil // allow to proceed
 	}
-	return false, nil
 }
 
 // This is only for internal queries. read cfg always use two_task, write uses both
