@@ -462,7 +462,7 @@ func CheckCfgChange(curcfg CutoverCfg, newcfg CutoverCfg) (bool, int) {
 		}
 		chgdProf |= 0x0010
 	}
-	return changed
+	return changed, 0
 }
 
 // initialize the golang's database/sql object used to read the database configuration. The connection is created using the loopdriver,
