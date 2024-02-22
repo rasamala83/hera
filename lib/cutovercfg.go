@@ -16,19 +16,11 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-type ShardByTwoTask int
-
 // rapid overloaded the sharding setting
 // two_task pool as shard 0
 // two_task_cutover as shard 1
 // max support 2 db at this time.
 // > 2 is as undefined
-const (
-	ShId2Task        ShardByTwoTask = 0
-	ShId2TaskCutover ShardByTwoTask = 1
-	MaxDbInCutover   ShardByTwoTask = 2
-	ShIdUnset        ShardByTwoTask = 3
-)
 
 const (
 	EnabledPh  = "enable"
@@ -72,7 +64,8 @@ var twoTaskRCutoverName string // e.g. MONEY_OCC_CUTOVER
 
 // a comphrehensive version of the state
 type CutoverCfg struct {
-	ActiveTwoTask string            // FOO or FOO_CUTOVER is the active
+	ActiveTwoTask string            // FOO or FOO_CUTOVER is the active, maybe we don't need this because ActiveShardId
+	ActiveShardId ShardByTwoTask    // active shard id mapped to FOO or FOO_CUTOVER
 	Phase         string            // current cutover phase
 	DbBy2task     map[string]string // DB_UNAME by two_task and two_task_cutover
 	RWstatusByDb  map[string]int    // uniqute db name --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
@@ -361,7 +354,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 
 		}
 	} else {
-		changed, chgprofile := checkCfgChange(*precfg, newcfg)
+		changed, chgprofile := CheckCfgChange(*precfg, newcfg)
 		if !changed {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Alert, "cutovercfg load has no change")
@@ -389,18 +382,24 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 					if err != nil {
 						logger.GetLogger().Log(logger.Alert, "error cutovercfg failed to udpate workerpool ", t, shid)
 					} else {
+						// workerpool tracks phase, dbuname.
+						// if phase unchanges but dbuname change
 						if wpool != nil {
-							switch shid {
-							case int(ShId2Task):
-								wpool.ChangeCutoverInfo(newcfg.DbBy2task[twoTaskName], newcfg.Phase)
-
-							case int(ShId2TaskCutover):
-								wpool.ChangeCutoverInfo(newcfg.DbBy2task[twoTaskCutoverName], newcfg.Phase)
+							_ph := precfg.Phase
+							if chgprofile&0x0001 > 0 {
+								_ph = newcfg.Phase
+							}
+							if chgprofile&0x0002 > 0 { // twotaskshard dbuname changed
+								wpool.ChangeCutoverInfo(newcfg.DbBy2task[twoTaskName], _ph)
+							}
+							if chgprofile&0x0004 > 0 { // twotaskcutover shard dbuname changed
+								wpool.ChangeCutoverInfo(newcfg.DbBy2task[twoTaskCutoverName], _ph)
 							}
 						}
 					}
 				}
 			}
+
 			gCutoverCfg.Store(&newcfg)
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Verbose, "cutovercfg loaded.")
@@ -414,13 +413,14 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// Return true is changed, false if the same and
+// Return true if changed, false if the same
+// 0x0000 identical
 // 0x0001 phase
 // 0x0002 2tashShard's dbuname
 // 0x0004 2taskCutoverShard's dbuname
 // 0x0008 2taskShard's RW
 // 0x00016 2taskCutoverShard's RW
-func checkCfgChange(curcfg CutoverCfg, newcfg CutoverCfg) (bool, int) {
+func CheckCfgChange(curcfg CutoverCfg, newcfg CutoverCfg) (bool, int) {
 	changed := false
 	chgdProf := 0
 	if curcfg.Phase != newcfg.Phase {

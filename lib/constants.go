@@ -119,6 +119,7 @@ const (
 )
 
 type dbtype int
+type ShardByTwoTask int
 
 // Database typoe constants
 const (
@@ -138,4 +139,11 @@ const (
 
 const (
 	SrcPrefixAppKey string = "srcPrefixApp"
+)
+
+const (
+	ShId2Task        ShardByTwoTask = 0
+	ShId2TaskCutover ShardByTwoTask = 1
+	MaxDbInCutover   ShardByTwoTask = 2
+	ShIdUnset        ShardByTwoTask = 3
 )

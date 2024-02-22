@@ -89,9 +89,9 @@ type WorkerPool struct {
 
 	// Cutover feaeture
 	// dbUname: set by 1) when workerpool is created 2) when cutovercfg is changed
-	p2task  ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
-	phase   string         // the phase is updated by the cutovercfg
-	dbUname string         // the dbuname is updated by the cutovercfg
+	CoShardID ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
+	phase     string         // the phase is updated by the cutovercfg
+	dbUname   string         // the dbuname is updated by the cutovercfg
 }
 
 // Init creates the pool by creating the workers and making all the initializations
@@ -108,9 +108,9 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 	pool.desiredSize = size
 	pool.tranSize = size
 	pool.moduleName = moduleName
-	pool.p2task = ShIdUnset
+	pool.CoShardID = ShIdUnset
 	if GetConfig().EnableCutover {
-		pool.p2task = pool2task
+		pool.CoShardID = pool2task
 	}
 
 	pool.workers = make([]*WorkerClient, size)
@@ -129,7 +129,7 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 // spawnWorker starts a worker and spawn a routine waiting for the "ready" message
 func (pool *WorkerPool) spawnWorker(wid int) error {
 
-	worker := NewWorker(wid, pool.p2task, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
+	worker := NewWorker(wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
 	worker.setState(wsSchd)
 	millis := rand.Intn(GetConfig().RandomStartMs)
@@ -908,17 +908,17 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 			logger.GetLogger().Log(logger.Info, "enforceIntegrity dbuname mismatched, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 		}
 		// determine graceful recycle or immediate termination
-		// Immdiate recycle:
-		// Cutover phase: both two_task and two_task_cutover shards
-		// Pre phase: two_task_cutover shard
-		// Complete phase: two_task shard
-		//
+		// Immdiate recycle conditions:
+		// Cutover phase: apply to both two_task and two_task_cutover shards
+		// Pre phase: apply to only two_task_cutover shard
+		// Complete phase: apply to only two_task shard
+		// Broom phase:
 		// Enable and Broom state, the connections may all go to same database so no immediate termination.
 		if pool.phase == CutoverPh {
 			w.Terminate()
-		} else if pool.phase == PrePh && pool.p2task == ShId2TaskCutover {
+		} else if pool.phase == PrePh && pool.CoShardID == ShId2TaskCutover {
 			w.Terminate()
-		} else if pool.phase == CompletePh && pool.p2task == ShId2Task {
+		} else if pool.phase == CompletePh && pool.CoShardID == ShId2Task {
 			w.Terminate()
 		} else {
 			w.exitTime = now // should we set some random number just in case?
@@ -947,6 +947,7 @@ func (pool *WorkerPool) ChangeCutoverInfo(newDbUname string, newPhase string) er
 	if pool.dbUname != newDbUname {
 		pool.dbUname = newDbUname
 		err = pool.enforceIntegrity(newDbUname)
+		return err
 	}
 	return err
 
