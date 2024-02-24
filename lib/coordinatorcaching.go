@@ -22,7 +22,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
+	"math/rand"
+	"strconv"
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility"
 	"github.com/paypal/hera/utility/encoding/netstring"
@@ -71,11 +72,13 @@ func (crd *Coordinator) setRecordToCache(request *netstring.Netstring, crdRespon
 	cli, _ := GetJunoClient()
 	logger.GetLogger().Log(logger.Verbose, "SET junoClientReady:", cli.junoClientReady)
 	if cli.junoClientReady && cli != nil {
-		txn := cal.NewCalTransaction("API", "CACHE_SESSION", "0", "", cal.DefaultTGName)
+		dice := rand.Intn(GetConfig().numCalThreads)
+		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
+		txn := cal.NewCalTransaction("API", "CACHE_SESSION", "0", "", calThreadGroupName)
 		txn.AddDataStr("corrid", crd.extractedcorrId)
 		keyHash, key, keyerr := crd.getKey(request)
 		if keyerr != nil {
-			evt := cal.NewCalEvent("setRecordToCache", "getKeyErr", cal.TransWarning, "")
+			evt := cal.NewCalEvent("setRecordToCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
 			evt.AddDataStr("corrid", crd.extractedcorrId)
 			evt.AddDataStr("err", keyerr.Error())
 			evt.Completed()
@@ -85,7 +88,7 @@ func (crd *Coordinator) setRecordToCache(request *netstring.Netstring, crdRespon
 		}
 		keyHashStr := fmt.Sprintf("%x", keyHash)
 		logger.GetLogger().Log(logger.Verbose, "Trying SET with key:", keyHashStr, "value:", crdResponse)
-		caltxn := cal.NewCalTransaction("SET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", cal.DefaultTGName)
+		caltxn := cal.NewCalTransaction("SET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
 		caltxn.AddDataStr("corrid", crd.extractedcorrId)
 		logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
 		err := cli.Set([]byte(keyHashStr), []byte(crdResponse), ttl)
@@ -112,18 +115,20 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 	cli, _ := GetJunoClient()
 	logger.GetLogger().Log(logger.Verbose, "GET junoClientReady:", cli.junoClientReady)
 	if cli.junoClientReady && cli != nil {
-		txn := cal.NewCalTransaction("API", "CACHE_SESSION", "0", "", cal.DefaultTGName)
+		dice := rand.Intn(GetConfig().numCalThreads)
+		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
+		txn := cal.NewCalTransaction("API", "CACHE_SESSION", "0", "", calThreadGroupName)
 		txn.AddDataStr("corrid", crd.extractedcorrId)
 		keyHash, key, keyerr := crd.getKey(request)
 		if keyerr != nil {
-			evt := cal.NewCalEvent("getRecordFromCache", "getKeyErr", cal.TransWarning, "")
+			evt := cal.NewCalEvent("getRecordFromCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
 			evt.AddDataStr("corrid", crd.extractedcorrId)
 			evt.AddDataStr("err", keyerr.Error())
 			evt.Completed()
 			txn.Completed()
 			return keyerr
 		}
-		caltxn := cal.NewCalTransaction("GET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", cal.DefaultTGName)
+		caltxn := cal.NewCalTransaction("GET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
 		caltxn.AddDataStr("corrid", crd.extractedcorrId)
 		keyHashStr := fmt.Sprintf("%x", keyHash)
 		logger.GetLogger().Log(logger.Verbose, "Trying GET with key:", keyHashStr)
@@ -155,7 +160,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 			if len(string(resp)) > 0 {
 				if shadowTest {
 					logger.GetLogger().Log(logger.Debug, crd.id, "Not responding to the client from cache...ShadowTestEnabled:", shadowTest)
-					evt := cal.NewCalEvent("getRecordFromCache", "shadowTest", cal.TransOK, "")
+					evt := cal.NewCalEvent("getRecordFromCache", "shadowTest", cal.TransOK, "", calThreadGroupName)
 					evt.AddDataStr("resp", ErrCacheShadowTest.Error())
 					evt.Completed()
 					txn.Completed()

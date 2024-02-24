@@ -176,6 +176,9 @@ type Config struct {
 	CacheResponseTimeoutMs int
 	CacheSSLEnabled bool
 	CacheCertFilePath string
+
+	// Requires cal_enable_threadgroup enabled to true. This ensures the messages are put in different swimlanes.
+	numCalThreads int
 	//
 	// enable background goroutine to recover worker not returned by coordinator
 	//
@@ -477,6 +480,7 @@ func InitConfig() error {
 	gAppConfig.CacheDefaultTTL = cdb.GetOrDefaultInt("cache_default_ttl", 60)
 	gAppConfig.CacheSSLEnabled = cdb.GetOrDefaultBool("cache_ssl_enabled", true)
 	gAppConfig.CacheCertFilePath = cdb.GetOrDefaultString("cache_cert_file_path", currentDir)
+	gAppConfig.numCalThreads = cdb.GetOrDefaultInt("num_cal_threads", 25)
 
 	gAppConfig.GoStatsInterval = cdb.GetOrDefaultInt("go_stats_interval", 10)
 	defaultConns := 10000 // disable by default

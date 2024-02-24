@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"strconv"
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
@@ -199,6 +200,11 @@ func Run() {
 	//
 	defer func() {
 		cal.ReleaseCxtResource()
+		if GetConfig().EnableCaching {
+			for i := 0; i < GetConfig().numCalThreads; i++ {
+				cal.ReleaseCxtResource(cal.DefaultTGName + strconv.Itoa(i))
+			}
+		}
 	}()
 
 	// Defer release resource in case of any abnormal exit of for application
@@ -234,6 +240,11 @@ func handlePanicAndReleaseResource(mux_process_id int) {
 		// this case is thread group calDefaultThreadGroupName.
 		//
 		cal.ReleaseCxtResource()
+		if GetConfig().EnableCaching {
+			for i := 0; i < GetConfig().numCalThreads; i++ {
+				cal.ReleaseCxtResource(cal.DefaultTGName + strconv.Itoa(i))
+			}
+		}
 		os.Exit(1)
 	}
 }
