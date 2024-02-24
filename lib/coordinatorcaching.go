@@ -91,7 +91,7 @@ func (crd *Coordinator) setRecordToCache(request *netstring.Netstring, crdRespon
 		caltxn := cal.NewCalTransaction("SET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
 		caltxn.AddDataStr("corrid", crd.extractedcorrId)
 		logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
-		err := cli.Set([]byte(keyHashStr), []byte(crdResponse), ttl)
+		err := cli.Set([]byte(keyHashStr), []byte(crdResponse), ttl, crd.extractedcorrId)
 		caltxn.AddDataStr("junoKeyHash", keyHashStr)
 		caltxn.AddDataInt("keySize:", int64(len([]byte(keyHashStr))))
 		caltxn.AddDataInt("crdResponseSize", int64(len([]byte(crdResponse))))
@@ -133,7 +133,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 		keyHashStr := fmt.Sprintf("%x", keyHash)
 		logger.GetLogger().Log(logger.Verbose, "Trying GET with key:", keyHashStr)
 		logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
-		resp, err := cli.Get([]byte(keyHashStr))
+		resp, err := cli.Get([]byte(keyHashStr), crd.extractedcorrId)
 		caltxn.AddDataStr("junoKeyHash:", keyHashStr)
 		caltxn.AddDataInt("keySize:", int64(len([]byte(keyHashStr))))
 		if err != nil {

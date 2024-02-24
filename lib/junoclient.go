@@ -136,7 +136,7 @@ func (cli *JunoClient) init() error {
 	return err
 }
 
-func (cli *JunoClient) Set(key []byte, value []byte, ttl uint32) error {
+func (cli *JunoClient) Set(key []byte, value []byte, ttl uint32, corrId string) error {
 	if GetConfig().EnableCompression {
 		compressedValue := snappy.Encode(nil, value)
 		evt := cal.NewCalEvent("Encode", "SET", cal.TransOK, "")
@@ -144,13 +144,13 @@ func (cli *JunoClient) Set(key []byte, value []byte, ttl uint32) error {
 		evt.AddDataInt("rawSize", int64(len(value)))
 		evt.Completed()
 		logger.GetLogger().Log(logger.Verbose, "Set: Compression enabled, compressedSize:", len(compressedValue), "rawSize:", len(value))
-		ctx, err := cli.junoClient.Create(key, compressedValue, client.WithTTL(ttl))
+		ctx, err := cli.junoClient.Create(key, compressedValue, client.WithTTL(ttl), client.WithCorrelationId(corrId))
 		if err == nil {
 			GetInfo(ctx)
 		}
 		return err
 	} else {
-		ctx, err := cli.junoClient.Create(key, value, client.WithTTL(ttl))
+		ctx, err := cli.junoClient.Create(key, value, client.WithTTL(ttl), client.WithCorrelationId(corrId))
 		if err == nil {
 			GetInfo(ctx)
 		}
@@ -158,12 +158,14 @@ func (cli *JunoClient) Set(key []byte, value []byte, ttl uint32) error {
 	}
 }
 
-func (cli *JunoClient) Get(key []byte) ([]byte, error) {
-	resp, ctx, err := cli.junoClient.Get(key)
+func (cli *JunoClient) Get(key []byte, corrId string) ([]byte, error) {
+	resp, ctx, err := cli.junoClient.Get(key, client.WithCorrelationId(corrId))
 	if err != nil {
 		return resp, err
 	}
-	GetInfo(ctx)
+	if logger.GetLogger().V(logger.Verbose) {
+		GetInfo(ctx)
+	}
 	if GetConfig().EnableCompression {
 		decompressedResp, err := snappy.Decode(nil, resp)
 		evt := cal.NewCalEvent("Decode", "GET", cal.TransOK, "")
