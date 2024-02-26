@@ -998,7 +998,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequest: exiting")
 		}
 	}()
-
+	crd.response = ""
 	now := time.Now().UnixNano()
 	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
@@ -1219,7 +1219,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 				logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...msg.data:", string(msg.data))
 				// disable timeout once response was sent to the client
 				timeout = nil
-				crd.response += string(msg.data) + "|"
+				crd.response += string(msg.data) + CacheSeparator
 				logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...crd.response:", crd.response)
 				// logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...msg.ns", string(msg.ns.Serialized))
 

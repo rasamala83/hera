@@ -154,3 +154,7 @@ const (
 const (
 	SrcPrefixAppKey string = "srcPrefixApp"
 )
+
+const (
+	CacheSeparator string = "##%%OCCCacheSep&&**"
+)

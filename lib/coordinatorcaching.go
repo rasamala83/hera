@@ -166,7 +166,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 					txn.Completed()
 					return ErrCacheShadowTest
 				}
-				splits := strings.Split(string(resp), "|")
+				splits := strings.Split(string(resp), CacheSeparator)
 				for idx, split := range splits {
 					if len(split) > 0 {
 						logger.GetLogger().Log(logger.Debug, crd.id, "Responding to client...")
@@ -238,7 +238,7 @@ func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.N
 						if logger.GetLogger().V(logger.Warning) {
 							logger.GetLogger().Log(logger.Warning, crd.id, "doCacheRequest: multiple client req", DebugString(ns.Serialized))
 						}
-						evt := cal.NewCalEvent("doCacheRequest", "multiple_client_req", cal.TransOK, fmt.Sprintf("cmd=%s", DebugString(ns.Serialized)))
+						evt := cal.NewCalEvent("doCacheRequest", "multiple_client_req", cal.TransWarning, fmt.Sprintf("cmd=%s", DebugString(ns.Serialized)))
 						evt.Completed()
 					}
 					quit <- true
