@@ -26,6 +26,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"os"
+	"github.com/paypal/hera/cal"
 )
 
 // Cache config record to store the hera_sql_caching entries
@@ -123,8 +125,16 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 			logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("cacheCfgRecords entry: queryId:%s, sqlHash:%d, sqlText:%s, Binds:%s, TTL: %d, enableShadowTest:%s, tableName:%s, invClause:%s, cachingEnabled:%s, remarks:%s, module:%s", rec.query_id, rec.sqlHash, rec.sqlText, rec.binds, rec.ttl, rec.enableShadowTest, rec.tableName, rec.invalidationClause, rec.cachingEnabled, rec.remarks, rec.module))
 		}
 	}
-	logger.GetLogger().Log(logger.Warning, fmt.Sprintf("Loaded %d sqlhashes, %d cacheCfg entries", len(cfgLoad.cacheCfgRecords), rowCount))
-
+	logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("Loaded %d sqlhashes, %d cacheCfg entries", len(cfgLoad.cacheCfgRecords), rowCount))
+	if rowCount > 0 {
+		host, _ := os.Hostname()
+		if len(host) >= 40 {
+			host = host[:39]
+		}
+		calevt := cal.NewCalEvent("loadCacheCfg", host, cal.TransOK, "")
+		calevt.AddDataInt("cacheCfgRecordsSize", int64(len(cfgLoad.cacheCfgRecords)))
+		calevt.Completed()
+	}
 	gCacheCfg.Store(cfgLoad)
 	return err
 }
@@ -161,11 +171,13 @@ func InitCachingCfg(modName string) error {
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, "Inside Routine to periodically load CacheConfig")
 				temp := getCacheCfg()
+				temp.lock.Lock()
 				logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("cacheCfgRecord size inside routine: %d", len(temp.cacheCfgRecords)))
 				for k, v := range temp.cacheCfgRecords {
 					logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("Key SQLHash:%d", k))
 					logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("Value:%s", v.sqlText))
 				}
+				temp.lock.Unlock()
 			}
 			time.Sleep(time.Second * time.Duration(GetConfig().CachingCfgReloadInterval))
 			if db != nil {

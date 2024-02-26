@@ -35,6 +35,9 @@ func (crd *Coordinator) getKey(request *netstring.Netstring) ([]byte, string, er
 	if GetConfig().CacheByCorrId {
 		// Return err if corrid is NotSet
 		if crd.extractedcorrId == "NotSet" || crd.extractedcorrId == "" || crd.extractedcorrId == "unset" {
+			evt := cal.NewCalEvent("getKey", "ErrCacheCorridNotSet", cal.TransWarning, "")
+			evt.AddDataStr("extracteedcorrId", crd.extractedcorrId)
+			evt.Completed()
 			return nil, "", ErrCacheCorridNotSet
 		}
 		key += crd.extractedcorrId + "|"
@@ -91,7 +94,7 @@ func (crd *Coordinator) setRecordToCache(request *netstring.Netstring, crdRespon
 		caltxn := cal.NewCalTransaction("SET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
 		caltxn.AddDataStr("corrid", crd.extractedcorrId)
 		logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
-		err := cli.Set([]byte(keyHashStr), []byte(crdResponse), ttl, crd.extractedcorrId)
+		err := cli.Set([]byte(keyHashStr), []byte(crdResponse), ttl, crd.extractedcorrId, calThreadGroupName)
 		caltxn.AddDataStr("junoKeyHash", keyHashStr)
 		caltxn.AddDataInt("keySize:", int64(len([]byte(keyHashStr))))
 		caltxn.AddDataInt("crdResponseSize", int64(len([]byte(crdResponse))))
@@ -125,6 +128,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 			evt.AddDataStr("corrid", crd.extractedcorrId)
 			evt.AddDataStr("err", keyerr.Error())
 			evt.Completed()
+			txn.SetStatus("3")
 			txn.Completed()
 			return keyerr
 		}
@@ -133,7 +137,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 		keyHashStr := fmt.Sprintf("%x", keyHash)
 		logger.GetLogger().Log(logger.Verbose, "Trying GET with key:", keyHashStr)
 		logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
-		resp, err := cli.Get([]byte(keyHashStr), crd.extractedcorrId)
+		resp, err := cli.Get([]byte(keyHashStr), crd.extractedcorrId, calThreadGroupName)
 		caltxn.AddDataStr("junoKeyHash:", keyHashStr)
 		caltxn.AddDataInt("keySize:", int64(len([]byte(keyHashStr))))
 		if err != nil {
@@ -152,7 +156,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, crd.id, "getRecordFromCache: received err:", err)
 			}
-			txn.SetStatus("2")
+			txn.SetStatus("3")
 			txn.AddDataStr("err", err.Error())
 			txn.Completed()
 			return err
@@ -175,8 +179,11 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 						txn.AddDataInt(fmt.Sprintf("%d", idx), int64(len([]byte(split))))
 						if err != nil {
 							logger.GetLogger().Log(logger.Debug, crd.id, "Failed to reply to client")
-							txn.SetStatus("2")
-							txn.AddDataStr("err", err.Error())
+							evt := cal.NewCalEvent("getRecordFromCache", "client_write_failed", cal.TransWarning, "", calThreadGroupName)
+							evt.AddDataStr("err", err.Error())
+							evt.Completed()
+							txn.SetStatus("3")
+							txn.AddDataStr("err", ErrCacheClientWriteFailed.Error())
 							txn.Completed()
 							return ErrCacheClientWriteFailed
 						}
@@ -250,7 +257,7 @@ func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.N
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, crd.id, "doCacheRequest: request canceled")
 				}
-				evt := cal.NewCalEvent("doCacheRequest", "client_req_canceled", cal.TransOK, "")
+				evt := cal.NewCalEvent("doCacheRequest", "client_req_canceled", cal.TransWarning, "")
 				evt.Completed()
 				quit <- true
 				respExit <- ErrCacheClientReqCanceled
@@ -294,8 +301,8 @@ func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, req
 	logger.GetLogger().Log(logger.Verbose, "Incoming request.Serialized:", string(request.Serialized))
 	cacheCfg := getCacheCfg()
 	cacheCfg.lock.Lock()
-	defer cacheCfg.lock.Unlock()
 	rec, ok := cacheCfg.cacheCfgRecords[uint32(crd.sqlhash)]
+	cacheCfg.lock.Unlock()
 	logger.GetLogger().Log(logger.Verbose, uint32(crd.sqlhash), "CachingEnabled for ", reqType, ":", ok)
 	if ok {
 		logger.GetLogger().Log(logger.Verbose, "cacheRecord:", "sqlHash", rec.sqlHash, "sqlText", rec.sqlText, "ttl", rec.ttl, "cache enabled", rec.cachingEnabled)

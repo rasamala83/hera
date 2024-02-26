@@ -330,10 +330,10 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", err)
 				}
 			} else if err == ErrCacheClientClosed || err == ErrCacheMultipleClientReq || err == ErrCacheClientReqCanceled || err == ErrCacheClientWriteFailed {
-				logger.GetLogger().Log(logger.Warning, crd.id, "coordinator DispatchCachingSession for GET returned:", err)
+				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", err)
 				return (err == nil)
 			} else {
-				logger.GetLogger().Log(logger.Alert, "coordinator DispatchCachingSession for GET returned:", err)
+				logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for GET returned:", err)
 			}
 		} else {
 			return (err == nil)
@@ -346,7 +346,7 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 		if taferr == nil && GetConfig().EnableCaching {
 			logger.GetLogger().Log(logger.Verbose, "Request after DispatchTAFSession request.payload:", string(request.Payload))
 			logger.GetLogger().Log(logger.Verbose, "Request after DispatchTAFSession request.Serialized:", string(request.Serialized))
-			// Skip setting the record again to cache
+			// Skip writing the record again to cache
 			if getErr != nil && getErr == ErrCacheShadowTest {
 				logger.GetLogger().Log(logger.Verbose, "Skip setting the record again to cache.. GET returned:", getErr)
 			} else {
@@ -357,7 +357,7 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", err)
 						}
 					} else {
-						logger.GetLogger().Log(logger.Alert, "coordinator DispatchCachingSession for SET returned:", err)
+						logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for SET returned:", err)
 					}
 				}
 			}
@@ -383,7 +383,7 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", err)
 					}
 				} else {
-					logger.GetLogger().Log(logger.Alert, "coordinator DispatchCachingSession for SET returned:", err)
+					logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for SET returned:", err)
 				}
 			}
 		}

@@ -136,10 +136,10 @@ func (cli *JunoClient) init() error {
 	return err
 }
 
-func (cli *JunoClient) Set(key []byte, value []byte, ttl uint32, corrId string) error {
+func (cli *JunoClient) Set(key []byte, value []byte, ttl uint32, corrId string, calThreadGroupName string) error {
 	if GetConfig().EnableCompression {
 		compressedValue := snappy.Encode(nil, value)
-		evt := cal.NewCalEvent("Encode", "SET", cal.TransOK, "")
+		evt := cal.NewCalEvent("Encode", "SET", cal.TransOK, "", calThreadGroupName)
 		evt.AddDataInt("compressedSize", int64(len(compressedValue)))
 		evt.AddDataInt("rawSize", int64(len(value)))
 		evt.Completed()
@@ -158,7 +158,7 @@ func (cli *JunoClient) Set(key []byte, value []byte, ttl uint32, corrId string) 
 	}
 }
 
-func (cli *JunoClient) Get(key []byte, corrId string) ([]byte, error) {
+func (cli *JunoClient) Get(key []byte, corrId string, calThreadGroupName string) ([]byte, error) {
 	resp, ctx, err := cli.junoClient.Get(key, client.WithCorrelationId(corrId))
 	if err != nil {
 		return resp, err
@@ -168,7 +168,7 @@ func (cli *JunoClient) Get(key []byte, corrId string) ([]byte, error) {
 	}
 	if GetConfig().EnableCompression {
 		decompressedResp, err := snappy.Decode(nil, resp)
-		evt := cal.NewCalEvent("Decode", "GET", cal.TransOK, "")
+		evt := cal.NewCalEvent("Decode", "GET", cal.TransOK, "", calThreadGroupName)
 		evt.AddDataInt("respSize", int64(len(resp)))
 		evt.AddDataInt("decompressedRespSize", int64(len(decompressedResp)))
 		evt.Completed()

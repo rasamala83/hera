@@ -124,7 +124,6 @@ func MkErr(prefix string) {
 	ErrCacheMultipleClientReq = errors.New("cache session: multiple client request not supported")
 	ErrCacheClientReqCanceled = errors.New("cache session: client request canceled")
 	ErrCacheClientWriteFailed = errors.New("cache session: client write failed")
-	ErrReqParseFail = errors.New("sql is not enabled for caching")
 }
 
 // Configuration entry names
