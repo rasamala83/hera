@@ -43,7 +43,7 @@ type DBType int
 const (
 	Oracle DBType = iota
 	MySQL
-	PostgreSQL 
+	PostgreSQL
 )
 
 type mux struct {
@@ -94,7 +94,7 @@ func (m *mux) setupWorkdir() {
 
 func (m *mux) setupConfig() error {
 	// opscfg
-	for k,v := range m.opscfg {
+	for k, v := range m.opscfg {
 		m.appcfg[k] = v
 	}
 	if m.wType == MySQLWorker {
@@ -149,7 +149,7 @@ func doBuildAndSymlink(binname string) {
 	var err error
 	_, err = os.Stat(binname)
 	if err != nil {
-		binpath := os.Getenv("GOPATH")+"/bin/"+binname
+		binpath := os.Getenv("GOPATH") + "/bin/" + binname
 		_, err = os.Stat(binpath)
 		if err != nil {
 			srcname := binname
@@ -199,18 +199,17 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		os.Setenv("password", "1-testDb")
 		waitLoop := 1
 		for {
-			err := DBDirect("select 1", "127.0.0.1", dbName/*"heratestdb"*/, MySQL)
+			err := DBDirect("select 1", "127.0.0.1", dbName /*"heratestdb"*/, MySQL)
 			if err != nil {
 				time.Sleep(1 * time.Second)
 				logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
-				fmt.Printf("waiting for db to come up %d %s\n",waitLoop, err.Error())
+				fmt.Printf("waiting for db to come up %d %s\n", waitLoop, err.Error())
 				waitLoop++
 				continue
 			} else {
 				break
 			}
 		}
-
 
 		q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
 		err := DBDirect(q, ipBuf.String(), dbName, MySQL)
@@ -266,7 +265,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		os.Setenv("postgresql_ip", ipBuf.String())
 
 		return ipBuf.String()
-	} 
+	}
 	return ""
 }
 
@@ -365,6 +364,10 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
+
+			os.Setenv("TWO_TASK_0", os.Getenv("TWO_TASK"))
+			os.Setenv("TWO_TASK_STANDBY0", os.Getenv("TWO_TASK"))
+			os.Setenv("TWO_TASK_STANDBY0_0", os.Getenv("TWO_TASK"))
 			os.Setenv("MYSQL_IP", ip)
 			// Set up the rac_maint table
 			pfx := os.Getenv("MGMT_TABLE_PREFIX")
@@ -384,10 +387,10 @@ func (m *mux) StartServer() error {
 			ip := MakeDB("postgres22", "heratestdb", PostgreSQL)
 			os.Setenv("TWO_TASK", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
 			twoTask := os.Getenv("TWO_TASK")
-			os.Setenv ("TWO_TASK_0", twoTask)
-			os.Setenv ("TWO_TASK_1", twoTask)
+			os.Setenv("TWO_TASK_0", twoTask)
+			os.Setenv("TWO_TASK_1", twoTask)
 			twoTask1 := os.Getenv("TWO_TASK")
-			fmt.Println ("TWO_TASK_1: ", twoTask1)
+			fmt.Println("TWO_TASK_1: ", twoTask1)
 		}
 	}
 

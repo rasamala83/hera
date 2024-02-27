@@ -1053,10 +1053,10 @@ func (act *calTransaction) completeAnyNestedTransactions() {
  */
 func (act *calTransaction) addAdditionalFieldsForRoot() {
 	var buf bytes.Buffer
-	buf.WriteString("corr_id_")
-	buf.WriteString(calEquals)
-	buf.WriteString(act.GetCorrelationID())
-	buf.WriteString(calAmpersand)
+	// buf.WriteString("corr_id_")
+	// buf.WriteString(calEquals)
+	// buf.WriteString(act.GetCorrelationID())
+	// buf.WriteString(calAmpersand)
 	buf.WriteString("log_id_")
 	buf.WriteString(calEquals)
 	//buf.WriteString(client.GetLogId())

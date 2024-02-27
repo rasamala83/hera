@@ -72,6 +72,8 @@ type Coordinator struct {
 
 	// if this handles an internal client like rac maintenance config or shard config
 	isInternal bool
+	extractedcorrId string
+	response string
 }
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
@@ -211,6 +213,7 @@ func (crd *Coordinator) Run() {
 			msglen := len(msg.data)
 			if msglen > 0 {
 				_, err := crd.conn.Write(msg.data)
+				logger.GetLogger().Log(logger.Verbose, "coordinator:Run got message from worker channel...msg.data:", string(msg.data))
 				if err != nil {
 					if logger.GetLogger().V(logger.Debug) {
 						logger.GetLogger().Log(logger.Debug, crd.id, "Fail to reply to client")
@@ -316,14 +319,77 @@ func (crd *Coordinator) Run() {
 }
 
 func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
+	var getErr error
+	if GetConfig().EnableCaching {
+		logger.GetLogger().Log(logger.Verbose, "Inside dispatch...Caching is enabled")
+		err := crd.DispatchCachingSession(request, "GET")
+		getErr = err
+		if err != nil {
+			if err == ErrCacheNotEnabled || err == ErrCacheDisabled || err == ErrCacheShadowTest || err == ErrCacheCorridNotSet {
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", err)
+				}
+			} else if err == ErrCacheClientClosed || err == ErrCacheMultipleClientReq || err == ErrCacheClientReqCanceled || err == ErrCacheClientWriteFailed {
+				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", err)
+				return (err == nil)
+			} else {
+				logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for GET returned:", err)
+			}
+		} else {
+			return (err == nil)
+		}
+	}
+
 	if GetConfig().EnableTAF && (crd.worker == nil) {
 		taferr := crd.DispatchTAFSession(request)
 		crd.processError(taferr)
+		if taferr == nil && GetConfig().EnableCaching {
+			logger.GetLogger().Log(logger.Verbose, "Request after DispatchTAFSession request.payload:", string(request.Payload))
+			logger.GetLogger().Log(logger.Verbose, "Request after DispatchTAFSession request.Serialized:", string(request.Serialized))
+			// Skip writing the record again to cache
+			if getErr != nil && getErr == ErrCacheShadowTest {
+				logger.GetLogger().Log(logger.Verbose, "Skip setting the record again to cache.. GET returned:", getErr)
+			} else {
+				err := crd.DispatchCachingSession(request, "SET")
+				if err != nil {
+					if err == ErrCacheNotEnabled || err == ErrCacheDisabled || err == ErrCacheCorridNotSet {
+						if logger.GetLogger().V(logger.Verbose) {
+							logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", err)
+						}
+					} else {
+						logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for SET returned:", err)
+					}
+				}
+			}
+		}
+		crd.response = ""
+		getErr = nil
 		return (taferr == nil)
 	}
 
 	deferr := crd.dispatchRequest(request)
 	crd.processError(deferr)
+	if deferr == nil && GetConfig().EnableCaching {
+		logger.GetLogger().Log(logger.Verbose, "Request after dispatchRequest request.payload:", string(request.Payload))
+		logger.GetLogger().Log(logger.Verbose, "Request after dispatchRequest request.Serialized:", string(request.Serialized))
+		// Skip setting the record again to cache
+		if getErr != nil && getErr == ErrCacheShadowTest {
+			logger.GetLogger().Log(logger.Verbose, "Skip setting the record again to cache.. GET returned:", getErr)
+		} else {
+			err := crd.DispatchCachingSession(request, "SET")
+			if err != nil {
+				if err == ErrCacheNotEnabled || err == ErrCacheDisabled || err == ErrCacheCorridNotSet {
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", err)
+					}
+				} else {
+					logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for SET returned:", err)
+				}
+			}
+		}
+	}
+	crd.response = ""
+	getErr = nil
 	return (deferr == nil)
 }
 
@@ -446,6 +512,7 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 	switch request.Cmd {
 	case common.CmdClientCalCorrelationID:
 		crd.corrID = request
+		crd.extractedcorrId = crd.extractCorrId(request)
 	case common.CmdServerPingCommand:
 		crd.respond([]byte("4:1009,"))
 	case common.CmdBacktrace: // TODO passing command to worker
@@ -494,6 +561,25 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 	return true, nil
 }
 
+// extract corrID from incoming netstring
+func (crd *Coordinator) extractCorrId(request *netstring.Netstring) string {
+	corr_id := "NotSet"
+	if request != nil {
+		cid := string(request.Payload)
+		pos := strings.Index(cid, "=")
+		if pos != -1 {
+			cid = cid[pos+1:]
+			pos = strings.Index(cid, "&")
+			if pos == -1 {
+				corr_id = cid
+			} else {
+				corr_id = cid[:pos]
+			}
+		}
+	}
+	logger.GetLogger().Log(logger.Info, "extracted corrId is", corr_id)
+	return corr_id
+}
 /*
  * answers to the client info command with this server information. also it logs to cal the client info
  */
@@ -863,6 +949,10 @@ func parseBinds(request *netstring.Netstring) map[string]string {
 		return out
 	}
 
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "Incoming request:", string(request.Payload), string(request.Serialized))
+	}
+
 	sz := len(requests)
 	for i := 0; i < sz; i++ {
 		if requests[i].Cmd == common.CmdBindName {
@@ -908,7 +998,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequest: exiting")
 		}
 	}()
-
+	crd.response = ""
 	now := time.Now().UnixNano()
 	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
@@ -1126,8 +1216,12 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			}
 			msglen := len(msg.data)
 			if msglen > 0 {
+				logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...msg.data:", string(msg.data))
 				// disable timeout once response was sent to the client
 				timeout = nil
+				crd.response += string(msg.data) + CacheSeparator
+				logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...crd.response:", crd.response)
+				// logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...msg.ns", string(msg.ns.Serialized))
 
 				_, err := clientWriter.Write(msg.data)
 				if err != nil {

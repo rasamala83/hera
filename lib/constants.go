@@ -78,6 +78,14 @@ var (
 	ErrCrossKeysDML,
 	ErrQueryBindBlocker,
 	ErrOther,
+	ErrCacheNotEnabled,
+	ErrCacheCorridNotSet,
+	ErrCacheDisabled,
+	ErrCacheShadowTest,
+	ErrCacheClientClosed,
+	ErrCacheMultipleClientReq,
+	ErrCacheClientReqCanceled,
+	ErrCacheClientWriteFailed,
 	ErrReqParseFail error
 )
 
@@ -108,6 +116,14 @@ func MkErr(prefix string) {
 	ErrQueryBindBlocker = errors.New(prefix + "-207: dba query bind blocker")
 	ErrOther = errors.New(prefix + "-1000: unknown error")
 	ErrReqParseFail = errors.New("Request error")
+	ErrCacheNotEnabled = errors.New("sql is not enabled for caching")
+	ErrCacheCorridNotSet = errors.New("cache session: corrid is NotSet")
+	ErrCacheDisabled = errors.New("sql is disabled for caching")
+	ErrCacheShadowTest = errors.New("cache session: shadow test enabled")
+	ErrCacheClientClosed = errors.New("client connection closed during cache session")
+	ErrCacheMultipleClientReq = errors.New("cache session: multiple client request not supported")
+	ErrCacheClientReqCanceled = errors.New("cache session: client request canceled")
+	ErrCacheClientWriteFailed = errors.New("cache session: client write failed")
 }
 
 // Configuration entry names
@@ -136,4 +152,8 @@ const (
 
 const (
 	SrcPrefixAppKey string = "srcPrefixApp"
+)
+
+const (
+	CacheSeparator string = "##%%OCCCacheSep&&**"
 )

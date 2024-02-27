@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"strconv"
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
@@ -124,6 +125,7 @@ func Run() {
 		InitQueryBindBlocker(*namePtr)
 	}
 
+
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "Waiting for at least one database connection")
 	}
@@ -166,6 +168,27 @@ func Run() {
 	}
 	InitRacMaint(*namePtr)
 
+	if GetConfig().EnableCaching {
+		logger.GetLogger().Log(logger.Verbose, "enable_caching is set to true...")
+		err = InitCachingCfg(*namePtr)
+		logger.GetLogger().Log(logger.Verbose, "After InitCachingCfg in main...")
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize caching config:", err)
+			}
+			// FullShutdown() -- Do not shut down during initial phase
+		}
+		logger.GetLogger().Log(logger.Verbose, "GetJunoClient in main...")
+		_, err = GetJunoClient()
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize juno client:", err)
+			}
+			FullShutdown()
+		}
+		logger.GetLogger().Log(logger.Verbose, "GetJunoClient in main successful...")
+	}
+
 	srv := NewServer(lsn, HandleConnection)
 
 	go srv.Run()
@@ -177,6 +200,11 @@ func Run() {
 	//
 	defer func() {
 		cal.ReleaseCxtResource()
+		if GetConfig().EnableCaching {
+			for i := 0; i < GetConfig().numCalThreads; i++ {
+				cal.ReleaseCxtResource(cal.DefaultTGName + strconv.Itoa(i))
+			}
+		}
 	}()
 
 	// Defer release resource in case of any abnormal exit of for application
@@ -212,6 +240,11 @@ func handlePanicAndReleaseResource(mux_process_id int) {
 		// this case is thread group calDefaultThreadGroupName.
 		//
 		cal.ReleaseCxtResource()
+		if GetConfig().EnableCaching {
+			for i := 0; i < GetConfig().numCalThreads; i++ {
+				cal.ReleaseCxtResource(cal.DefaultTGName + strconv.Itoa(i))
+			}
+		}
 		os.Exit(1)
 	}
 }
