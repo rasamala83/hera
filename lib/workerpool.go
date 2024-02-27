@@ -1,4 +1,3 @@
-// Copyright 2019 PayPal Inc.
 //
 // Licensed to the Apache Software Foundation (ASF) under one or more
 // contributor license agreements.  See the NOTICE file distributed with
@@ -111,6 +110,7 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 	pool.CoShardID = ShIdUnset
 	if GetConfig().EnableCutover {
 		pool.CoShardID = pool2task
+		pool.ShardID = int(pool2task)
 	}
 
 	pool.workers = make([]*WorkerClient, size)
@@ -129,6 +129,8 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 // spawnWorker starts a worker and spawn a routine waiting for the "ready" message
 func (pool *WorkerPool) spawnWorker(wid int) error {
 
+	logger.GetLogger().Log(logger.Alert, "shtein spawnWorker [wid, cutovershardid, pooltype, poolinstId, shardID, pool.moduleName] [",
+		wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, "]")
 	worker := NewWorker(wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
 	worker.setState(wsSchd)
@@ -881,10 +883,12 @@ func (pool *WorkerPool) decBacklogCnt() {
 	}
 }
 
-func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
+func (pool *WorkerPool) enforceIntegrity() error {
 	if pool == nil {
 		return nil
 	}
+
+	logger.GetLogger().Log(logger.Verbose, "CP 21 invoked")
 
 	now := time.Now().Unix()
 	cnt := 0
@@ -892,11 +896,12 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 	pool.poolCond.L.Lock()
 	for i := 0; i < pool.currentSize; i++ {
 		if pool.workers[i] != nil {
-			if pool.workers[i].dbUname != newDbUname {
+			if pool.workers[i].dbUname != pool.dbUname {
+				logger.GetLogger().Log(logger.Verbose, "CP 21 worker", i, "dbUname", pool.workers[i].dbUname, "not match cutovercfg dbUname", pool.dbUname)
 				//pool.workers[i].exitTime = now // should we set this ?
 				workers = append(workers, pool.workers[i])
 				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, "Cutover enforce dbuname integrity, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now, pool.currentSize)
+					logger.GetLogger().Log(logger.Verbose, "CP 21 Cutover enforce dbuname integrity, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now, pool.currentSize)
 				}
 				cnt++
 			}
@@ -905,7 +910,7 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 	pool.poolCond.L.Unlock()
 	for _, w := range workers {
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "enforceIntegrity dbuname mismatched, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
+			logger.GetLogger().Log(logger.Info, "CP 21 enforceIntegrity dbuname mismatched, terminate worker: pid =", w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 		}
 		// determine graceful recycle or immediate termination
 		// Immdiate recycle conditions:
@@ -914,11 +919,11 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 		// Complete phase: apply to only two_task shard
 		// Broom phase:
 		// Enable and Broom state, the connections may all go to same database so no immediate termination.
-		if pool.phase == CutoverPh {
+		if pool.phase == CutoverPhStr {
 			w.Terminate()
-		} else if pool.phase == PrePh && pool.CoShardID == ShId2TaskCutover {
+		} else if pool.phase == PrePhStr && pool.CoShardID == ShId2TaskCutover {
 			w.Terminate()
-		} else if pool.phase == CompletePh && pool.CoShardID == ShId2Task {
+		} else if pool.phase == CompletePhStr && pool.CoShardID == ShId2Task {
 			w.Terminate()
 		} else {
 			w.exitTime = now // should we set some random number just in case?
@@ -928,26 +933,44 @@ func (pool *WorkerPool) enforceIntegrity(newDbUname string) error {
 			e.Completed()
 		}
 	}
+
+	logger.GetLogger().Log(logger.Verbose, "CP 21 end of enforce", pool.phase, pool.dbUname)
+
 	return nil
 }
 
 // workerpool integrity ensured in ways
 // 1. when cfg change, it invokes the function to check all workers' info
 // 2. workerpool will track the current setting, and enforce in case any worker is restarted/recycled outside condition 1.
-func (pool *WorkerPool) ChangeCutoverInfo(newDbUname string, newPhase string) error {
+func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) error {
+	logger.GetLogger().Log(logger.Alert, "CP 20 begin")
 	if pool.phase == newPhase && pool.dbUname == newDbUname { // nothing changed.
 		return nil
 	}
-	if pool.phase != newPhase {
-		// phase change, what does it means?
-		pool.phase = newPhase
-	}
+
+	logger.GetLogger().Log(logger.Alert, "CP 20 workerpool phase or dbuname change before [",
+		pool.phase, ",", pool.dbUname, "] to [", newPhase, ",", newDbUname)
 
 	var err error
 	if pool.dbUname != newDbUname {
+		pool.phase = newPhase
 		pool.dbUname = newDbUname
-		err = pool.enforceIntegrity(newDbUname)
-		return err
+		if newPhase == CutoverPhStr || newPhase == CompletePhStr {
+			logger.GetLogger().Log(logger.Alert, "CP 20 in Cutover or Complete phase, enforce workerpool integrity")
+			err = pool.enforceIntegrity()
+
+			if err != nil {
+				// ATTN: should we still set pool.dbUname = newDBUname?
+				return err
+			}
+		} else {
+			err = pool.enforceIntegrity()
+			if err != nil {
+				return err
+			}
+			logger.GetLogger().Log(logger.Alert, "CP 20 Not in Cutover or Complete phase, still call enforce workerpool integrity")
+		}
+
 	}
 	return err
 

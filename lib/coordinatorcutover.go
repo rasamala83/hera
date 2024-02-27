@@ -64,14 +64,19 @@ func compActiveInfo(cur ActiveInfo, new ActiveInfo) int {
 }
 
 // Build the ActiveCOInfo from CutoverCfg.
-func cvtActiveInfo(cocfg *CutoverCfg) ActiveInfo {
-	newAInfo := ActiveInfo{
+func cvtActiveInfo(cocfg *CutoverCfg) *ActiveInfo {
+	if cocfg == nil {
+		return nil
+	}
+
+	newActInfo := ActiveInfo{
 		ActShId:   cocfg.ActiveShardId,
 		AdbUname:  cocfg.DbBy2task[cocfg.ActiveTwoTask],
 		Aphase:    cocfg.Phase,
-		Arwstatus: cocfg.RWstatusByDb[cocfg.ActiveTwoTask],
+		Arwstatus: cocfg.RWstatusByDb[cocfg.DbBy2task[cocfg.ActiveTwoTask]],
 	}
-	return newAInfo
+	logger.GetLogger().Log(logger.Alert, "shtien newActInfo (ActShId, AdbUname, Aphase, Arwstatus)=(", newActInfo.ActShId, newActInfo.AdbUname, newActInfo.Aphase, newActInfo.Arwstatus,")")
+	return &newActInfo
 }
 
 /*
@@ -83,84 +88,103 @@ and disconnect the client if needed.
 // (00100) 4 if phase changes (may force shard id )
 // (01000) 8 if RWStatus changes. any type (of R or W) is stopped, terminate ongoing txn
 
-coordinator cares about
+info required.
 a. which workerpool (sh + type) to dispatch such request
 b. some phase has default behavior and different policy
 c. update the ActiveInfo struct
 d. return bool -> hang up or not, int -> shard id
+
+hang up conditions
+1. active two_task has changed from last tracked active info in this coordinator
+2. active two_task is unchanged but RWstatus disabled from enabled.
 */
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessCutover:", crd.curActInfo.ActShId)
+
+	//curActInfo     *ActiveInfo    // maybe we don't need this, just use the CutoverInfo (atomic) directly
+	//curCOCfg
+	if crd.curActInfo == nil && GetCutoverCfg() == nil {
+		logger.GetLogger().Log(logger.Alert, crd.id, "shtien PreprocessCutover at init")
 	}
 	interrupt := false // if txn should be disrupted
 	newActInfo := cvtActiveInfo(GetCutoverCfg())
-	diff := compActiveInfo(*crd.curActInfo, newActInfo)
+	if newActInfo == nil {
+		logger.GetLogger().Log(logger.Alert, crd.id, "shtien PreprocessCutover no new activeInfo, treat as no diff")
+		return interrupt, nil
+	}
+
+	if crd.curActInfo == nil {
+		// TODO. are we doing the right thing? need to check if we have missed some init case.
+		logger.GetLogger().Log(logger.Alert, "crd.curActInfo is nil")
+		crd.curActInfo = newActInfo
+	}
+	diff := compActiveInfo(*crd.curActInfo, *newActInfo)
 	if diff == 0 {
+		logger.GetLogger().Log(logger.Alert, "crd.curActInfo and newActInfo is the same")
 		return interrupt, nil // same cutover config
 	}
 	var err error
-	if crd.inTransaction { // worker could be in a long txn, break it if needed.
-		for i := 0; i < 4; i++ { // check 4 attributes for difference (2task, dbuname, phase, RWstatus)
-			switch diff {
-			case 0x0001: // active twotask change means shard change. The logic to determine to hang up or not
-				if newActInfo.Aphase == PrePh || newActInfo.Aphase == EnabledPh {
-					if newActInfo.ActShId != ShId2Task {
-						logger.GetLogger().Log(logger.Alert, crd.id, "logging only. cutover active sh not ShId2Task.")
-					}
-				} else if newActInfo.Aphase == CompletePh {
-					if newActInfo.ActShId != ShId2TaskCutover {
-						logger.GetLogger().Log(logger.Alert, crd.id, "logging only. cutover active sh not ShId2TaskCutover.")
-					}
-				} else if newActInfo.Aphase == CutoverPh {
-					interrupt = true
-				} else {
-					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. Unrecognized cutover phase with active occ_two_task change")
+	if crd.inTransaction {
+		// worker could be in a long txn, break it if needed.
+		if (diff & 0x0001) == 0x0001 {
+			if newActInfo.Aphase == PrePhStr || newActInfo.Aphase == EnablePhStr {
+				if newActInfo.ActShId != ShId2Task {
+					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. prior to cutover phase config using ShId2TaskCutover!")
 				}
-			case 0x0002: // dbuname, outside something coordinator contract with selecting workerpool
-				// integrity is handled by workerpool in a separate way, is there anything we should do here as dispatching?
-				logger.GetLogger().Log(logger.Alert, crd.id, "logging only. active dbuname change")
-			case 0x0004: //phase
-				// preprocess upon phase change, what does this mean?
-				// Enable, Pre, Complete has fixed shard
-				crd.curActInfo.Aphase = newActInfo.Aphase
-			case 0x0008: // diff rwstatus
-				// if this has a stop to read or write, we will take action by stopping the intransaction
-				// rw status, 1 R, 2 W, 3 RW, 0 NRNW
-				if newActInfo.Aphase == CutoverPh {
-					if crd.curActInfo.Arwstatus > newActInfo.Arwstatus { // either W or R or both RW are newly disabled.
-						if newActInfo.Arwstatus == 0 {
-							interrupt = true //we will check this later
+			} else if newActInfo.Aphase == CompletePhStr || newActInfo.Aphase == BroomPhStr {
+				if newActInfo.ActShId != ShId2TaskCutover {
+					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. post cutover phase config using ShId2Task!")
+				}
+			} else if newActInfo.Aphase == CutoverPhStr {
+				//cutover phase, swithc worker pool
+				logger.GetLogger().Log(logger.Alert, crd.id, "cutover phase worker pool switch")
+				interrupt = true
+				err = errors.New("cutover database switch")
+			} else {
+				// shouldn't reach here
+				logger.GetLogger().Log(logger.Alert, crd.id, "logging only. Unrecognized new cutover phase with occ_two_task change")
+			}
+		}
+		if (diff & 0x0002) == 0x0002 {
+			// integrity is handled by workerpool in a separate way, is there anything we should do here as dispatching?
+			logger.GetLogger().Log(logger.Alert, crd.id, "logging only. active dbuname change")
+		}
+		if (diff & 0x0004) == 0x0004 {
+			// preprocess upon phase change, what does this mean?
+			logger.GetLogger().Log(logger.Alert, crd.id, "logging only. cutover phase change")
+		}
+		if (diff & 0x0008) == 0x0008 {
+			// if this has a stop to read or write, we will take action by stopping the intransaction
+			// rw status, 1 R, 2 W, 3 RW, 0 NRNW
+			if newActInfo.Aphase == CutoverPhStr {
+				if crd.curActInfo.Arwstatus > newActInfo.Arwstatus { // either W or R or both RW are newly disabled.
+					if newActInfo.Arwstatus == 0 {
+						interrupt = true //we will check this later
+						err = errors.New("cutover stop in-txn")
+					}
+					if newActInfo.Arwstatus&0x0001 == 0 { // read is disabled now
+						// stop READ
+						if crd.isRead {
+							interrupt = true // we will check this later
 							err = errors.New("cutover stop in-txn read")
-							break
 						}
-						if newActInfo.Arwstatus&0x0001 == 0 { // read is disabled now
-							// stop READ
-							if crd.isRead {
-								interrupt = true // we will check this later
-								err = errors.New("cutover stop in-txn read")
-								break
-							}
-						}
-						if newActInfo.Arwstatus&0x0002 == 0 { // write is disabled now
-							// stop WRTIE
-							if !crd.isRead {
-								interrupt = true // we will check this later
-								err = errors.New("cutover top in-txn write")
-								break
-							}
+					}
+					if newActInfo.Arwstatus&0x0002 == 0 { // write is disabled now
+						// stop WRTIE
+						if !crd.isRead {
+							interrupt = true // we will check this later
+							err = errors.New("cutover top in-txn write")
 						}
 					}
 				}
 			}
 		}
-		copyActCOInfo(crd.curActInfo, newActInfo)       // now coordinator has updated with latest info
-		crd.shard.shardID = int(crd.curActInfo.ActShId) // we will need shardID in dispatchRequest()
+		copyActCOInfo(crd.curActInfo, *newActInfo)      // now coordinator has updated with latest info
+		crd.shard.shardID = int(crd.curActInfo.ActShId) // we will need shardID in dispatchRequest(). hm..
 		return interrupt, err
 	} else {
 		// worker is not in transactions
 		// we will just load the new cfg and update the crd flags as needed.
-		copyActCOInfo(crd.curActInfo, newActInfo)
+		copyActCOInfo(crd.curActInfo, *newActInfo)
 		crd.shard.shardID = int(crd.curActInfo.ActShId)
 		return false, nil // allow to proceed
 	}

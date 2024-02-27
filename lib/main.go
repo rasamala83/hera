@@ -95,6 +95,7 @@ func Run() {
 	//
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
+	logger.GetLogger().Log(logger.Alert, "checkpoint 2")
 	tnsnames, err := FindTns()
 	// Rapid cutover is enabled when meeting the following both conditions at start-up
 	// Also, cutover feature is mutually exclusive to sharding and taf.
@@ -105,24 +106,32 @@ func Run() {
 	// (?) 3. occ.cdb has cutover_enabled = true.
 	GetConfig().EnableCutover = false
 	if err != nil {
-		logger.GetLogger().Log(logger.Alert, "FindTns() failed. Skip checking for cutover enablement")
+		logger.GetLogger().Log(logger.Alert, "FindTns() failed. Skip checking for cutover enablement", err.Error())
+	} else if tnsnames == nil {
+		logger.GetLogger().Log(logger.Alert, "FindTns() return nil")
 	} else {
 		if !GetConfig().EnableSharding && !GetConfig().EnableTAF {
 			logicdbId := os.Getenv("TWO_TASK_CUTOVER")
 			if logicdbId != "" {
-				_, ok := tnsnames[logicdbId]
+				logger.GetLogger().Log(logger.Alert, "shtien retrieved TWO_TASK_CUTOVER", logicdbId) 
+
+				val, ok := tnsnames[logicdbId]
 				if ok && GetConfig().ReadonlyPct > 0 { // r/w split enabled
 					logicdbId = os.Getenv("TWO_TASK_OCC_CUTOVER")
-					_, ok = tnsnames[logicdbId]
+					val, ok = tnsnames[logicdbId]
 				}
 				if ok {
 					// condition meet
+					logger.GetLogger().Log(logger.Alert, "shtien retrieved", logicdbId, "value", val) 
 					logger.GetLogger().Log(logger.Alert, "successfully enable cutover feature")
 					GetConfig().EnableCutover = true
+				} else {
+					logger.GetLogger().Log(logger.Alert, "not enable cutover feature")
 				}
 			}
 		}
 	}
+	logger.GetLogger().Log(logger.Alert, "checkpoint 3")
 
 	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
 		if logger.GetLogger().V(logger.Alert) {
@@ -159,6 +168,7 @@ func Run() {
 	}
 
 	pool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, 0)
+	logger.GetLogger().Log(logger.Info, "shtien GetWorkerPool(wtypeRW, 0, 0)")
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RW, 0, 0:", err)
@@ -167,6 +177,7 @@ func Run() {
 	}
 	for {
 		if pool.GetHealthyWorkersCount() > 0 {
+			logger.GetLogger().Log(logger.Alert, "shtien got healthy worker")
 			break
 		} else {
 			if GetConfig().EnableTAF {
@@ -179,13 +190,9 @@ func Run() {
 		time.Sleep(time.Millisecond * 100)
 	}
 
-	var lsn Listener
-	if GetConfig().KeyFile != "" {
-		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
-	} else {
-		lsn = NewTCPListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
-	}
-
+	logger.GetLogger().Log(logger.Alert, "shtien wait for seconds")
+	time.Sleep(time.Second * 6)
+	logger.GetLogger().Log(logger.Alert, "end of seconds wait")
 	if GetConfig().EnableCutover {
 		err = InitCutoverCfg(*namePtr)
 		if err != nil {
@@ -194,6 +201,12 @@ func Run() {
 			}
 			FullShutdown()
 		}
+	}
+	var lsn Listener
+	if GetConfig().KeyFile != "" {
+		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
+	} else {
+		lsn = NewTCPListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
 	}
 
 	if GetConfig().EnableSharding {

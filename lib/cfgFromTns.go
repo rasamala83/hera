@@ -32,6 +32,7 @@ import (
 // state log prefix hera
 func CfgFromTns(name string) {
 	if GetConfig().CfgFromTns == false {
+		logger.GetLogger().Log(logger.Alert, "shtien CfgFromTns disabled") 
 		return
 	}
 
@@ -56,6 +57,7 @@ func CfgFromTns(name string) {
 	tafShards := 0
 	rwShards := 0
 	for {
+		logger.GetLogger().Log(logger.Alert, "shtien FindTns, iterating") 
 		dbName := fmt.Sprintf("%s_SH%d%s", baseName, numShards, twoTaskSuffix)
 		_, ok = tnsEntries[dbName]
 		if !ok {
@@ -184,6 +186,7 @@ func FindTns() (map[string]string, error) {
 			logErr(err.Error())
 			return nil, err
 		}
+		logErr("checkpoint 1")
 		FindTnsCacheData = tnsEntries
 		FindTnsCacheTime = &now
 		return tnsEntries, err
@@ -216,6 +219,7 @@ func loadTns(tnsFname string) (map[string]string, error) {
 				for ; line[idx-1] == ' '; idx-- {
 				} // trim spaces before =
 				name := line[0:idx]
+				logger.GetLogger().Log(logger.Alert, "shtien loadTns", name) 
 				out[name] = line[idx+1:]
 			}
 		}

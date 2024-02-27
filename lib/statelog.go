@@ -176,9 +176,23 @@ func GetStateLog() *StateLog {
 
 // PublishStateEvent sends the event to the channel, so it will be processed by the state log routine
 func (sl *StateLog) PublishStateEvent(_evt StateEvent) error {
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "publish state event", _evt.eType)
-	}
+//	if logger.GetLogger().V(logger.Verbose) {
+//		logger.GetLogger().Log(logger.Verbose, "publish state event", _evt.eType)
+//	}
+
+ /*       eType     StateEventType
+        shardID   int
+        wType     HeraWorkerType
+        instID    int
+        workerID  int
+        newWState HeraWorkerStatus
+        oldCState ConnState
+        newCState ConnState
+        newWSize  int
+*/
+
+	logger.GetLogger().Log(logger.Verbose, "[shardID:", _evt.shardID, "] [wType:", _evt.wType, "] [instID:", _evt.instID,"] [workerID:", _evt.workerID, "]")
+	logger.GetLogger().Log(logger.Verbose, "checkpoint 9" )
 	// missing event could cause unbalanced statelog output.
 	sl.mEventChann <- _evt
 	return nil
@@ -433,11 +447,13 @@ func (sl *StateLog) init() error {
 	sl.maxShardSize = GetConfig().NumOfShards
 	if sl.maxShardSize == 0 || !(GetConfig().EnableSharding) {
 		sl.maxShardSize = 1
+		if GetConfig().EnableCutover {
+			logger.GetLogger().Log(logger.Verbose, "shtien init statelog enable cutover")
+			sl.maxShardSize = int(MaxDbInCutover)
+			logger.GetLogger().Log(logger.Verbose, "shtien init statelog maxShardSize", sl.maxShardSize)
+		}
 	}
 
-	if GetConfig().EnableCutover {
-		sl.maxShardSize = int(MaxDbInCutover)
-	}
 
 	sl.maxStndbySize = GetConfig().NumStdbyDbs
 	if sl.maxStndbySize > 10 {
@@ -547,13 +563,13 @@ func (sl *StateLog) init() error {
 		typeTitlePrefix[wtypeRW] = GetConfig().StateLogPrefix
 	}
 	for s := 0; s < sl.maxShardSize; s++ {
+		logger.GetLogger().Log(logger.Verbose, "shtien statelog init shard", s)
 		for t := wtypeRW; t < wtypeTotalCount; t++ {
 			var suffix string
 			if GetConfig().EnableCutover {
-				if s == int(ShId2Task) {
-					suffix = ".2t"
-				} else if s == int(ShId2TaskCutover) {
-					suffix = ".2tc"
+				logger.GetLogger().Log(logger.Verbose, "shtien statelog init enable cutover", t)
+				if s == int(ShId2TaskCutover) {
+					suffix = ".co"
 				}
 			} else {
 				suffix = ".sh" + strconv.Itoa(s)
@@ -565,7 +581,7 @@ func (sl *StateLog) init() error {
 				if instCnt > 1 {
 					sl.mTypeTitles[s][t][i] += strconv.Itoa(i + 1)
 				}
-				if shardEnabled {
+				if shardEnabled || GetConfig().EnableCutover { 
 					sl.mTypeTitles[s][t][i] += suffix
 				}
 			}
@@ -592,6 +608,7 @@ func (sl *StateLog) init() error {
 		//
 		// forever waiting for state event or timeout every second to genreport.
 		//
+		logger.GetLogger().Log(logger.Verbose, "checkpoint 10")
 		for {
 			select {
 			//case <- reportTimer:
@@ -599,13 +616,17 @@ func (sl *StateLog) init() error {
 				sl.genReport()
 				reportTimer.Reset(waitTime)
 			case evt, ok := <-sl.mEventChann:
+				//logger.GetLogger().Log(logger.Verbose, "shtien statelog mEventChann")
 				if ok {
 					switch evt.eType {
 					case WorkerStateEvt:
+						//logger.GetLogger().Log(logger.Verbose, "shtien WorkerStateEvt")
 						sl.setWorkerState(evt.shardID, evt.wType, evt.instID, evt.workerID, evt.newWState)
 					case ConnStateEvt:
+						//logger.GetLogger().Log(logger.Verbose, "shtien ConnStateEvt")
 						sl.updateConnectionState(evt.shardID, evt.wType, evt.instID, evt.oldCState, evt.newCState)
 					case WorkerResizeEvt:
+						//logger.GetLogger().Log(logger.Verbose, "shtien WorkerResizeEvt")
 						sl.resizeWorkers(evt.shardID, evt.wType, evt.instID, evt.newWSize)
 					default:
 						if logger.GetLogger().V(logger.Info) {
@@ -625,7 +646,7 @@ func (sl *StateLog) init() error {
 
 /**
  * client should not call these "private" none-threadsafe functions directly.
- * use PublishStateEvent instead.
+ * use eublishStateEvent instead.
  *
  * @TODO test
  *

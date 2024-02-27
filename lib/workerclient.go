@@ -358,28 +358,31 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		envUpsert(&attr, envHeraName, worker.moduleName)
 		twoTaskEnv := ""
 		if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
-			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d_CUTOVER", worker.shardID)
+			twoTaskEnv = fmt.Sprintf("TWO_TASK_CUTOVER_%d", worker.shardID)
 		} else {
 			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d", worker.shardID)
 		}
 		twoTask = os.Getenv(twoTaskEnv)
 		if twoTask == "" {
-			if worker.shardID != 0 {
-				logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
-				et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
-				et.Completed()
-				return errors.New(twoTaskEnv + " is not defined")
-			}
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
-			}
-			twoTaskEnv = envTwoTask
 			if GetConfig().EnableCutover {
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
+				}
+				twoTaskEnv = envTwoTask
 				twoTaskEnv += "_CUTOVER"
+				twoTask = os.Getenv(twoTaskEnv)
+			} else {
+				logger.GetLogger().Log(logger.Info, "shtien check if sharded", twoTaskEnv, "is not defined")
+				if worker.shardID != 0 {
+					logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
+					et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
+					et.Completed()
+					return errors.New(twoTaskEnv + " is not defined")
+				}
+				// fallback
+				twoTaskEnv = envTwoTask
+				twoTask = os.Getenv(twoTaskEnv)
 			}
-			twoTask = os.Getenv(twoTaskEnv)
-		} else {
-			envUpsert(&attr, envTwoTask, twoTask)
 		}
 
 		if twoTask == "" {
@@ -387,6 +390,8 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
 			et.Completed()
 			return errors.New("TWO_TASK is not defined")
+		} else {
+			envUpsert(&attr, envTwoTask, twoTask)
 		}
 	}
 
@@ -486,6 +491,8 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	evt := cal.NewCalEvent(EvtTypeMux, buf.String(), cal.TransOK, "")
 	evt.Completed()
 
+	logger.GetLogger().Log(logger.Alert, "CP 12")
+
 	// TODO: change to use "exec"
 	pid, er := syscall.ForkExec(workerPath, argv, &attr)
 	syscall.Close(socketPair[1])
@@ -535,6 +542,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		worker.Terminate()
 		worker.Close()
 	}()
+	logger.GetLogger().Log(logger.Alert, "CP 11")
 
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "Waiting for control message from worker (", worker.ID, ", ", worker.pid, ")")
@@ -582,13 +590,19 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			logger.GetLogger().Log(logger.Alert, "two_task env is not defined at workerclient start")
 		}
 
-		if coCfg.DbBy2task[os.Getenv(envTwoTask)] != worker.dbUname && coCfg.Phase != "enable" {
-			// this is not good, this workers can't be in service
-			errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %d, %d, %s", coCfg.DbBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
-			return errors.New(errmsg)
+		logger.GetLogger().Log(logger.Alert, "CP 11 attachWorker Cutover enabled")
+		if coCfg != nil {
+			logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg and workerclient integrity failed")
+			if coCfg.DbBy2task[os.Getenv(envTwoTask)] != worker.dbUname && coCfg.Phase == "cutover" {
+				logger.GetLogger().Log(logger.Alert, "shtien integrity failed")
+				// this is not good, this workers can't be in service
+				errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %d, %d, %s", coCfg.DbBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
+				return errors.New(errmsg)
+			}
 		}
 	}
 
+	logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg and workerclient integrity checked")
 	worker.setState(wsAcpt)
 
 	pool, err := GetWorkerBrokerInstance().GetWorkerPool(worker.Type, worker.instID, worker.shardID)
@@ -597,6 +611,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			logger.GetLogger().Log(logger.Alert, "Can't get pool for", worker, ":", err)
 		}
 	} else {
+		logger.GetLogger().Log(logger.Alert, "shtien pool.WorkerReady")
 		pool.WorkerReady(worker)
 	}
 	pool.IncHealthyWorkers()
@@ -1010,8 +1025,9 @@ func (worker *WorkerClient) setState(status HeraWorkerStatus) {
 
 	// TODO: sync atomic set
 	worker.Status = status
-
+	logger.GetLogger().Log(logger.Debug, "[wpid, worker.shardID, wType, workerID]", worker.pid, worker.shardID, worker.Type, worker.ID)
 	GetStateLog().PublishStateEvent(StateEvent{eType: WorkerStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, workerID: worker.ID, newWState: status})
+	logger.GetLogger().Log(logger.Alert, "shtien setState done")
 }
 
 // Channel returns the worker out channel

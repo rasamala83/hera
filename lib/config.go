@@ -376,17 +376,23 @@ func InitConfig() error {
 	var numWorkers int
 	numWorkers = 6
 	//err = config.InitOpsConfigWithName("../opscfg/hera.txt")
+	logger.GetLogger().Log(logger.Alert, "shtien init opscfg") 
 	err = config.InitOpsConfig()
 	if err != nil {
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "Error initializing ops config:", err.Error())
+			logger.GetLogger().Log(logger.Alert, "Error initializing ops config:", err.Error())
 		}
 	} else {
+		logger.GetLogger().Log(logger.Alert, "shtien init opscfg proceed")
 		cfg := config.GetOpsConfig()
 		numWorkersOpscfg, err := cfg.GetInt(ConfigMaxWorkers)
 		if err == nil {
 			numWorkers = numWorkersOpscfg
-		} // continue on error
+			logger.GetLogger().Log(logger.Alert, "shtien OpsConfig GetInt(ConfigMaxWorkers)", numWorkersOpscfg)
+		} else {
+			logger.GetLogger().Log(logger.Alert, "shtien OpsConfig GetInt(ConfigMaxWorkers) error", err.Error())
+		}
+		// continue on error
 		gOpsConfig = &OpsConfig{
 			logLevel:               cfg.GetOrDefaultInt("log_level", logLevel),
 			numWorkers:             uint32(numWorkers),
@@ -398,7 +404,9 @@ func InitConfig() error {
 			satRecoverThrottleRate: uint32(cfg.GetOrDefaultInt("saturation_recover_throttle_rate", 0)),
 		}
 		logger.SetLogVerbosity(int32(gOpsConfig.logLevel))
+		/* comment this out to see if init works
 		gAppConfig.numWorkersCh <- numWorkers
+		*/
 	}
 
 	gAppConfig.ReadonlyPct = cdb.GetOrDefaultInt("readonly_children_pct", 0)
@@ -568,6 +576,12 @@ func GetMaxRequestsPerChild() uint32 {
 func (cfg *Config) NumWorkersCh() <-chan int {
 	return cfg.numWorkersCh
 }
+
+// NumWorkersCh returns the channel where to update number of workers change
+func (cfg *Config) NumWorkersChW() chan int {
+	return cfg.numWorkersCh
+}
+
 
 // GetBacklogLimit returns the limit for the number of backlogged workers for a certain pool and shard.
 func (cfg *Config) GetBacklogLimit(wtype HeraWorkerType, shard int) int {

@@ -80,7 +80,9 @@ var (
 	ErrQueryBindBlocker,
 	ErrNotInternal,
 	ErrOther,
-	ErrReqParseFail error
+	ErrReqParseFail,
+	ErrCutoverReadNotAllowed,
+	ErrCutoverWriteNotAllowed error
 )
 
 // Initializes error strings with a prefix like "HERA"
@@ -110,6 +112,9 @@ func MkErr(prefix string) {
 	ErrQueryBindBlocker = errors.New(prefix + "-207: dba query bind blocker")
 	ErrOther = errors.New(prefix + "-1000: unknown error")
 	ErrReqParseFail = errors.New("Request error")
+	ErrCutoverReadNotAllowed = errors.New(prefix + "-500: active db cutover no read allowed")
+	ErrCutoverWriteNotAllowed = errors.New(prefix + "-501: active db cutover no write allowed")
+
 }
 
 // Configuration entry names
