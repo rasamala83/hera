@@ -118,8 +118,12 @@ func TestTTLCacheEnabledMissingCacheCfgTable(t *testing.T) {
 		t.Fatalf("Error: query should be sent to the database")
 	}
 
-	if testutil.RegexCountFile(".*CACHE_SESSION.*", "cal.log") > 0 {
-		t.Fatalf("Error: should not see CACHE_SESSION when cacheCfg is empty")
+	if testutil.RegexCountFile(".*\tGET\t.*", "cal.log") > 0 {
+		t.Fatalf("Error: should not see GET when cacheCfg is empty")
+	}
+
+	if testutil.RegexCountFile(".*\tSET\t.*", "cal.log") > 0 {
+		t.Fatalf("Error: should not see SET when cacheCfg is empty")
 	}
 
 	conn.Close()

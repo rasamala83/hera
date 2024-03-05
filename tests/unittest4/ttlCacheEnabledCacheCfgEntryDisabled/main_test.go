@@ -132,8 +132,12 @@ func TestTTLCacheEnabledCacheCfgEntryDisabled(t *testing.T) {
 		t.Fatalf("Error: should have exited from CachingSession for SET")
 	}
 
-	if testutil.RegexCountFile(".*CACHE_SESSION.*", "cal.log") > 0 {
-		t.Fatalf("Error: should not see CACHE_SESSION when cacheCfgRecord is disabled for caching")
+	if testutil.RegexCountFile(".*\tGET\t.*", "cal.log") > 0 {
+		t.Fatalf("Error: should not see GET when cacheCfgRecord is disabled for caching")
+	}
+
+	if testutil.RegexCountFile(".*\tSET\t.*", "cal.log") > 0 {
+		t.Fatalf("Error: should not see SET when cacheCfgRecord is disabled for caching")
 	}
 
 	conn.Close()

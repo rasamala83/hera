@@ -134,7 +134,7 @@ func TestTTLCacheJunoResponseTimeout(t *testing.T) {
 		t.Fatalf("Error: query should be sent to the database")
 	}
 
-	if testutil.RegexCountFile("T.*SET\t2580005598\t2.*response timeout", "cal.log") < 1 {
+	if testutil.RegexCountFile(".*SET\t2580005598\t2.*response timeout", "cal.log") < 1 {
 		t.Fatalf("Error: SET should have failed")
 	}
 	conn.Close()

@@ -134,10 +134,6 @@ func TestTTLCacheByCorridDisabled(t *testing.T) {
 		t.Fatalf("Error: should be a cache miss for the first read")
 	}
 
-	if testutil.RegexCountFile("T.*CACHE_SESSION.*", "cal.log") < 1 {
-		t.Fatalf("Error: should see CACHE_SESSION when cacheCfgRecord is enabled for caching")
-	}
-
 	if testutil.RegexCountFile("coordinator dispatchrequest", "hera.log") < 4 {
 		t.Fatalf("Error: should have dispatched the request to database")
 	}

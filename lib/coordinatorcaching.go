@@ -77,21 +77,18 @@ func (crd *Coordinator) setRecordToCache(request *netstring.Netstring, crdRespon
 	if cli.junoClientReady && cli != nil {
 		dice := rand.Intn(GetConfig().numCalThreads)
 		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
-		txn := cal.NewCalTransaction("API", "CACHE_SESSION", "0", "", calThreadGroupName)
-		txn.AddDataStr("corr_id_", crd.extractedcorrId)
 		keyHash, key, keyerr := crd.getKey(request)
 		if keyerr != nil {
 			evt := cal.NewCalEvent("setRecordToCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
 			evt.AddDataStr("corr_id_", crd.extractedcorrId)
 			evt.AddDataStr("err", keyerr.Error())
+			evt.SetStatus("3")
 			evt.Completed()
-			txn.SetStatus("3")
-			txn.Completed()
 			return keyerr
 		}
 		keyHashStr := fmt.Sprintf("%x", keyHash)
 		logger.GetLogger().Log(logger.Verbose, "Trying SET with key:", keyHashStr, "value:", crdResponse)
-		caltxn := cal.NewCalTransaction("SET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
+		caltxn := cal.NewCalAtomicTransaction("SET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
 		caltxn.AddDataStr("corr_id_", crd.extractedcorrId)
 		logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
 		err := cli.Set([]byte(keyHashStr), []byte(crdResponse), ttl, crd.extractedcorrId, calThreadGroupName)
@@ -103,11 +100,9 @@ func (crd *Coordinator) setRecordToCache(request *netstring.Netstring, crdRespon
 			caltxn.SetStatus("2")
 			caltxn.AddDataStr("err", err.Error())
 			caltxn.Completed()
-			txn.Completed()
 			return err
 		}
 		caltxn.Completed()
-		txn.Completed()
 		return err
 	} else {
 		return fmt.Errorf("GetJunoClient returned nil...")
@@ -120,19 +115,16 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 	if cli.junoClientReady && cli != nil {
 		dice := rand.Intn(GetConfig().numCalThreads)
 		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
-		txn := cal.NewCalTransaction("API", "CACHE_SESSION", "0", "", calThreadGroupName)
-		txn.AddDataStr("corr_id_", crd.extractedcorrId)
 		keyHash, key, keyerr := crd.getKey(request)
 		if keyerr != nil {
 			evt := cal.NewCalEvent("getRecordFromCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
 			evt.AddDataStr("corr_id_", crd.extractedcorrId)
 			evt.AddDataStr("err", keyerr.Error())
+			evt.SetStatus("3")
 			evt.Completed()
-			txn.SetStatus("3")
-			txn.Completed()
 			return keyerr
 		}
-		caltxn := cal.NewCalTransaction("GET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
+		caltxn := cal.NewCalAtomicTransaction("GET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
 		caltxn.AddDataStr("corr_id_", crd.extractedcorrId)
 		keyHashStr := fmt.Sprintf("%x", keyHash)
 		logger.GetLogger().Log(logger.Verbose, "Trying GET with key:", keyHashStr)
@@ -145,29 +137,29 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 			caltxn.SetStatus("2")
 			caltxn.AddDataStr("err", err.Error())
 			caltxn.Completed()
-			txn.Completed()
 			return err
 		}
 		logger.GetLogger().Log(logger.Verbose, "Response from cache...", string(resp))
 		caltxn.AddDataInt("cacheResponseSize", int64(len(resp)))
-		caltxn.Completed()
 		select {
 		case err := <-respExit:
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, crd.id, "getRecordFromCache: received err:", err)
 			}
-			txn.SetStatus("3")
-			txn.AddDataStr("err", err.Error())
-			txn.Completed()
+			caltxn.SetStatus("3")
+			caltxn.AddDataStr("err", err.Error())
+			caltxn.Completed()
 			return err
 		default:
 			if len(string(resp)) > 0 {
 				if shadowTest {
+					caltxn.SetStatus("shadowTestEnabled")
+					caltxn.AddDataStr("resp", ErrCacheShadowTest.Error())
+					caltxn.Completed()
 					logger.GetLogger().Log(logger.Debug, crd.id, "Not responding to the client from cache...ShadowTestEnabled:", shadowTest)
 					evt := cal.NewCalEvent("getRecordFromCache", "shadowTest", cal.TransOK, "", calThreadGroupName)
 					evt.AddDataStr("resp", ErrCacheShadowTest.Error())
 					evt.Completed()
-					txn.Completed()
 					return ErrCacheShadowTest
 				}
 				splits := strings.Split(string(resp), CacheSeparator)
@@ -176,21 +168,21 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 						logger.GetLogger().Log(logger.Debug, crd.id, "Responding to client...")
 						err := crd.respond([]byte(split))
 						// _, err = crd.conn.Write([]byte(split))
-						txn.AddDataInt(fmt.Sprintf("%d", idx), int64(len([]byte(split))))
+						caltxn.AddDataInt(fmt.Sprintf("%d", idx), int64(len([]byte(split))))
 						if err != nil {
+							caltxn.SetStatus("ErrCacheClientWriteFailed")
+							caltxn.AddDataStr("err", ErrCacheClientWriteFailed.Error())
+							caltxn.Completed()
 							logger.GetLogger().Log(logger.Debug, crd.id, "Failed to reply to client")
 							evt := cal.NewCalEvent("getRecordFromCache", "client_write_failed", cal.TransWarning, "", calThreadGroupName)
 							evt.AddDataStr("err", err.Error())
 							evt.Completed()
-							txn.SetStatus("3")
-							txn.AddDataStr("err", ErrCacheClientWriteFailed.Error())
-							txn.Completed()
 							return ErrCacheClientWriteFailed
 						}
 					}
 				}
 			}
-			txn.Completed()
+			caltxn.Completed()
 			return err
 		}
 	} else {

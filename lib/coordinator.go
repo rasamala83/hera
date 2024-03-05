@@ -28,6 +28,8 @@ import (
 	"regexp"
 	"strings"
 	"sync/atomic"
+	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/paypal/hera/cal"
@@ -322,7 +324,9 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 	var getErr error
 	if GetConfig().EnableCaching {
 		logger.GetLogger().Log(logger.Verbose, "Inside dispatch...Caching is enabled")
+		timeStart := time.Now()
 		err := crd.DispatchCachingSession(request, "GET")
+		timediff := time.Since(timeStart)
 		getErr = err
 		if err != nil {
 			if err == ErrCacheNotEnabled || err == ErrCacheDisabled || err == ErrCacheShadowTest || err == ErrCacheCorridNotSet {
@@ -336,6 +340,17 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 				logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for GET returned:", err)
 			}
 		} else {
+			dice := rand.Intn(GetConfig().numCalThreads)
+			calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
+			// Add a API Txn when Cache GET is successful
+			txn := cal.NewCalAtomicTransaction("API", "CACHE_SESSION", "0", "", calThreadGroupName)
+			duration := float32(timediff.Nanoseconds()) / float32(time.Millisecond)
+			logger.GetLogger().Log(logger.Verbose, "coordinator GET duration:", duration)
+			txn.AddDataStr("corr_id_", crd.extractedcorrId)
+			txn.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(crd.sqlhash)))
+			txn.AddDataStr("raddr", crd.conn.RemoteAddr().String())
+			txn.SetDuration(duration)
+			txn.Completed()
 			return (err == nil)
 		}
 	}

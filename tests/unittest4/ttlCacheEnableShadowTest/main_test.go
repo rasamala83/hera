@@ -137,10 +137,6 @@ func TestTTLCacheEnableShadowTest(t *testing.T) {
 		t.Fatalf("Error: should be a cache miss for the first read")
 	}
 
-	if testutil.RegexCountFile("T.*CACHE_SESSION.*", "cal.log") < 1 {
-		t.Fatalf("Error: should see CACHE_SESSION when cacheCfgRecord is enabled for caching")
-	}
-
 	if testutil.RegexCountFile("coordinator dispatchrequest", "hera.log") < 4 {
 		t.Fatalf("Error: should have dispatched the request to database")
 	}
@@ -215,12 +211,16 @@ func TestTTLCacheEnableShadowTest(t *testing.T) {
 		t.Fatalf("Error: should see the event when shadow_test is enabled")
 	}
 
+	if testutil.RegexCountFile(".*\tGET\t.*\tshadowTestEnabled.*", "cal.log") < 1 {
+		t.Fatalf("Error: should see the GET status set to shadowTestEnabled")
+	}
+
 	if testutil.RegexCountFile("coordinator DispatchCachingSession for GET returned: cache session: shadow test enabled", "hera.log") < 1 {
 		t.Fatalf("Error: should return ErrCacheShadowTest when shadow test is enabled")
 	}
 
-	if testutil.RegexCountFile(".*GET\t2904134799\t0.*", "cal.log") < 1 {
-		t.Fatalf("Error: should be a cache HIT")
+	if testutil.RegexCountFile(".*GET\t2904134799\tshadowTestEnabled.*", "cal.log") < 1 {
+		t.Fatalf("Error: should be a cache HIT with status shadowTestEnabled")
 	}
 
 	if testutil.RegexCountFile(".*EXEC\t2904134799\t0.*", "cal.log") < 2 {

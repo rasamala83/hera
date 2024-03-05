@@ -177,10 +177,6 @@ func TestTTLCacheValTooLargeForJuno(t *testing.T) {
 		t.Fatalf("Error: query should be sent to the database")
 	}
 
-	if testutil.RegexCountFile("coordinator DispatchCachingSession for SET returned: error: bad parameter", "hera.log") < 1 {
-		t.Fatalf("Error: SET should fail with bad param due to max payload size")
-	}
-
 	if testutil.RegexCountFile(".*SET\t3520330359\t2.*error: bad parameter", "cal.log") < 1 {
 		t.Fatalf("Error: SET should fail with bad param due to max payload size")
 	}

@@ -127,8 +127,8 @@ func TestTTLCacheHappyPath(t *testing.T) {
 		t.Fatalf("Error: should be a cache miss for the first read")
 	}
 
-	if testutil.RegexCountFile("T.*CACHE_SESSION.*", "cal.log") < 1 {
-		t.Fatalf("Error: should see CACHE_SESSION when cacheCfgRecord is enabled for caching")
+	if testutil.RegexCountFile(".*\tGET\t.*", "cal.log") < 1 {
+		t.Fatalf("Error: should see GET when cacheCfgRecord is enabled for caching")
 	}
 
 	if testutil.RegexCountFile("coordinator dispatchrequest", "hera.log") < 4 {
@@ -146,10 +146,6 @@ func TestTTLCacheHappyPath(t *testing.T) {
 	// INSERT + UPDATE + CacheCfg query and the select query should be sent to the database)
 	if testutil.RegexCountFile("T.*CLIENT_SESSION.*", "cal.log") < 4 {
 		t.Fatalf("Error: both the requests should be sent to the database")
-	}
-
-	if testutil.RegexCountFile("T.*CACHE_SESSION.*", "cal.log") < 2 { // GET + SET
-		t.Fatalf("Error: should see CACHE_SESSION when cacheCfgRecord is enabled for caching")
 	}
 
 	if testutil.RegexCountFile(".*GET.*1883341761", "cal.log") < 1 {

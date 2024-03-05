@@ -139,11 +139,11 @@ func TestTTLCacheJunoCertsMissing(t *testing.T) {
 		t.Fatalf("Error: query should be sent to the database")
 	}
 
-	if testutil.RegexCountFile("T.*GET\t2904134799\t2", "cal.log") < 1 {
+	if testutil.RegexCountFile(".*GET\t2904134799\t2", "cal.log") < 1 {
 		t.Fatalf("Error: GET should have failed")
 	}
 
-	if testutil.RegexCountFile("T.*SET\t2904134799\t2", "cal.log") < 1 {
+	if testutil.RegexCountFile(".*SET\t2904134799\t2", "cal.log") < 1 {
 		t.Fatalf("Error: SET should have failed")
 	}
 	conn.Close()
