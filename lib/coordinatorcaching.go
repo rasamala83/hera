@@ -30,17 +30,17 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-func (crd *Coordinator) getKey(request *netstring.Netstring) ([]byte, string, error) {
+func getKey(request *netstring.Netstring, corrId string, sqlHash int32) ([]byte, string, error) {
 	var key string
 	if GetConfig().CacheByCorrId {
 		// Return err if corrid is NotSet
-		if crd.extractedcorrId == "NotSet" || crd.extractedcorrId == "" || crd.extractedcorrId == "unset" {
+		if corrId == "NotSet" || corrId == "" || corrId == "unset" {
 			evt := cal.NewCalEvent("getKey", "ErrCacheCorridNotSet", cal.TransWarning, "")
-			evt.AddDataStr("extracteedcorrId", crd.extractedcorrId)
+			evt.AddDataStr("extracteedcorrId", corrId)
 			evt.Completed()
 			return nil, "", ErrCacheCorridNotSet
 		}
-		key += crd.extractedcorrId + "|"
+		key += corrId + "|"
 	}
 	reqAfterCorrId := ""
 	if request != nil {
@@ -54,7 +54,7 @@ func (crd *Coordinator) getKey(request *netstring.Netstring) ([]byte, string, er
 			key += reqAfterCorrId + "|"
 		}
 	}
-	sqlhashStr := fmt.Sprintf("%d", uint32(crd.sqlhash))
+	sqlhashStr := fmt.Sprintf("%d", uint32(sqlHash))
 	logger.GetLogger().Log(logger.Verbose, "SQLHash:", sqlhashStr)
 	key += sqlhashStr + "|"
 	binds := parseBinds(request)
@@ -71,27 +71,27 @@ func (crd *Coordinator) getKey(request *netstring.Netstring) ([]byte, string, er
 	return keyHash, key, nil
 }
 
-func (crd *Coordinator) setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint32) error {
+func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint32, corrId string, sqlHash int32) {
 	cli, _ := GetJunoClient()
 	logger.GetLogger().Log(logger.Verbose, "SET junoClientReady:", cli.junoClientReady)
 	if cli.junoClientReady && cli != nil {
 		dice := rand.Intn(GetConfig().numCalThreads)
 		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
-		keyHash, key, keyerr := crd.getKey(request)
+		keyHash, key, keyerr := getKey(request, corrId, sqlHash)
 		if keyerr != nil {
 			evt := cal.NewCalEvent("setRecordToCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
-			evt.AddDataStr("corr_id_", crd.extractedcorrId)
+			evt.AddDataStr("corr_id_", corrId)
 			evt.AddDataStr("err", keyerr.Error())
 			evt.SetStatus("3")
 			evt.Completed()
-			return keyerr
+			return
 		}
 		keyHashStr := fmt.Sprintf("%x", keyHash)
 		logger.GetLogger().Log(logger.Verbose, "Trying SET with key:", keyHashStr, "value:", crdResponse)
-		caltxn := cal.NewCalAtomicTransaction("SET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
-		caltxn.AddDataStr("corr_id_", crd.extractedcorrId)
+		caltxn := cal.NewCalAtomicTransaction("SET", fmt.Sprintf("%d", uint32(sqlHash)), "0", "", calThreadGroupName)
+		caltxn.AddDataStr("corr_id_", corrId)
 		logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
-		err := cli.Set([]byte(keyHashStr), []byte(crdResponse), ttl, crd.extractedcorrId, calThreadGroupName)
+		err := cli.Set([]byte(keyHashStr), []byte(crdResponse), ttl, corrId, calThreadGroupName)
 		caltxn.AddDataStr("junoKeyHash", keyHashStr)
 		caltxn.AddDataInt("keySize:", int64(len([]byte(keyHashStr))))
 		caltxn.AddDataInt("crdResponseSize", int64(len([]byte(crdResponse))))
@@ -100,12 +100,13 @@ func (crd *Coordinator) setRecordToCache(request *netstring.Netstring, crdRespon
 			caltxn.SetStatus("2")
 			caltxn.AddDataStr("err", err.Error())
 			caltxn.Completed()
-			return err
+			return
 		}
 		caltxn.Completed()
-		return err
+		return
 	} else {
-		return fmt.Errorf("GetJunoClient returned nil...")
+		logger.GetLogger().Log(logger.Alert, "GetJunoClient returned nil...")
+		return
 	}
 }
 
@@ -115,7 +116,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 	if cli.junoClientReady && cli != nil {
 		dice := rand.Intn(GetConfig().numCalThreads)
 		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
-		keyHash, key, keyerr := crd.getKey(request)
+		keyHash, key, keyerr := getKey(request, crd.extractedcorrId, crd.sqlhash)
 		if keyerr != nil {
 			evt := cal.NewCalEvent("getRecordFromCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
 			evt.AddDataStr("corr_id_", crd.extractedcorrId)
@@ -278,7 +279,7 @@ func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.N
 
 }
 
-func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, reqType string) error {
+func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, reqType string) (uint32, error) {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for", reqType, ": starting")
 	}
@@ -302,22 +303,19 @@ func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, req
 			if reqType == "GET" {
 				if rec.enableShadowTest == "Y" {
 					err := crd.doCacheRequest(crd.ctx, request, true)
-					return err
+					return rec.ttl, err
 				} else {
 					err := crd.doCacheRequest(crd.ctx, request, false)
-					return err
+					return rec.ttl, err
 				}
-			} else if reqType == "SET" {
-				err := crd.setRecordToCache(request, crd.response, rec.ttl)
-				return err
 			} else {
-				err := fmt.Errorf("Unsupported reqType...It must be GET/SET")
-				return err
+				err := fmt.Errorf("Unsupported reqType...It must be GET")
+				return rec.ttl, err
 			}
 		} else {
 			logger.GetLogger().Log(logger.Verbose, "sqlHash is disabled for caching:", rec.sqlHash, rec.cachingEnabled)
-			return ErrCacheDisabled
+			return rec.ttl, ErrCacheDisabled
 		}
 	}
-	return ErrCacheNotEnabled
+	return 0, ErrCacheNotEnabled
 }

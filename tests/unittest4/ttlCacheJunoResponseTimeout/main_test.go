@@ -117,12 +117,8 @@ func TestTTLCacheJunoResponseTimeout(t *testing.T) {
 		t.Fatalf("Error: should have dispatched the request to database")
 	}
 
-	if testutil.RegexCountFile("2580005598 CachingEnabled for  SET : true", "hera.log") < 1 {
-		t.Fatalf("Error: should have entered this block")
-	}
-
-	if testutil.RegexCountFile("coordinator DispatchCachingSession for SET returned:.*response timeout", "hera.log") < 1 {
-		t.Fatalf("Error: should have exited from CachingSession for SET with response timeout")
+	if testutil.RegexCountFile("Error in setRecordToCache: error: response timeout", "hera.log") < 1 {
+		t.Fatalf("Error: should have exited from setRecordToCache with response timeout")
 	}
 
 	// INSERT + UPDATE + CacheCfg query and the select query should be sent to the database)

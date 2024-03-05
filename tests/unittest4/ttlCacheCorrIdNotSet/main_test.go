@@ -135,10 +135,6 @@ func TestTTLCacheCorridNotSet(t *testing.T) {
 		t.Fatalf("Error: should fail before SET when corrid is NotSet")
 	}
 
-	if testutil.RegexCountFile(".*setRecordToCache\tgetKeyErr.*", "cal.log") < 1 {
-		t.Fatalf("Error: should see getKeyErr event")
-	}
-
 	if testutil.RegexCountFile(".*EXEC\t2904134799\t0.*", "cal.log") < 1 {
 		t.Fatalf("Error: query should be sent to the database")
 	}
@@ -174,10 +170,6 @@ func TestTTLCacheCorridNotSet(t *testing.T) {
 
 	if testutil.RegexCountFile("coordinator DispatchCachingSession for GET returned: cache session: corrid is NotSet", "hera.log") < 2 {
 		t.Fatalf("Error: should fail before GET when corrid is NotSet")
-	}
-
-	if testutil.RegexCountFile(".*setRecordToCache\tgetKeyErr.*", "cal.log") < 2 {
-		t.Fatalf("Error: should see getKeyErr event")
 	}
 
 	if testutil.RegexCountFile("coordinator DispatchCachingSession for SET returned: cache session: corrid is NotSet", "hera.log") < 2 {

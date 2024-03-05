@@ -107,10 +107,6 @@ func TestTTLCacheEnabledEmptyCacheCfg(t *testing.T) {
 		t.Fatalf("Error: should have dispatched the request to database")
 	}
 
-	if testutil.RegexCountFile("2904134799 CachingEnabled for  SET : false", "hera.log") < 1 {
-		t.Fatalf("Error: should have exited from CachingSession for SET")
-	}
-
 	if testutil.RegexCountFile("coordinator DispatchCachingSession for SET returned: sql is not enabled for caching", "hera.log") < 1 {
 		t.Fatalf("Error: should have exited from CachingSession for SET")
 	}

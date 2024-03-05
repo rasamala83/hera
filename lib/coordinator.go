@@ -322,22 +322,22 @@ func (crd *Coordinator) Run() {
 
 func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 	var getErr error
+	var cache_ttl uint32
 	if GetConfig().EnableCaching {
 		logger.GetLogger().Log(logger.Verbose, "Inside dispatch...Caching is enabled")
 		timeStart := time.Now()
-		err := crd.DispatchCachingSession(request, "GET")
+		cache_ttl, getErr = crd.DispatchCachingSession(request, "GET")
 		timediff := time.Since(timeStart)
-		getErr = err
-		if err != nil {
-			if err == ErrCacheNotEnabled || err == ErrCacheDisabled || err == ErrCacheShadowTest || err == ErrCacheCorridNotSet {
+		if getErr != nil {
+			if getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheShadowTest || getErr == ErrCacheCorridNotSet {
 				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", err)
+					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", getErr)
 				}
-			} else if err == ErrCacheClientClosed || err == ErrCacheMultipleClientReq || err == ErrCacheClientReqCanceled || err == ErrCacheClientWriteFailed {
-				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", err)
-				return (err == nil)
+			} else if getErr == ErrCacheClientClosed || getErr == ErrCacheMultipleClientReq || getErr == ErrCacheClientReqCanceled || getErr == ErrCacheClientWriteFailed {
+				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", getErr)
+				return (getErr == nil)
 			} else {
-				logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for GET returned:", err)
+				logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for GET returned:", getErr)
 			}
 		} else {
 			dice := rand.Intn(GetConfig().numCalThreads)
@@ -351,7 +351,7 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 			txn.AddDataStr("raddr", crd.conn.RemoteAddr().String())
 			txn.SetDuration(duration)
 			txn.Completed()
-			return (err == nil)
+			return (getErr == nil)
 		}
 	}
 
@@ -365,15 +365,13 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 			if getErr != nil && getErr == ErrCacheShadowTest {
 				logger.GetLogger().Log(logger.Verbose, "Skip setting the record again to cache.. GET returned:", getErr)
 			} else {
-				err := crd.DispatchCachingSession(request, "SET")
-				if err != nil {
-					if err == ErrCacheNotEnabled || err == ErrCacheDisabled || err == ErrCacheCorridNotSet {
-						if logger.GetLogger().V(logger.Verbose) {
-							logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", err)
-						}
-					} else {
-						logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for SET returned:", err)
+				// Caching disabled in the config table (or) caching disabled (or) corrId missing -- Do not SET record to cache
+				if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheCorridNotSet) {
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", getErr)
 					}
+				} else {
+					go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash)
 				}
 			}
 		}
@@ -391,15 +389,13 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 		if getErr != nil && getErr == ErrCacheShadowTest {
 			logger.GetLogger().Log(logger.Verbose, "Skip setting the record again to cache.. GET returned:", getErr)
 		} else {
-			err := crd.DispatchCachingSession(request, "SET")
-			if err != nil {
-				if err == ErrCacheNotEnabled || err == ErrCacheDisabled || err == ErrCacheCorridNotSet {
-					if logger.GetLogger().V(logger.Verbose) {
-						logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", err)
-					}
-				} else {
-					logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for SET returned:", err)
+			// Caching disabled in the config table (or) caching disabled (or) corrId missing -- Do not SET record to cache
+			if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheCorridNotSet) {
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", getErr)
 				}
+			} else {
+				go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash)
 			}
 		}
 	}

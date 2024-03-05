@@ -126,10 +126,6 @@ func TestTTLCacheWithTxnStartFlow(t *testing.T) {
 		t.Fatalf("Error: should be a cache miss for the first read")
 	}
 
-	if testutil.RegexCountFile("2733177372 CachingEnabled for  SET : true", "hera.log") < 1 {
-		t.Fatalf("Error: should have entered this block")
-	}
-
 	if testutil.RegexCountFile("Trying SET with key", "hera.log") < 1 {
 		t.Fatalf("Error: should have entered setRecordToCache when caching is enabled")
 	}

@@ -112,11 +112,7 @@ func TestTTLCacheJunoUnreachable(t *testing.T) {
 		t.Fatalf("Error: should have dispatched the request to database")
 	}
 
-	if testutil.RegexCountFile("2904134799 CachingEnabled for  SET : true", "hera.log") < 1 {
-		t.Fatalf("Error: should have entered this block")
-	}
-
-	if testutil.RegexCountFile("coordinator DispatchCachingSession for SET returned:.*connection refused", "hera.log") < 1 {
+	if testutil.RegexCountFile("Error in setRecordToCache:.*connection refused", "hera.log") < 1 {
 		t.Fatalf("Error: should have exited from CachingSession for SET")
 	}
 

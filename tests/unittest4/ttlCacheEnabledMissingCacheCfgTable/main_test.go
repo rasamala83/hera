@@ -105,10 +105,6 @@ func TestTTLCacheEnabledMissingCacheCfgTable(t *testing.T) {
 		t.Fatalf("Error: should have exited from CachingSession for GET")
 	}
 
-	if testutil.RegexCountFile("2904134799 CachingEnabled for  SET : false", "hera.log") < 1 {
-		t.Fatalf("Error: should have exited from CachingSession for SET")
-	}
-
 	// All the queries (cacheCfg query (3 retries) and the select query should be sent to the database)
 	if testutil.RegexCountFile("T.*CLIENT_SESSION.*", "cal.log") < 4 {
 		t.Fatalf("Error: both the requests should be sent to the database")
