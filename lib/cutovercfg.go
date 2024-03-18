@@ -404,7 +404,6 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 			var wpool *WorkerPool
 			for shid := 0; shid < int(MaxDbInCutover); shid++ {
 				for t := 0; t <= maxtype; t++ {
-					logger.GetLogger().Log(logger.Alert, "CP 14 [shid, wtype][", shid, ",", t, "]")
 					wpool = nil
 					wpool, err = GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 					if err != nil {
@@ -412,20 +411,27 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 					} else {
 						// workerpool tracks phase, dbuname.
 						// if phase unchanges but dbuname change
+						// Return true if changed, false if the same
+						// 0x0000 identical
+						// 0x0001 phase
+						// 0x0002 2tashShard's dbuname
+						// 0x0004 2taskCutoverShard's dbuname
+						// 0x0008 2taskShard's RW
+						// 0x00016 2taskCutoverShard's RW
 						if wpool != nil {
 							logger.GetLogger().Log(logger.Alert, "CP 14 got the workerpool [shid, type] [", shid, ",", t, "]")
 							_ph := precfg.Phase
-							if changedAttr&0x0001 > 0 {
+							if changedAttr&0x0001 == 0x0001 {
 								logger.GetLogger().Log(logger.Alert, "CP 14 Phase change [shid, type] [", shid, ",", t, "]")
 								_ph = newcfg.Phase
 								//
 								// TODO: we need to also call wpool.ChangeCutoverInfo
 							}
-							if changedAttr&0x0002 > 0 { // twotaskshard dbuname changed
+							if changedAttr&0x0002 == 0x0002 && (shid == int(ShId2Task)) { // twotaskshard dbuname changed
 								logger.GetLogger().Log(logger.Alert, "CP 14 dbuname change [shid, type] [", shid, ",", t, "]")
 								wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskName])
 							}
-							if changedAttr&0x0004 > 0 { // twotaskcutover shard dbuname changed
+							if changedAttr&0x0004 == 0x0004 && (shid == int (ShId2TaskCutover)) { // twotaskcutover shard dbuname changed
 								logger.GetLogger().Log(logger.Alert, "CP 14 cutover dbuname change [shid, type] [", shid, ",", t, "]")
 								wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskCutoverName])
 							}
