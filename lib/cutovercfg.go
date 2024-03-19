@@ -331,15 +331,11 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	precfg := GetCutoverCfg()
 	if precfg == nil {
 		logger.GetLogger().Log(logger.Verbose, "shtien precfg is nil")
-	} else {
-		logger.GetLogger().Log(logger.Verbose, "shtien precfg len is", len(precfg.ActiveTwoTask))
-	}
-	if precfg == nil {
+
 		//this means we are at init
 		if newcfg.ActiveTwoTask != "" {
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Verbose, "cutovercfg init and loaded")
-				logger.GetLogger().Log(logger.Verbose, "shtien cutovercfg init dump activecfg", newcfg)
+				logger.GetLogger().Log(logger.Verbose, "CP 14 INIT cutovercfg init dump activecfg", newcfg)
 			}
 			// TODO we need to notify workersize change based on the Phase we are in
 			cfgwkrchange := GetConfig().NumWorkersChW()
@@ -374,7 +370,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 								wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[g2TaskCutoverName])
 							}
 						} else {
-							logger.GetLogger().Log(logger.Alert, "CP 14 can't get workerpool [shid, type] [", shid, ",", t, "]")
+							logger.GetLogger().Log(logger.Alert, "CP 14 INIT can't get workerpool [shid, type] [", shid, ",", t, "]")
 						}
 						wpool = nil
 					}
@@ -384,9 +380,9 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	} else {
 		changed, changedAttr := CheckCfgChange(*precfg, newcfg)
 		if !changed {
-			logger.GetLogger().Log(logger.Alert, "CP 14 cutovercfg load has no change")
+			logger.GetLogger().Log(logger.Alert, "CP 14 cutovercfg has no change")
 		} else {
-			logger.GetLogger().Log(logger.Alert, "CP 14 cutovercfg load detected change")
+			logger.GetLogger().Log(logger.Alert, "CP 14 detected cutovercfg change")
 
 			// gCutoverCfg.Store(&newcfg)
 			// 1. Coordinator could retrieve (pull per sql) the new cfg after gCutoverCfg.Store(&newcfg)
@@ -427,13 +423,22 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 								//
 								// TODO: we need to also call wpool.ChangeCutoverInfo
 							}
+							// Enforce workerpool and db connection integrity carefully by phase
 							if changedAttr&0x0002 == 0x0002 && (shid == int(ShId2Task)) { // twotaskshard dbuname changed
-								logger.GetLogger().Log(logger.Alert, "CP 14 dbuname change [shid, type] [", shid, ",", t, "]")
-								wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskName])
+								if _ph == CutoverPhStr || _ph == CompletePhStr {
+									logger.GetLogger().Log(logger.Alert, "CP 14 enforce TWO_TASK pool dbuname change at CUTOVER/COMPELTE [shid, type]  [", shid, ",", t, "]")
+									wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskName])
+								} else {
+									logger.GetLogger().Log(logger.Alert, "CP 14 at ENABLE/PRE skip TWO_TASK pool dbuname change [shid, type] [", shid, ",", t, "]")
+								}
 							}
-							if changedAttr&0x0004 == 0x0004 && (shid == int (ShId2TaskCutover)) { // twotaskcutover shard dbuname changed
-								logger.GetLogger().Log(logger.Alert, "CP 14 cutover dbuname change [shid, type] [", shid, ",", t, "]")
-								wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskCutoverName])
+							if changedAttr&0x0004 == 0x0004 && (shid == int(ShId2TaskCutover)) { // twotaskcutover shard dbuname changed
+								if _ph == CutoverPhStr || _ph == PrePhStr {
+									logger.GetLogger().Log(logger.Alert, "CP 14 enforce TWO_TASK_CUTOVER pool dbuname change at PRE/CUTOVER [shid, type]  [", shid, ",", t, "]")
+									wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskCutoverName])
+								} else {
+									logger.GetLogger().Log(logger.Alert, "CP 14 at ENABLE/COMPLETE skip TWO_TASK_CUTOVER pool dbuname change [shid, type] [", shid, ",", t, "]")
+								}
 							}
 						} else {
 							logger.GetLogger().Log(logger.Alert, "CP 14 can't get workerpool [shid, type] [", shid, ",", t, "]")
@@ -450,9 +455,6 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Verbose, "cutovercfg change is processed and updated.")
 			}
-		}
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Verbose, "shtien loadCutoverCfg done")
 		}
 	}
 
