@@ -942,6 +942,12 @@ func (pool *WorkerPool) enforceIntegrity() error {
 // workerpool integrity ensured in ways
 // 1. when cfg change, it invokes the function to check all workers' info
 // 2. workerpool will track the current setting, and enforce in case any worker is restarted/recycled outside condition 1.
+// Scenario needs attention
+// When Enable/Pre ignore the TWO_TASK pool DBUNAME mismatch, Complete/Broom Ignore TWO_TASK_CUTOVER pool DBUNAME mismatch,
+// How do we know it is to enforce?
+// Everything has been loaded and dbuname is mismatched for two_task pool and the cutover phase was PRE. Upon changing the CUTOVER phase
+// The mismatched DBUNAME is not view as changed since no difference. However, since we are in CUTOVER, the connection must be corrected.
+// Maybe we should anyway call enforceintegrity?
 func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) error {
 	logger.GetLogger().Log(logger.Alert, "CP 20 begin")
 	if pool.phase == newPhase && pool.dbUname == newDbUname { // nothing changed.
@@ -954,23 +960,34 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) er
 	var err error
 	if pool.dbUname != newDbUname {
 		pool.phase = newPhase
-		pool.dbUname = newDbUname
 		if newPhase == CutoverPhStr || newPhase == CompletePhStr {
-			logger.GetLogger().Log(logger.Alert, "CP 20 in Cutover or Complete phase, enforce workerpool integrity")
+			logger.GetLogger().Log(logger.Alert, "CP 20 in Cutover or Complete dbuname change, enforce workerpool integrity")
 			err = pool.enforceIntegrity()
-
+			pool.dbUname = newDbUname
 			if err != nil {
-				// ATTN: should we still set pool.dbUname = newDBUname?
+				// ATTN: we will set pool.dbuname otherwise it will lock workerlist everytime cfg load
+				logger.GetLogger().Log(logger.Alert, "CP 20 in Cutover or Complete dbuname change, pool enforce integrity error", err.Error())
 				return err
 			}
+			logger.GetLogger().Log(logger.Alert, "CP 20 in Cutover or Complete dbuname change, still call enforce workerpool integrity")
 		} else {
+			logger.GetLogger().Log(logger.Alert, "CP 20 NOT Cutover or Complete dbuname change, enforce workerpool integrity")
+			pool.dbUname = newDbUname
 			err = pool.enforceIntegrity()
 			if err != nil {
+				// ATTN: we will set pool.dbuname otherwise it will lock workerlist everytime cfg load
+				logger.GetLogger().Log(logger.Alert, "CP 20 NOT Cutover or Complete dbuname change, pool enforce integrity error", err.Error())
 				return err
 			}
-			logger.GetLogger().Log(logger.Alert, "CP 20 Not in Cutover or Complete phase, still call enforce workerpool integrity")
+			logger.GetLogger().Log(logger.Alert, "CP 20 NOT Cutover or Complete dbuname change, still call enforce workerpool integrity")
 		}
-
+	} else if (newPhase != pool.phase) && (newPhase == CutoverPhStr) {
+		// we will enforce anyways
+		err = pool.enforceIntegrity()
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "CP 20 Phase only change but pool enforce integrity error", err.Error())
+			return err
+		}
 	}
 	return err
 
