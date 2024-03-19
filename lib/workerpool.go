@@ -909,9 +909,6 @@ func (pool *WorkerPool) enforceIntegrity() error {
 	}
 	pool.poolCond.L.Unlock()
 	for _, w := range workers {
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "CP 21 enforceIntegrity dbuname mismatched, terminate worker: pid =", w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
-		}
 		// determine graceful recycle or immediate termination
 		// Immdiate recycle conditions:
 		// Cutover phase: apply to both two_task and two_task_cutover shards
@@ -920,17 +917,23 @@ func (pool *WorkerPool) enforceIntegrity() error {
 		// Broom phase:
 		// Enable and Broom state, the connections may all go to same database so no immediate termination.
 		if pool.phase == CutoverPhStr {
+			logger.GetLogger().Log(logger.Alert, "CP 21 CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
+				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 			w.Terminate()
 		} else if pool.phase == PrePhStr && pool.CoShardID == ShId2TaskCutover {
+			logger.GetLogger().Log(logger.Alert, "CP 21 PRE AND TWO_TASK_CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
+				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 			w.Terminate()
 		} else if pool.phase == CompletePhStr && pool.CoShardID == ShId2Task {
+			logger.GetLogger().Log(logger.Alert, "CP 21 COMPLETE AND TWO_TASK enforceIntegrity dbuname mismatched, terminate worker: pid =",
+				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 			w.Terminate()
 		} else {
-			w.exitTime = now // should we set some random number just in case?
-			//log warning and gracefully recycle
-			logger.GetLogger().Log(logger.Warning, "worker dbuname not match target db while cutover phase not at Pre or Cutover")
-			e := cal.NewCalEvent(EvtTypeCutover, "uname_not_match_not_enforced", cal.TransOK, "")
-			e.Completed()
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "CP 21 enforceIntegrity dbuname mismatched, but SKIP terminate worker: pid =",
+					w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
+			}
+			// We log the mismatched case but skip the recycle worker
 		}
 	}
 
