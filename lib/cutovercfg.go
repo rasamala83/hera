@@ -422,6 +422,16 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 								_ph = newcfg.Phase
 								//
 								// TODO: we need to also call wpool.ChangeCutoverInfo
+								if _ph == CutoverPhStr {
+									logger.GetLogger().Log(logger.Alert, "CP 14 Phase change to CUTOVER [shid, type] [", shid, ",", t, "]")
+									// we will always do enforce integrity
+									if shid == int(ShId2Task) {
+										wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskName])
+									}
+									if shid == int(ShId2TaskCutover) {
+										wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskCutoverName])
+									}
+								}
 							}
 							// Enforce workerpool and db connection integrity carefully by phase
 							if changedAttr&0x0002 == 0x0002 && (shid == int(ShId2Task)) { // twotaskshard dbuname changed
