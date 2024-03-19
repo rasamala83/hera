@@ -96,7 +96,7 @@ type WorkerClient struct {
 	workerOOBConn net.Conn         // the connection over which it sends out-of-band messages
 	pid           int              // worker pid, needed to check terminated worker before recycling a new one
 	instID        int              // currently 0 or 1
-	shardID       int              // also resuded in cutover
+	shardID       int              // also reused in cutover
 	racID         int              // for RAC maintenance, the rac ID where the worker connected
 	dbUname       string           // the database name where the worker connected
 
@@ -563,7 +563,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		for i := 0; i < ln; i++ {
 			ch := ns.Payload[i]
 			if ch == ' ' {
-				worker.dbUname = string(ns.Payload[i:])
+				worker.dbUname = strings.TrimSpace(string(ns.Payload[i:]))
 				break
 			} else {
 				n := ch - '0'
@@ -590,18 +590,29 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			logger.GetLogger().Log(logger.Alert, "two_task env is not defined at workerclient start")
 		}
 
-		logger.GetLogger().Log(logger.Alert, "CP 11 attachWorker() Cutover enabled")
+		logger.GetLogger().Log(logger.Alert, "CP 11 attachWorker() Cutover enabled. worker.ID", worker.ID,
+			"worker.dbUname", worker.dbUname,
+			"worker.shardID", worker.shardID,
+			"worker.Type", worker.Type,
+			"worker.ConnTwoTask", worker.ConnTwoTask)
 		if coCfg != nil {
-			logger.GetLogger().Log(logger.Alert, "CP 11 check cutovercfg and workerclient integrity")
-			if coCfg.DbBy2task[os.Getenv(envTwoTask)] != worker.dbUname && coCfg.Phase == "cutover" {
-				logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg dbuname and workerclient dbuname mismatch in CUTOVER", 
-					coCfg.DbBy2task[os.Getenv(envTwoTask)], worker.dbUname)
+			var wkr2task string
+			if int(worker.ConnTwoTask) == int(ShId2Task) {
+				wkr2task = Get2TaskName()
+			} else {
+				wkr2task = Get2TaskCutoverName()
+			}
+			logger.GetLogger().Log(logger.Alert, "CP 11 check cutovercfg and workerclient integrity: worker two_task", wkr2task, "target dbuname", coCfg.DbBy2task[wkr2task])
+
+			if coCfg.DbBy2task[wkr2task] != worker.dbUname && coCfg.Phase == CutoverPhStr {
+				logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg dbuname and workerclient dbuname mismatch in CUTOVER phase [",
+					coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
 				// this is not good, this workers can't be in service
-				errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %d, %d, %s", coCfg.DbBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
+				errmsg := fmt.Sprintf("CP 11 workerclient integrity check failed. Expect dbname [%s], %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
 				return errors.New(errmsg)
 			}
 		} else {
-			logger.GetLogger().Log(logger.Alert, "CP 11 GetCutoverCfg() return nil most likely during INIT") 
+			logger.GetLogger().Log(logger.Alert, "CP 11 GetCutoverCfg() return nil most likely during INIT")
 		}
 
 	}
@@ -614,7 +625,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			logger.GetLogger().Log(logger.Alert, "Can't get pool for", worker, ":", err)
 		}
 	} else {
-		logger.GetLogger().Log(logger.Alert, "shtien pool.WorkerReady")
+		logger.GetLogger().Log(logger.Alert, "CP 11 pool.WorkerReady")
 		pool.WorkerReady(worker)
 	}
 	pool.IncHealthyWorkers()

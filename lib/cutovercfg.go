@@ -75,6 +75,22 @@ type CutoverCfg struct {
 // we will have to view the records atomically.
 var gCutoverCfg atomic.Value
 
+func Get2TaskName() string {
+	return g2TaskName
+}
+
+func Get2TaskCutoverName() string {
+	return g2TaskCutoverName
+}
+
+func Get2TaskRName() string {
+	return g2TaskRName
+}
+
+func Get2TaskRCutoverName() string {
+	return g2TaskRCutoverName
+}
+
 // Get the cfg atomically
 func GetCutoverCfg() *CutoverCfg {
 	cfg := gCutoverCfg.Load()
