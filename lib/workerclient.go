@@ -590,19 +590,22 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			logger.GetLogger().Log(logger.Alert, "two_task env is not defined at workerclient start")
 		}
 
-		logger.GetLogger().Log(logger.Alert, "CP 11 attachWorker Cutover enabled")
+		logger.GetLogger().Log(logger.Alert, "CP 11 attachWorker() Cutover enabled")
 		if coCfg != nil {
-			logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg and workerclient integrity failed")
+			logger.GetLogger().Log(logger.Alert, "CP 11 check cutovercfg and workerclient integrity")
 			if coCfg.DbBy2task[os.Getenv(envTwoTask)] != worker.dbUname && coCfg.Phase == "cutover" {
-				logger.GetLogger().Log(logger.Alert, "shtien integrity failed")
+				logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg dbuname and workerclient dbuname mismatch in CUTOVER", 
+					coCfg.DbBy2task[os.Getenv(envTwoTask)], worker.dbUname)
 				// this is not good, this workers can't be in service
 				errmsg := fmt.Sprintf("worker pool integrity check failed. Expect dbname [%s], %d, %d, %s", coCfg.DbBy2task[os.Getenv(envTwoTask)], worker.ID, worker.racID, worker.dbUname)
 				return errors.New(errmsg)
 			}
+		} else {
+			logger.GetLogger().Log(logger.Alert, "CP 11 GetCutoverCfg() return nil most likely during INIT") 
 		}
+
 	}
 
-	logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg and workerclient integrity checked")
 	worker.setState(wsAcpt)
 
 	pool, err := GetWorkerBrokerInstance().GetWorkerPool(worker.Type, worker.instID, worker.shardID)

@@ -891,7 +891,6 @@ func (pool *WorkerPool) enforceIntegrity() {
 
 	logger.GetLogger().Log(logger.Verbose, "CP 21 invoked")
 
-	now := time.Now().Unix()
 	cnt := 0
 	var workers []*WorkerClient
 	pool.poolCond.L.Lock()
