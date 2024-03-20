@@ -153,6 +153,12 @@ func InitCutoverCfg(modulename string) error {
 		return errors.New("failed to load cutovercfg from two_task pool, no more retry")
 	}
 
+	err = writeCutoverLog(ctx)
+	if err != nil {
+		logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
+		// best effort. continue.
+	}
+
 	// spawn the routine to load config
 	go func() {
 		for {
@@ -172,6 +178,11 @@ func InitCutoverCfg(modulename string) error {
 				} else {
 					evt := cal.NewCalEvent(EvtTypeCutover, "loadcfg", cal.TransOK, "success")
 					evt.Completed()
+					err = writeCutoverLog(ctx)
+					if err != nil {
+						logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
+						// best effort. continue.
+					}
 				}
 			} else {
 				evt := cal.NewCalEvent(EvtTypeCutover, "load opendb error", cal.TransOK, err.Error())
@@ -558,22 +569,35 @@ func cutoverOpenDb(wkpool ShardByTwoTask) (*sql.DB, error) {
 	return db, nil
 }
 
-// we should use bind
+// Generate the insert log sql
 func getLogSQL() string {
-	return fmt.Sprintf("insert into %s_cutove_log_%s (poolname, db_uname, two_task, write_status, read_status, last_update_time) values (?, ?, ?, ?, ?, ?)",
+	return fmt.Sprintf("insert into %s_cutove_log_%s (poolname, hostname, db_uname, two_task, write_status, read_status, last_update_time) values (?, ?, ?, ?, ?, ?)",
 		GetConfig().ManagementTablePrefix, GetConfig().CutoverPostfix)
 }
 
 // Best efforts log writing. Insert to both database connection pools two_task and two_task_cutover
-func WriteCutoverLog(cfg CutoverCfg) error {
+func writeCutoverLog(ctx context.Context) error {
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "CP 8 Begin loading cutover cfg")
+		defer func() {
+			logger.GetLogger().Log(logger.Verbose, "CP 8 Done loading cutover cfg")
+		}()
+
+	}
+
+	cfg := GetCutoverCfg()
+	if cfg == nil {
+		logger.GetLogger().Log(logger.Verbose, "CP 8 cfg is nil")
+		return nil
+	}
+
 	for sh := 0; sh < 2; sh++ {
-		ctx := context.Background()
 		var db *sql.DB
 		var err error
 		// best efforts, write to both shard
+		evtname := "write_log_"
 
 		db, err = cutoverOpenDb(ShardByTwoTask(sh))
-		evtname := "write_log_"
 		if err != nil {
 			evtname = evtname + "opendb_error_" + strconv.Itoa(sh)
 			evt := cal.NewCalEvent(EvtTypeCutover, evtname, cal.TransOK, err.Error())
@@ -582,10 +606,12 @@ func WriteCutoverLog(cfg CutoverCfg) error {
 		conn, err := db.Conn(ctx)
 		if err != nil {
 			conn.Close()
-			return fmt.Errorf("error (conn) write cutover cfg to Db: %s", err.Error())
+			return fmt.Errorf("CP 8 error (conn) write cutover cfg to Db: %s", err.Error())
 		}
+		defer conn.Close()
 
 		tomux := gosqldriver.InnerConn(conn)
+		logger.GetLogger().Log(logger.Verbose, "CP 8 get connection to SetShardID")
 		// Internal READ query has contract controlled by mux
 		// Internal WRITE query, mux will follow to sessional shard setting
 		tomux.SetShardID(int(ShId2Task))
@@ -595,14 +621,19 @@ func WriteCutoverLog(cfg CutoverCfg) error {
 			conn.Close()
 			return fmt.Errorf("error (stmt) loading cutover cfg: %s", err.Error())
 		}
-
-		result, err := stmt.Exec(cfg.ActiveTwoTask, cfg.Phase, cfg.DbBy2task[cfg.ActiveTwoTask],
-			cfg.RWstatusByDb[cfg.DbBy2task[cfg.ActiveTwoTask]],
+		defer stmt.Close()
+		//poolname, hostname, two_task, db_uname, phase, write_status, read_status, last_update_time
+		result, err := stmt.Exec(gModuleName,
+			/*hostname*/ "fill_in_hostname",
+			g2TaskName,
+			cfg.Phase,
+			cfg.DbBy2task[g2TaskName],
+			cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&WriteOk == WriteOk,
+			cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&ReadOk == ReadOk,
 			cfg.UpdateTime)
 		//what do we do about this?
 		result.RowsAffected()
 		logger.GetLogger().Log(logger.Debug, "inserted log ", cfg.RWstatusByDb[cfg.DbBy2task[cfg.ActiveTwoTask]], ", ", cfg.UpdateTime)
-
 		if err != nil {
 			conn.Close()
 			return fmt.Errorf("error (log query) insert error: %s", err.Error())

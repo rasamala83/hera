@@ -75,7 +75,7 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveInfo {
 		Aphase:    cocfg.Phase,
 		Arwstatus: cocfg.RWstatusByDb[cocfg.DbBy2task[cocfg.ActiveTwoTask]],
 	}
-	logger.GetLogger().Log(logger.Alert, "shtien newActInfo (ActShId, AdbUname, Aphase, Arwstatus)=(", newActInfo.ActShId, newActInfo.AdbUname, newActInfo.Aphase, newActInfo.Arwstatus,")")
+	logger.GetLogger().Log(logger.Alert, "CP 5 convert cfg to newActInfo (ActShId, AdbUname, Aphase, Arwstatus)=(", newActInfo.ActShId, newActInfo.AdbUname, newActInfo.Aphase, newActInfo.Arwstatus, ")")
 	return &newActInfo
 }
 
