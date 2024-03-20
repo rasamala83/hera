@@ -211,17 +211,17 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	}
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		return fmt.Errorf("error (conn) loading cutover cfg: %s", err.Error())
+		return fmt.Errorf("CP 7 error (conn) loading cutover cfg: %s", err.Error())
 	}
 	defer conn.Close()
 	stmt, err := conn.PrepareContext(ctx, getCutoverSQL())
 	if err != nil {
-		return fmt.Errorf("error (stmt) loading cutover cfg: %s", err.Error())
+		return fmt.Errorf("CP 7 error (stmt) loading cutover cfg: %s", err.Error())
 	}
 	defer stmt.Close()
 	rows, err := stmt.QueryContext(ctx)
 	if err != nil {
-		return fmt.Errorf("error (query) loading cutover cfg: %s", err.Error())
+		return fmt.Errorf("CP 7error (query) loading cutover cfg: %s", err.Error())
 	}
 	defer rows.Close()
 
@@ -229,7 +229,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	nrow := 0
 	for rows.Next() {
 		if nrow > 2 {
-			return fmt.Errorf("error more than 2 rows from cfg table")
+			return fmt.Errorf("CP 7 error more than 2 rows from cfg table")
 		}
 		//sqltxt := fmt.Sprintf("select occ_name, dbuname, occ_two_task, write_status, read_status, cutover_phase from %s_cutover where occ_name = '%s' and occ_two_task IN ('%s', '%s')",
 		rec := &records[nrow]
@@ -241,7 +241,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	}
 
 	if nrow != 2 {
-		return fmt.Errorf("error expected 2 rows but get %d from cfg table", nrow)
+		return fmt.Errorf("CP 7 error expected 2 rows but get %d from cfg table", nrow)
 	}
 
 	// standardize a few things
@@ -253,13 +253,13 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	// Having the query result, validate a few basic things
 	same := isCfgSame(records[0].phase, records[1].phase) // phase is consistent
 	if !same {
-		logger.GetLogger().Log(logger.Alert, "error cutovercfg load inconsistent phase", records[0].phase, records[1].phase)
+		logger.GetLogger().Log(logger.Alert, "CP 7 error cutovercfg load inconsistent phase", records[0].phase, records[1].phase)
 		return fmt.Errorf("error cutovercfg query result has inconsistent phase %s, %s", records[0].phase, records[1].phase)
 	}
 
 	ph := validatePhase(records[0].phase) // phase is valid
 	if ph == 0 {
-		return fmt.Errorf("error cutover cfg query result has invalid phase")
+		return fmt.Errorf("CP 7 error cutover cfg query result has invalid phase")
 	}
 
 	same = isCfgSame(records[0].occ2task, records[1].occ2task) // occ_two_task cannot be the same
@@ -304,24 +304,24 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 
 			logger.GetLogger().Log(logger.Alert, "CP 7 setting newcfg.ActiveTwoTask", newcfg.ActiveTwoTask)
 			if active >= 2 {
-				logger.GetLogger().Log(logger.Alert, "error cutovercfg both active")
+				logger.GetLogger().Log(logger.Alert, "CP 7 error cutovercfg both active")
 				if newcfg.Phase == CutoverPhStr {
 					newcfg.ActiveTwoTask = "INVALID" // just to be safe.
-					logger.GetLogger().Log(logger.Alert, "error cutovercfg both active, skip loading", records[0], records[1])
+					logger.GetLogger().Log(logger.Alert, "CP 7 error cutovercfg both active, skip loading", records[0], records[1])
 					evt := cal.NewCalEvent(EvtTypeCutover, "daul_active_skip_loading", cal.TransOK, "dual active db cfg")
 					evt.Completed()
 					return fmt.Errorf("error dual active db")
 				} else {
 					//outside Cutover Phase, read/write config is not applied. log warning and move on
-					logger.GetLogger().Log(logger.Warning, "error cutovercfg both active", records[0], records[1])
-					evt := cal.NewCalEvent(EvtTypeCutover, "cfgerror_dual_active", cal.TransOK, "dual active db cfg")
+					logger.GetLogger().Log(logger.Warning, "CP 7error cutovercfg both active", records[0], records[1])
+					evt := cal.NewCalEvent(EvtTypeCutover, "CP 7 cfgerror_dual_active", cal.TransOK, "dual active db cfg")
 					evt.Completed()
 					newcfg.ActiveTwoTask = "INVALID" // just to be safe.
 					// maybe we should also error out
 				}
 			}
 		}
-		logger.GetLogger().Log(logger.Verbose, "shtien load newcfg[", i, "](phase, dbuname, wstatus, rstatus)(", records[i].phase, records[i].dbUname, records[i].wstatus, records[i].rstatus, ")")
+		logger.GetLogger().Log(logger.Verbose, "CP 7 load newcfg[", i, "](phase, dbuname, wstatus, rstatus)(", records[i].phase, records[i].dbUname, records[i].wstatus, records[i].rstatus, ")")
 
 	}
 
@@ -331,7 +331,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 		} else {
 			newcfg.ActiveTwoTask = g2TaskName // reset to two_task
 		}
-		logger.GetLogger().Log(logger.Alert, "shtien no active DB reset newcfg.ActiveTwoTask based on cutover phase ", newcfg.ActiveTwoTask)
+		logger.GetLogger().Log(logger.Alert, "CP 7 no active DB reset newcfg.ActiveTwoTask based on cutover phase ", newcfg.ActiveTwoTask)
 	}
 
 	/*
@@ -342,11 +342,11 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	           RWstatusByDb  map[string]int    // uniqute db name --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
 	*/
 
-	logger.GetLogger().Log(logger.Verbose, "shtien dump newcfg (ActiveTwoTask,ActiveShardId,Phase, rwstatus)=(",
+	logger.GetLogger().Log(logger.Verbose, "CP 7 dump newcfg (ActiveTwoTask,ActiveShardId,Phase, rwstatus)=(",
 		newcfg.ActiveTwoTask, newcfg.ActiveShardId, newcfg.Phase, newcfg.RWstatusByDb[newcfg.DbBy2task[newcfg.ActiveTwoTask]], ")")
 	precfg := GetCutoverCfg()
 	if precfg == nil {
-		logger.GetLogger().Log(logger.Verbose, "shtien precfg is nil")
+		logger.GetLogger().Log(logger.Verbose, "CP 7 INIT after run cutovercfg sql")
 
 		//this means we are at init
 		if newcfg.ActiveTwoTask != "" {
@@ -479,7 +479,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 			gCutoverCfg.Store(&newcfg)
 			// ensure the change-triggered action are done as well
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Verbose, "cutovercfg change is processed and updated.")
+				logger.GetLogger().Log(logger.Verbose, "CP 14 cutovercfg change is processed and updated.")
 			}
 		}
 	}

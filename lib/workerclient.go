@@ -1041,7 +1041,6 @@ func (worker *WorkerClient) setState(status HeraWorkerStatus) {
 	worker.Status = status
 	logger.GetLogger().Log(logger.Debug, "[wpid, worker.shardID, wType, workerID]", worker.pid, worker.shardID, worker.Type, worker.ID)
 	GetStateLog().PublishStateEvent(StateEvent{eType: WorkerStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, workerID: worker.ID, newWState: status})
-	logger.GetLogger().Log(logger.Alert, "shtien setState done")
 }
 
 // Channel returns the worker out channel
