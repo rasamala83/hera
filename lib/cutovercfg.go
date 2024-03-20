@@ -492,6 +492,13 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Verbose, "CP 14 cutovercfg change is processed and updated.")
 			}
+
+			logger.GetLogger().Log(logger.Warning, "CP 14 write to log")
+			err = writeCutoverLog(ctx)
+			if err != nil {
+				logger.GetLogger().Log(logger.Warning, "CP 14 write to log failed", err.Error())
+				// best effort. continue.
+			}
 		}
 	}
 
@@ -632,12 +639,16 @@ func writeCutoverLog(ctx context.Context) error {
 			cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&ReadOk == ReadOk,
 			cfg.UpdateTime)
 		//what do we do about this?
-		result.RowsAffected()
-		logger.GetLogger().Log(logger.Debug, "inserted log ", cfg.RWstatusByDb[cfg.DbBy2task[cfg.ActiveTwoTask]], ", ", cfg.UpdateTime)
 		if err != nil {
 			conn.Close()
 			return fmt.Errorf("error (log query) insert error: %s", err.Error())
 		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			conn.Close()
+			return fmt.Errorf("error (log query) insert error: %s", err.Error())
+		}
+		logger.GetLogger().Log(logger.Debug, "CP 8 inserted log", rows)
 		conn.Close()
 	}
 	return nil
