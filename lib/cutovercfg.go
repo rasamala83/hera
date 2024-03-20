@@ -63,12 +63,14 @@ var g2TaskRName string        //e.g. MONEY_OCC
 var g2TaskRCutoverName string // e.g. MONEY_OCC_CUTOVER
 
 // a comphrehensive version of the state
+// maybe we should look up on RWstatus by two_task + DBuname so it allows both two_task and two_task_cutover point to the same DB like in ENABLE and BROOM state
 type CutoverCfg struct {
 	ActiveTwoTask string            // FOO or FOO_CUTOVER is the active, maybe we don't need this because ActiveShardId
 	ActiveShardId ShardByTwoTask    // active shard id mapped to FOO or FOO_CUTOVER
 	Phase         string            // current cutover phase
 	DbBy2task     map[string]string // DB_UNAME by two_task and two_task_cutover
 	RWstatusByDb  map[string]int    // uniqute db name --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
+	RWstatusByComb map[string]int   // two_task + dbuname --> rw status. e.g. CLOC_HERADB_PRIMARY, CLOC_CUTOVER_HERADB_PRIMARY as key
 	UpdateTime    int
 }
 
@@ -153,11 +155,11 @@ func InitCutoverCfg(modulename string) error {
 		return errors.New("failed to load cutovercfg from two_task pool, no more retry")
 	}
 
-	err = writeCutoverLog(ctx)
-	if err != nil {
-		logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
+	//err = writeCutoverLog(ctx)
+	//if err != nil {
+	//	logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
 		// best effort. continue.
-	}
+	//}
 
 	// spawn the routine to load config
 	go func() {
@@ -178,11 +180,11 @@ func InitCutoverCfg(modulename string) error {
 				} else {
 					evt := cal.NewCalEvent(EvtTypeCutover, "loadcfg", cal.TransOK, "success")
 					evt.Completed()
-					err = writeCutoverLog(ctx)
-					if err != nil {
-						logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
+					//err = writeCutoverLog(ctx)
+					//if err != nil {
+					//	logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed but continue", err.Error())
 						// best effort. continue.
-					}
+					//}
 				}
 			} else {
 				evt := cal.NewCalEvent(EvtTypeCutover, "load opendb error", cal.TransOK, err.Error())
@@ -290,17 +292,22 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 		newcfg.DbBy2task[records[i].occ2task] = records[i].dbUname
 		newcfg.RWstatusByDb[records[i].dbUname] = 0
 		if records[i].rstatus.Valid && records[i].rstatus.String[0] == 'Y' {
+			logger.GetLogger().Log(logger.Debug, "CP 7 ==")
 			newcfg.RWstatusByDb[records[i].dbUname] |= 0x0001
 		}
 		if records[i].wstatus.Valid && records[i].wstatus.String[0] == 'Y' {
+			logger.GetLogger().Log(logger.Debug, "CP 7 === ")
 			newcfg.RWstatusByDb[records[i].dbUname] |= 0x0002
 		}
 
 		logger.GetLogger().Log(logger.Debug, "CP 7 newcfg.RWStatusByDb[", records[i].dbUname, "], value =", newcfg.RWstatusByDb[records[i].dbUname])
-		if newcfg.RWstatusByDb[records[i].dbUname] > 0 {
+		logger.GetLogger().Log(logger.Debug, "CP 7 newcfg.RWStatusByDb[", newcfg.DbBy2task[records[i].occ2task], "], value =", newcfg.RWstatusByDb[newcfg.DbBy2task[records[i].occ2task]])
+		if newcfg.RWstatusByDb[newcfg.DbBy2task[records[i].occ2task]] > 0 {
 			active++
+			logger.GetLogger().Log(logger.Debug, "CP 7 Active is ", i)
 			newcfg.ActiveTwoTask = records[i].occ2task // set it to active
 			logger.GetLogger().Log(logger.Debug, "CP 7 check active db: newcfg.RWStatusByDb[", records[i].dbUname, "], value =", newcfg.RWstatusByDb[records[i].dbUname])
+			logger.GetLogger().Log(logger.Debug, "CP 7 check active db: newcfg.RWStatusByDb[", newcfg.DbBy2task[records[i].occ2task], "], value =", newcfg.RWstatusByDb[newcfg.DbBy2task[records[i].occ2task]])
 			if records[i].occ2task == g2TaskName { // set shardid based on ActiveTwoTask.
 				logger.GetLogger().Log(logger.Alert, "CP 7 Setting ActiveShardId to", ShId2Task)
 				newcfg.ActiveShardId = ShId2Task
@@ -494,11 +501,11 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 			}
 
 			logger.GetLogger().Log(logger.Warning, "CP 14 write to log")
-			err = writeCutoverLog(ctx)
-			if err != nil {
-				logger.GetLogger().Log(logger.Warning, "CP 14 write to log failed", err.Error())
+			//err = writeCutoverLog(ctx)
+			//if err != nil {
+			//	logger.GetLogger().Log(logger.Warning, "CP 14 write to log failed", err.Error())
 				// best effort. continue.
-			}
+			//}
 		}
 	}
 
@@ -578,7 +585,8 @@ func cutoverOpenDb(wkpool ShardByTwoTask) (*sql.DB, error) {
 
 // Generate the insert log sql
 func getLogSQL() string {
-	return fmt.Sprintf("insert into %s_cutove_log_%s (poolname, hostname, db_uname, two_task, write_status, read_status, last_update_time) values (?, ?, ?, ?, ?, ?)",
+//poolname, hostname, two_task, db_uname, phase, write_status, read_status, last_update_time
+	return fmt.Sprintf("insert into %s_cutove_log_%s (poolname, hostname, two_task, db_uname, phase,  write_status, read_status, last_update_time) values (?, ?, ?, ?, ?, ?, ?)",
 		GetConfig().ManagementTablePrefix, GetConfig().CutoverPostfix)
 }
 
@@ -629,16 +637,22 @@ func writeCutoverLog(ctx context.Context) error {
 			return fmt.Errorf("error (stmt) loading cutover cfg: %s", err.Error())
 		}
 		defer stmt.Close()
+
+
+			temp_hostname := "dummyhost"
+		        var bindIns []interface{}
+			var BindInNames = [] string {"poolname", "hostname", "two_task", "db_uname", "phase", "write_status", "read_status", "last_update_time"}
+			var BindInValues =[] string {gModuleName, temp_hostname, g2TaskName, cfg.DbBy2task[g2TaskName], cfg.Phase, 
+				strconv.FormatBool(cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&WriteOk == WriteOk),
+				strconv.FormatBool(cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&ReadOk == ReadOk),
+				strconv.Itoa(cfg.UpdateTime)} // change to populate as int
+			for i:=0; i < 8; i++ {
+                		bindIns = append(bindIns, sql.Named(BindInNames[i], BindInValues[i]))
+       		 	}
+
+
 		//poolname, hostname, two_task, db_uname, phase, write_status, read_status, last_update_time
-		result, err := stmt.Exec(gModuleName,
-			/*hostname*/ "fill_in_hostname",
-			g2TaskName,
-			cfg.Phase,
-			cfg.DbBy2task[g2TaskName],
-			cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&WriteOk == WriteOk,
-			cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&ReadOk == ReadOk,
-			cfg.UpdateTime)
-		//what do we do about this?
+		result, err := stmt.ExecContext(ctx, bindIns...)
 		if err != nil {
 			conn.Close()
 			return fmt.Errorf("error (log query) insert error: %s", err.Error())
