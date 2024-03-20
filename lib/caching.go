@@ -22,15 +22,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
-	"os"
-	"github.com/paypal/hera/cal"
 )
 
-// Cache config record to store the hera_sql_caching entries
+// CacheRecord Cache config record to store the <ManagementTablePrefix>_sql_caching entries
 type CacheRecord struct {
 	query_id           string
 	sqlHash            uint32
@@ -54,7 +54,7 @@ var moduleName string
 var gCacheCfg atomic.Value
 
 func getCacheCfgSQL() string {
-	return fmt.Sprintf("SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'", GetConfig().StateLogPrefix, "hera", GetConfig().StateLogPrefix, moduleName)
+	return fmt.Sprintf("SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'", GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, moduleName)
 }
 
 func getCacheCfg() *CacheCfg {
