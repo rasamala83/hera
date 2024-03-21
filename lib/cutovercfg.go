@@ -155,11 +155,11 @@ func InitCutoverCfg(modulename string) error {
 		return errors.New("failed to load cutovercfg from two_task pool, no more retry")
 	}
 
-	err = writeCutoverLog(ctx)
-	if err != nil {
-		logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
+	//err = writeCutoverLog(ctx)
+	//if err != nil {
+	//	logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
 		// best effort. continue.
-	}
+	//}
 
 	// spawn the routine to load config
 	go func() {
