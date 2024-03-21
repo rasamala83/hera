@@ -604,12 +604,32 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			}
 			logger.GetLogger().Log(logger.Alert, "CP 11 check cutovercfg and workerclient integrity: worker two_task", wkr2task, "target dbuname", coCfg.DbBy2task[wkr2task])
 
-			if coCfg.DbBy2task[wkr2task] != worker.dbUname && coCfg.Phase == CutoverPhStr {
-				logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg dbuname and workerclient dbuname mismatch in CUTOVER phase [",
-					coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
-				// this is not good, this workers can't be in service
-				errmsg := fmt.Sprintf("CP 11 workerclient integrity check failed. Expect dbname [%s], %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
-				return errors.New(errmsg)
+			if coCfg.DbBy2task[wkr2task] != worker.dbUname {
+				if coCfg.Phase == CutoverPhStr {
+					logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg dbuname and workerclient dbuname mismatch in CUTOVER phase [",
+						coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
+					errmsg := fmt.Sprintf("CP 11 new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
+					return errors.New(errmsg)
+				} else {
+					if int(worker.ConnTwoTask) == int(ShId2TaskCutover) {
+						//enforce two_task_cutover pool in PRE
+						if coCfg.Phase == PrePhStr {
+							logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg dbuname and workerclient dbuname mismatch in CUTOVER phase [",
+							coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
+							errmsg := fmt.Sprintf("CP 11 new workerclient integrity check failed. Expect dbname [%s], %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
+							return errors.New(errmsg)
+						}
+					}
+					if int(worker.ConnTwoTask) == int(ShId2Task) {
+						// enforce two_task pool in Complete
+						if coCfg.Phase == CompletePhStr {
+							logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg dbuname and workerclient dbuname mismatch in CUTOVER phase [",
+							coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
+							errmsg := fmt.Sprintf("CP 11 new workerclient integrity check failed. Expect dbname [%s], %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
+							return errors.New(errmsg)
+						}
+					}
+				}
 			}
 		} else {
 			logger.GetLogger().Log(logger.Alert, "CP 11 GetCutoverCfg() return nil most likely during INIT")

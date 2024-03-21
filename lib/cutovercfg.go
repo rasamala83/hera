@@ -155,11 +155,11 @@ func InitCutoverCfg(modulename string) error {
 		return errors.New("failed to load cutovercfg from two_task pool, no more retry")
 	}
 
-	//err = writeCutoverLog(ctx)
-	//if err != nil {
-	//	logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
+	err = writeCutoverLog(ctx)
+	if err != nil {
+		logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
 		// best effort. continue.
-	//}
+	}
 
 	// spawn the routine to load config
 	go func() {
@@ -416,7 +416,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 		if !changed {
 			logger.GetLogger().Log(logger.Alert, "CP 14 cutovercfg has no change")
 		} else {
-			logger.GetLogger().Log(logger.Alert, "CP 14 detected cutovercfg change")
+			logger.GetLogger().Log(logger.Alert, "CP 14 detected cutovercfg change", changedAttr)
 
 			// gCutoverCfg.Store(&newcfg)
 			// 1. Coordinator could retrieve (pull per sql) the new cfg after gCutoverCfg.Store(&newcfg)
@@ -450,39 +450,14 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 						// 0x00016 2taskCutoverShard's RW
 						if wpool != nil {
 							logger.GetLogger().Log(logger.Alert, "CP 14 got the workerpool [shid, type] [", shid, ",", t, "]")
-							_ph := precfg.Phase
-							if changedAttr&0x0001 == 0x0001 {
-								logger.GetLogger().Log(logger.Alert, "CP 14 Phase change [shid, type] [", shid, ",", t, "]")
-								_ph = newcfg.Phase
-								//
-								// TODO: we need to also call wpool.ChangeCutoverInfo
-								if _ph == CutoverPhStr {
-									logger.GetLogger().Log(logger.Alert, "CP 14 Phase change to CUTOVER [shid, type] [", shid, ",", t, "]")
-									// we will always do enforce integrity
-									if shid == int(ShId2Task) {
-										wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskName])
-									}
-									if shid == int(ShId2TaskCutover) {
-										wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskCutoverName])
-									}
-								}
+							// integrity is mainly for the workerpool phase + dbuname
+							// if phase changed only, apply to all pools
+							// if phase didn't change, we can add protection?
+							if shid == int(ShId2Task) {
+								wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[g2TaskName])
 							}
-							// Enforce workerpool and db connection integrity carefully by phase
-							if changedAttr&0x0002 == 0x0002 && (shid == int(ShId2Task)) { // twotaskshard dbuname changed
-								if _ph == CutoverPhStr || _ph == CompletePhStr {
-									logger.GetLogger().Log(logger.Alert, "CP 14 enforce TWO_TASK pool dbuname change at CUTOVER/COMPELTE [shid, type]  [", shid, ",", t, "]")
-									wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskName])
-								} else {
-									logger.GetLogger().Log(logger.Alert, "CP 14 at ENABLE/PRE skip TWO_TASK pool dbuname change [shid, type] [", shid, ",", t, "]")
-								}
-							}
-							if changedAttr&0x0004 == 0x0004 && (shid == int(ShId2TaskCutover)) { // twotaskcutover shard dbuname changed
-								if _ph == CutoverPhStr || _ph == PrePhStr {
-									logger.GetLogger().Log(logger.Alert, "CP 14 enforce TWO_TASK_CUTOVER pool dbuname change at PRE/CUTOVER [shid, type]  [", shid, ",", t, "]")
-									wpool.ChangeCutoverInfo(_ph, newcfg.DbBy2task[g2TaskCutoverName])
-								} else {
-									logger.GetLogger().Log(logger.Alert, "CP 14 at ENABLE/COMPLETE skip TWO_TASK_CUTOVER pool dbuname change [shid, type] [", shid, ",", t, "]")
-								}
+							if shid == int(ShId2TaskCutover) {
+								wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[g2TaskCutoverName])
 							}
 						} else {
 							logger.GetLogger().Log(logger.Alert, "CP 14 can't get workerpool [shid, type] [", shid, ",", t, "]")
@@ -586,8 +561,8 @@ func cutoverOpenDb(wkpool ShardByTwoTask) (*sql.DB, error) {
 // Generate the insert log sql
 func getLogSQL() string {
 	//poolname, hostname, two_task, db_uname, phase, write_status, read_status, last_update_time
-	return fmt.Sprintf("insert into %s_cutove_log_%s (poolname, hostname, two_task, db_uname, phase,  write_status, read_status, last_update_time) values (?, ?, ?, ?, ?, ?, ?)",
-		GetConfig().ManagementTablePrefix, GetConfig().CutoverPostfix)
+	return fmt.Sprintf("insert into %s_cutover_log (occ_name, host_name, occ_two_task, dbuname, phase,  write_status, read_status, time_last_update) values (:occ_name, :host_name, :occ_two_task, :dbuname, :phase, :write_status, :read_status, :time_last_update)",
+		GetConfig().ManagementTablePrefix)
 }
 
 // Best efforts log writing. Insert to both database connection pools two_task and two_task_cutover
@@ -625,6 +600,13 @@ func writeCutoverLog(ctx context.Context) error {
 		}
 		defer conn.Close()
 
+		txn, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			logger.GetLogger().Log(logger.Debug, "CP 8 BeginTx error", err.Error())
+			return fmt.Errorf("CP 8 error BeginTx error %s", err.Error())
+		}
+		defer txn.Rollback()
+
 		tomux := gosqldriver.InnerConn(conn)
 		logger.GetLogger().Log(logger.Verbose, "CP 8 get connection to SetShardID")
 		// Internal READ query has contract controlled by mux
@@ -640,10 +622,24 @@ func writeCutoverLog(ctx context.Context) error {
 
 		temp_hostname := "dummyhost"
 		var bindIns []interface{}
-		var BindInNames = []string{"poolname", "hostname", "two_task", "db_uname", "phase", "write_status", "read_status", "last_update_time"}
-		var BindInValues = []string{gModuleName, temp_hostname, g2TaskName, cfg.DbBy2task[g2TaskName], cfg.Phase,
-			strconv.FormatBool(cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&WriteOk == WriteOk),
-			strconv.FormatBool(cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&ReadOk == ReadOk),
+		
+		//("insert into %s_cutover_log (occ_name, host_name, occ_two_task, dbuname, phase,  write_status, read_status, time_last_update) values (:occ_name, :host_name, :occ_two_task, :dbuname, :phase, :write_status, :read_status, :time_last_update)",
+		var BindInNames = []string{"occ_name", "host_name", "occ_two_task", "dbuname", "phase", "write_status", "read_status", "time_last_update"}
+		ws, rs:= "N", "N"
+		if cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&WriteOk == WriteOk {
+			ws = "Y"
+		}
+
+		if cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&ReadOk == ReadOk {
+			rs = "Y"
+		}
+		var BindInValues = []string{gModuleName, 
+			temp_hostname, 
+			g2TaskName, 
+			cfg.DbBy2task[g2TaskName], 
+			cfg.Phase,
+			ws,
+			rs,
 			strconv.Itoa(cfg.UpdateTime)} // change to populate as int
 		for i := 0; i < 8; i++ {
 			bindIns = append(bindIns, sql.Named(BindInNames[i], BindInValues[i]))
@@ -653,12 +649,18 @@ func writeCutoverLog(ctx context.Context) error {
 		result, err := stmt.ExecContext(ctx, bindIns...)
 		if err != nil {
 			conn.Close()
-			return fmt.Errorf("error (log query) insert error: %s", err.Error())
+			return fmt.Errorf("CP 8 error (log query) insert error: %s", err.Error())
 		}
 		rows, err := result.RowsAffected()
 		if err != nil {
+			logger.GetLogger().Log(logger.Debug, "CP 8 RowsAffected error", err.Error())
 			conn.Close()
-			return fmt.Errorf("error (log query) insert error: %s", err.Error())
+			return fmt.Errorf("CP 8 error (log query) insert error: %s", err.Error())
+		}
+		err = txn.Commit()
+		if err != nil {
+			logger.GetLogger().Log(logger.Debug, "CP 8 inserted commit failure", rows)
+			return fmt.Errorf("CP 8 insert commit failure %s", err.Error())
 		}
 		logger.GetLogger().Log(logger.Debug, "CP 8 inserted log", rows)
 		conn.Close()

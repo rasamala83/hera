@@ -895,6 +895,8 @@ func (pool *WorkerPool) enforceIntegrity() {
 	var workers []*WorkerClient
 	pool.poolCond.L.Lock()
 	for i := 0; i < pool.currentSize; i++ {
+		logger.GetLogger().Log(logger.Verbose, "CP 21 pool shid", pool.CoShardID, "current size", pool.currentSize)
+
 		if pool.workers[i] != nil {
 			if pool.workers[i].dbUname != pool.dbUname {
 				logger.GetLogger().Log(logger.Verbose, "CP 21 pool shid", pool.CoShardID, "worker id", i, "dbUname", pool.workers[i].dbUname, "not match cutovercfg dbUname", pool.dbUname)
