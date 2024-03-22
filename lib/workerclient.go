@@ -366,11 +366,17 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		if twoTask == "" {
 			if GetConfig().EnableCutover {
 				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
+					logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback to default")
 				}
 				twoTaskEnv = envTwoTask
-				twoTaskEnv += "_CUTOVER"
+				if worker.ConnTwoTask == ShId2TaskCutover {
+					twoTaskEnv += "_CUTOVER"
+				}
 				twoTask = os.Getenv(twoTaskEnv)
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, twoTaskEnv, "fallback to default", twoTask)
+				}
+
 			} else {
 				logger.GetLogger().Log(logger.Info, "shtien check if sharded", twoTaskEnv, "is not defined")
 				if worker.shardID != 0 {

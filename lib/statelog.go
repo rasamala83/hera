@@ -191,8 +191,8 @@ func (sl *StateLog) PublishStateEvent(_evt StateEvent) error {
         newWSize  int
 */
 
-	logger.GetLogger().Log(logger.Verbose, "[shardID:", _evt.shardID, "] [wType:", _evt.wType, "] [instID:", _evt.instID,"] [workerID:", _evt.workerID, "]")
-	logger.GetLogger().Log(logger.Verbose, "checkpoint 9" )
+	//logger.GetLogger().Log(logger.Verbose, "[shardID:", _evt.shardID, "] [wType:", _evt.wType, "] [instID:", _evt.instID,"] [workerID:", _evt.workerID, "]")
+	//logger.GetLogger().Log(logger.Verbose, "checkpoint 9" )
 	// missing event could cause unbalanced statelog output.
 	sl.mEventChann <- _evt
 	return nil

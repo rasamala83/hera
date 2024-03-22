@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/paypal/hera/cal"
-	"github.com/paypal/hera/client/gosqldriver"
+//	"github.com/paypal/hera/client/gosqldriver"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -581,51 +581,58 @@ func writeCutoverLog(ctx context.Context) error {
 		return nil
 	}
 
-	for sh := 0; sh < 2; sh++ {
+	ctx2 := context.Background()
+	for sh := 0; sh < 1; sh++ {
 		var db *sql.DB
 		var err error
 		// best efforts, write to both shard
 		evtname := "write_log_"
-
+		if db != nil {
+			db.Close()
+		}
 		db, err = cutoverOpenDb(ShardByTwoTask(sh))
+		logger.GetLogger().Log(logger.Debug, "shtien DONE call cutoverOpenDb")
 		if err != nil {
 			evtname = evtname + "opendb_error_" + strconv.Itoa(sh)
 			evt := cal.NewCalEvent(EvtTypeCutover, evtname, cal.TransOK, err.Error())
 			evt.Completed()
 		}
-		conn, err := db.Conn(ctx)
+		conn, err := db.Conn(ctx2)
+		logger.GetLogger().Log(logger.Debug, "shtien DONE call db.Conn(ctx)")
 		if err != nil {
 			conn.Close()
 			return fmt.Errorf("CP 8 error (conn) write cutover cfg to Db: %s", err.Error())
 		}
 		defer conn.Close()
 
-		txn, err := db.BeginTx(ctx, nil)
+		//tomux := gosqldriver.InnerConn(conn)
+		//logger.GetLogger().Log(logger.Verbose, "CP 8 get connection to SetShardID")
+		// Internal READ query has contract controlled by mux
+		// Internal WRITE query, mux will follow to sessional shard setting
+		//tomux.SetShardID(int(ShId2Task))
+		txn, err := conn.BeginTx(ctx2, nil)
+		logger.GetLogger().Log(logger.Debug, "shtien DONE call conn.BeginTx(ctx)")
 		if err != nil {
 			logger.GetLogger().Log(logger.Debug, "CP 8 BeginTx error", err.Error())
 			return fmt.Errorf("CP 8 error BeginTx error %s", err.Error())
 		}
 		defer txn.Rollback()
 
-		tomux := gosqldriver.InnerConn(conn)
-		logger.GetLogger().Log(logger.Verbose, "CP 8 get connection to SetShardID")
-		// Internal READ query has contract controlled by mux
-		// Internal WRITE query, mux will follow to sessional shard setting
-		tomux.SetShardID(int(ShId2Task))
-
-		stmt, err := conn.PrepareContext(ctx, getLogSQL())
+		stmt, err := txn.PrepareContext(ctx2, getLogSQL())
+		logger.GetLogger().Log(logger.Debug, "shtien DONE call conn.BeginTx(ctx)")
 		if err != nil {
 			conn.Close()
 			return fmt.Errorf("error (stmt) loading cutover cfg: %s", err.Error())
 		}
 		defer stmt.Close()
 
-		temp_hostname := "dummyhost"
+		hostname, _ := os.Hostname()
+		//temp_hostname := "dummyhost"
 		var bindIns []interface{}
-		
+
 		//("insert into %s_cutover_log (occ_name, host_name, occ_two_task, dbuname, phase,  write_status, read_status, time_last_update) values (:occ_name, :host_name, :occ_two_task, :dbuname, :phase, :write_status, :read_status, :time_last_update)",
 		var BindInNames = []string{"occ_name", "host_name", "occ_two_task", "dbuname", "phase", "write_status", "read_status", "time_last_update"}
-		ws, rs:= "N", "N"
+		ws, rs := "N", "N"
 		if cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&WriteOk == WriteOk {
 			ws = "Y"
 		}
@@ -633,20 +640,14 @@ func writeCutoverLog(ctx context.Context) error {
 		if cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&ReadOk == ReadOk {
 			rs = "Y"
 		}
-		var BindInValues = []string{gModuleName, 
-			temp_hostname, 
-			g2TaskName, 
-			cfg.DbBy2task[g2TaskName], 
-			cfg.Phase,
-			ws,
-			rs,
-			strconv.Itoa(cfg.UpdateTime)} // change to populate as int
+		var BindInValues = []string{gModuleName, hostname, g2TaskName,
+			cfg.DbBy2task[g2TaskName], cfg.Phase, ws, rs, strconv.Itoa(cfg.UpdateTime)} // change to populate as int
 		for i := 0; i < 8; i++ {
 			bindIns = append(bindIns, sql.Named(BindInNames[i], BindInValues[i]))
 		}
 
 		//poolname, hostname, two_task, db_uname, phase, write_status, read_status, last_update_time
-		result, err := stmt.ExecContext(ctx, bindIns...)
+		result, err := stmt.ExecContext(ctx2, bindIns...)
 		if err != nil {
 			conn.Close()
 			return fmt.Errorf("CP 8 error (log query) insert error: %s", err.Error())
@@ -662,6 +663,7 @@ func writeCutoverLog(ctx context.Context) error {
 			logger.GetLogger().Log(logger.Debug, "CP 8 inserted commit failure", rows)
 			return fmt.Errorf("CP 8 insert commit failure %s", err.Error())
 		}
+
 		logger.GetLogger().Log(logger.Debug, "CP 8 inserted log", rows)
 		conn.Close()
 	}

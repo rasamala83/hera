@@ -92,6 +92,7 @@ func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstri
 	if conn.RemoteAddr().Network() == "pipe" {
 		coordinator.isInternal = true
 	}
+	logger.GetLogger().Log(logger.Alert, coordinator.id, "shtien Create new coordinator")
 	return coordinator
 }
 
@@ -129,6 +130,9 @@ func (crd *Coordinator) Run() {
 	for running {
 		select {
 		case ns, ok := <-crd.clientchannel:
+				if crd.worker == nil {
+					logger.GetLogger().Log(logger.Debug, crd.id, "CP 23 A coordinator worker is nil.")
+				}
 			if !ok {
 				if logger.GetLogger().V(logger.Debug) {
 					logger.GetLogger().Log(logger.Debug, crd.id, "Coordinator exiting (closed channel) ...")
@@ -145,10 +149,17 @@ func (crd *Coordinator) Run() {
 			}
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, crd.id, "coordinator run got client request.")
+				if crd.worker == nil {
+					logger.GetLogger().Log(logger.Debug, crd.id, "CP 23 B coordinator worker is nil.")
+				}
 			}
+
 			// new session
 			crd.nss = nil
 			handle, _ := crd.handleMux(ns)
+			if crd.worker == nil {
+				logger.GetLogger().Log(logger.Debug, crd.id, "CP 23 C coordinator worker is nil.")
+			}
 			if !handle {
 				// if the current worker is not in transaction we recover the current worker and dispatch to a new worker
 				// the reason is that for R/W split it is possible that the new query needs to go to a write worker
@@ -169,6 +180,7 @@ func (crd *Coordinator) Run() {
 
 				running = crd.dispatch(ns)
 				if crd.worker != nil {
+					logger.GetLogger().Log(logger.Debug, crd.id, "shtien after dispatch: worker not nil")
 					workerChan = crd.worker.channel()
 					workerCtrlChan = crd.worker.ctrlCh
 				} else {
@@ -186,6 +198,9 @@ func (crd *Coordinator) Run() {
 					idleTimeoutMs = time.Duration(GetIdleTimeoutMs()) * time.Millisecond
 				}
 				idleTimer.Reset(idleTimeoutMs)
+			}
+			if crd.worker == nil {
+				logger.GetLogger().Log(logger.Debug, crd.id, "CP 23 D coordinator worker is nil.")
 			}
 
 		case <-idleTimerCh:
@@ -241,6 +256,7 @@ func (crd *Coordinator) Run() {
 					atomic.StoreUint32(&(crd.worker.sqlStartTimeMs), 0)
 					GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
 				}
+				logger.GetLogger().Log(logger.Verbose, crd.id, "shtien msg.free going to reset worker")
 				crd.workerpool.ReturnWorker(crd.worker, crd.ticket)
 				crd.resetWorkerInfo()
 				workerChan = nil
@@ -333,7 +349,17 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 	}
 
 	deferr := crd.dispatchRequest(request)
+	if crd.worker == nil {
+		logger.GetLogger().Log(logger.Verbose, crd.id, "crd.worker is nil after dispatchRequest()")
+	} else {
+		logger.GetLogger().Log(logger.Verbose, crd.id, "crd.worker is not nil after dispatchRequest()")
+	}
 	crd.processError(deferr)
+	if crd.worker == nil {
+		logger.GetLogger().Log(logger.Verbose, crd.id, "crd.worker is nil after dispatchRequest() 2")
+	} else {
+		logger.GetLogger().Log(logger.Verbose, crd.id, "crd.worker is not nil after dispatchRequest() 2")
+	}
 	return (deferr == nil)
 }
 
@@ -662,6 +688,7 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 }
 
 func (crd *Coordinator) resetWorkerInfo() {
+	logger.GetLogger().Log(logger.Debug, crd.id, "shtien reset worker info")
 	crd.worker = nil
 	crd.workerpool = nil
 	crd.ticket = ""
@@ -772,9 +799,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 17")
 
 	if worker == nil {
-		logger.GetLogger().Log(logger.Verbose, "checkpoint 6")
+		logger.GetLogger().Log(logger.Verbose, crd.id, "checkpoint 6")
 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
-			logger.GetLogger().Log(logger.Verbose, "shtien worker == nil, sql is read and RW enabled.")
+			logger.GetLogger().Log(logger.Verbose, crd.id, "shtien worker == nil, sql is read and RW enabled.")
 			// read query and has R/W split enabled.
 			if GetConfig().EnableCutover {
 				// cutover is enabled
@@ -824,13 +851,14 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		} else {
 			// either sql is not read, or no rw split disabled, or nor of both
-			logger.GetLogger().Log(logger.Verbose, "CP 7")
+			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7")
 			if GetConfig().EnableCutover {
-				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 process either a write sql, or a read without RW split")
+				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 process either a write sql, or a read without RW split. isRead", crd.isRead)
 				if crd.isInternal {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 cutover runs internal query")
+					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 cutover runs internal query. isRead", crd.isRead)
 					workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, int(ShId2Task))
 					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
+
 				} else {
 					// not an internal sql, now need to check the phase
 					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 cutover runs external query", crd.curActInfo.Aphase)
@@ -879,7 +907,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					}
 				}
 				if err != nil {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "shtien error: ", err.Error())
+					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 error: ", err.Error())
 					return err
 				}
 			} else {
@@ -979,6 +1007,8 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	if worker == nil {
 		return nil
 	}
+
+
 	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
 
 	if !xShardRead {
@@ -988,6 +1018,10 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			crd.ticket = ticket
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dispatchrequest: waiting for client.")
+			}
+
+			if crd.worker == nil {
+				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dispatchrequest: worker is nil")
 			}
 			return nil
 		}
