@@ -127,12 +127,6 @@ func (ct ClientTraffic) identifyDB(conn *sql.Conn, ctx context.Context) (int, er
 	return 0, errors.New("should not have reached")
 }
 
-func (ct ClientTraffic) incrementDB(qsType string, dbId int, dbStats map[string]map[int]int) {
-	dbMutex.Lock()
-	dbStats[qsType][dbId] += 1
-	dbMutex.Unlock()
-}
-
 func initQueryStats() map[int]*queryStats {
 	r := make(map[int]*queryStats)
 
@@ -143,11 +137,10 @@ func initQueryStats() map[int]*queryStats {
 }
 
 func (ct ClientTraffic) checkAndCreateStruct(utc int64, CTS map[int64]ClientTrafficStats) {
+	timeMutex.Lock()
 	_, ok := CTS[utc]
-	if !ok {
-		timeMutex.Lock()
-		_, ok = CTS[utc]
 
+	if !ok {
 		v := make(map[string]map[int]*queryStats)
 
 		v[READ] = initQueryStats()
@@ -155,25 +148,23 @@ func (ct ClientTraffic) checkAndCreateStruct(utc int64, CTS map[int64]ClientTraf
 		v[TXN] = initQueryStats()
 
 		CTS[utc] = ClientTrafficStats{v}
-		timeMutex.Unlock()
 	}
+	timeMutex.Unlock()
+
 }
 
 func (ct ClientTraffic) CreateCounter(utc int64, counterType string, CTS map[int64]ClientTrafficStats) {
 	ct.checkAndCreateStruct(utc, CTS)
 
+	statMutex.Lock()
 	_, ok := CTS[utc].stats[counterType]
 	if !ok {
-		readMutex.Lock()
-		_, ok = CTS[utc].stats[counterType]
-		if !ok {
-
-			CTS[utc].stats[counterType][0] = &queryStats{}
-			CTS[utc].stats[counterType][1] = &queryStats{}
-			CTS[utc].stats[counterType][2] = &queryStats{}
-		}
-		readMutex.Unlock()
+		CTS[utc].stats[counterType][0] = &queryStats{}
+		CTS[utc].stats[counterType][1] = &queryStats{}
+		CTS[utc].stats[counterType][2] = &queryStats{}
 	}
+	statMutex.Unlock()
+
 }
 
 func (ct ClientTraffic) txnTraffic(CTS map[int64]ClientTrafficStats, n int64) {
@@ -287,6 +278,7 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, stopRun chan bool, CTChan ch
 
 	CTS := make(map[int64]ClientTrafficStats)
 
+	cnt := 0
 	fmt.Println("Sending Client Traffic")
 	for {
 		select {
@@ -296,10 +288,14 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, stopRun chan bool, CTChan ch
 			return
 		default:
 			n := time.Now().Unix()
-			ct.readTraffic(CTS, n)
-			ct.txnTraffic(CTS, n)
-			ct.writeTraffic(CTS, n)
-			//time.Sleep(10 * time.Millisecond)
+			if cnt == 0 {
+				fmt.Printf("Traffic StartTime %d\n", n)
+			}
+			go ct.readTraffic(CTS, n)
+			go ct.txnTraffic(CTS, n)
+			go ct.writeTraffic(CTS, n)
+			cnt += 1
+			time.Sleep(300 * time.Millisecond)
 		}
 	}
 
