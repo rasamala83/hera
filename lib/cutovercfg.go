@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/paypal/hera/cal"
-//	"github.com/paypal/hera/client/gosqldriver"
+	//	"github.com/paypal/hera/client/gosqldriver"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -65,13 +65,13 @@ var g2TaskRCutoverName string // e.g. MONEY_OCC_CUTOVER
 // a comphrehensive version of the state
 // maybe we should look up on RWstatus by two_task + DBuname so it allows both two_task and two_task_cutover point to the same DB like in ENABLE and BROOM state
 type CutoverCfg struct {
-	ActiveTwoTask  string            // FOO or FOO_CUTOVER is the active, maybe we don't need this because ActiveShardId
-	ActiveShardId  ShardByTwoTask    // active shard id mapped to FOO or FOO_CUTOVER
-	Phase          string            // current cutover phase
-	DbBy2task      map[string]string // DB_UNAME by two_task and two_task_cutover
-	RWstatusByDb   map[string]int    // uniqute db name --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
-	RWstatusByComb map[string]int    // two_task + dbuname --> rw status. e.g. CLOC_HERADB_PRIMARY, CLOC_CUTOVER_HERADB_PRIMARY as key
-	UpdateTime     int
+	ActiveTwoTask string            // FOO or FOO_CUTOVER is the active, maybe we don't need this because ActiveShardId
+	ActiveShardId ShardByTwoTask    // active shard id mapped to FOO or FOO_CUTOVER
+	Phase         string            // current cutover phase
+	DbBy2task     map[string]string // DB_UNAME by two_task and two_task_cutover
+	RWstatusByDb  map[string]int    // uniqute db name --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
+	//RWstatusByComb map[string]int    // two_task + dbuname --> rw status. e.g. CLOC_HERADB_PRIMARY, CLOC_CUTOVER_HERADB_PRIMARY as key
+	UpdateTime int
 }
 
 // we will have to view the records atomically.
@@ -180,12 +180,12 @@ func InitCutoverCfg(modulename string) error {
 				} else {
 					evt := cal.NewCalEvent(EvtTypeCutover, "loadcfg", cal.TransOK, "success")
 					evt.Completed()
-					//err = writeCutoverLog(ctx)
-					//if err != nil {
-					//	logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed but continue", err.Error())
-					// best effort. continue.
-					//}
 				}
+				//err = writeCutoverLog(ctx)
+				//if err != nil {
+				//	logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed but continue", err.Error())
+				//}
+
 			} else {
 				evt := cal.NewCalEvent(EvtTypeCutover, "load opendb error", cal.TransOK, err.Error())
 				evt.Completed()
@@ -545,12 +545,12 @@ func CheckCfgChange(curcfg CutoverCfg, newcfg CutoverCfg) (bool, int) {
 
 // initialize the golang's database/sql object used to read the database configuration. The connection is created using the loopdriver,
 // a sql driver used internally for ease of programming: the config load routines use standard database/sql interface.
-func cutoverOpenDb(wkpool ShardByTwoTask) (*sql.DB, error) {
-	if wkpool > 1 {
+func cutoverOpenDb(shid ShardByTwoTask) (*sql.DB, error) {
+	if shid > 1 {
 		return nil, errors.New("rapid cutover not support more than 2 database")
 	}
 
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", wkpool))
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shid))
 	if err != nil {
 		return nil, err
 	}
@@ -582,7 +582,7 @@ func writeCutoverLog(ctx context.Context) error {
 	}
 
 	ctx2 := context.Background()
-	for sh := 0; sh < 1; sh++ {
+	for sh := 0; sh < 2; sh++ {
 		var db *sql.DB
 		var err error
 		// best efforts, write to both shard
@@ -591,14 +591,12 @@ func writeCutoverLog(ctx context.Context) error {
 			db.Close()
 		}
 		db, err = cutoverOpenDb(ShardByTwoTask(sh))
-		logger.GetLogger().Log(logger.Debug, "shtien DONE call cutoverOpenDb")
 		if err != nil {
 			evtname = evtname + "opendb_error_" + strconv.Itoa(sh)
 			evt := cal.NewCalEvent(EvtTypeCutover, evtname, cal.TransOK, err.Error())
 			evt.Completed()
 		}
 		conn, err := db.Conn(ctx2)
-		logger.GetLogger().Log(logger.Debug, "shtien DONE call db.Conn(ctx)")
 		if err != nil {
 			conn.Close()
 			return fmt.Errorf("CP 8 error (conn) write cutover cfg to Db: %s", err.Error())
@@ -611,7 +609,6 @@ func writeCutoverLog(ctx context.Context) error {
 		// Internal WRITE query, mux will follow to sessional shard setting
 		//tomux.SetShardID(int(ShId2Task))
 		txn, err := conn.BeginTx(ctx2, nil)
-		logger.GetLogger().Log(logger.Debug, "shtien DONE call conn.BeginTx(ctx)")
 		if err != nil {
 			logger.GetLogger().Log(logger.Debug, "CP 8 BeginTx error", err.Error())
 			return fmt.Errorf("CP 8 error BeginTx error %s", err.Error())
@@ -619,7 +616,6 @@ func writeCutoverLog(ctx context.Context) error {
 		defer txn.Rollback()
 
 		stmt, err := txn.PrepareContext(ctx2, getLogSQL())
-		logger.GetLogger().Log(logger.Debug, "shtien DONE call conn.BeginTx(ctx)")
 		if err != nil {
 			conn.Close()
 			return fmt.Errorf("error (stmt) loading cutover cfg: %s", err.Error())

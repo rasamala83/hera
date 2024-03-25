@@ -130,9 +130,9 @@ func (crd *Coordinator) Run() {
 	for running {
 		select {
 		case ns, ok := <-crd.clientchannel:
-				if crd.worker == nil {
-					logger.GetLogger().Log(logger.Debug, crd.id, "CP 23 A coordinator worker is nil.")
-				}
+			if crd.worker == nil {
+				logger.GetLogger().Log(logger.Debug, crd.id, "CP 23 A coordinator worker is nil.")
+			}
 			if !ok {
 				if logger.GetLogger().V(logger.Debug) {
 					logger.GetLogger().Log(logger.Debug, crd.id, "Coordinator exiting (closed channel) ...")
@@ -180,7 +180,6 @@ func (crd *Coordinator) Run() {
 
 				running = crd.dispatch(ns)
 				if crd.worker != nil {
-					logger.GetLogger().Log(logger.Debug, crd.id, "shtien after dispatch: worker not nil")
 					workerChan = crd.worker.channel()
 					workerCtrlChan = crd.worker.ctrlCh
 				} else {
@@ -256,7 +255,6 @@ func (crd *Coordinator) Run() {
 					atomic.StoreUint32(&(crd.worker.sqlStartTimeMs), 0)
 					GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
 				}
-				logger.GetLogger().Log(logger.Verbose, crd.id, "shtien msg.free going to reset worker")
 				crd.workerpool.ReturnWorker(crd.worker, crd.ticket)
 				crd.resetWorkerInfo()
 				workerChan = nil
@@ -799,9 +797,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 17")
 
 	if worker == nil {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "checkpoint 6")
+		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6")
 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "shtien worker == nil, sql is read and RW enabled.")
+			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6 worker == nil, sql is read and RW enabled.")
 			// read query and has R/W split enabled.
 			if GetConfig().EnableCutover {
 				// cutover is enabled
@@ -821,7 +819,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					// check RW status of the shard
 					if (crd.curActInfo.Aphase == CutoverPhStr) && (crd.curActInfo.Arwstatus != ReadOk) {
 						// we don't allow to do Read
-						logger.GetLogger().Log(logger.Alert, "Cutover phase read not allowed")
+						logger.GetLogger().Log(logger.Alert, crd.id, "CP 6 in CUTOVER phase and read not allowed")
 						return errors.New("Cutover phase read not allowed")
 					}
 					worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
@@ -1007,7 +1005,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	if worker == nil {
 		return nil
 	}
-
 
 	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
 
