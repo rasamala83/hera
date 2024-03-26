@@ -168,7 +168,7 @@ func (broker *WorkerBroker) init() error {
 			// as the worker pool is setting up configs, we don't know the state of cutover
 			// safer approach is to flex up at 20%. Next change is either flex up to full or reduce to 2 conn depending
 			// on what phase it is
-			broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s)/2 
+			broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s) / 2
 			switch s {
 			case int(ShId2Task):
 				broker.poolCfgs[s][wtypeRO].p2t = ShId2Task
@@ -186,7 +186,7 @@ func (broker *WorkerBroker) init() error {
 		broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s)
 		broker.poolCfgs[s][wtypeRW].instCnt = 1
 		if GetConfig().EnableCutover {
-			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s)/2 
+			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s) / 2
 			switch s {
 			case int(ShId2Task):
 				broker.poolCfgs[s][wtypeRW].p2t = ShId2Task
@@ -215,7 +215,7 @@ func (broker *WorkerBroker) init() error {
 		for t := 0; t < int(wtypeTotalCount); t++ {
 			poolcfg := broker.poolCfgs[s][HeraWorkerType(t)]
 			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "init pool [sh:", s, "][workercnt", poolcfg.maxWorkerCnt,"][instCnt",  poolcfg.instCnt,"][p2t", poolcfg.p2t,"]")
+				logger.GetLogger().Log(logger.Verbose, "init pool [sh:", s, "][workercnt", poolcfg.maxWorkerCnt, "][instCnt", poolcfg.instCnt, "][p2t", poolcfg.p2t, "]")
 			}
 			workercnt += (poolcfg.instCnt * poolcfg.maxWorkerCnt)
 			broker.workerpools[s][HeraWorkerType(t)] = make([]*WorkerPool, poolcfg.instCnt)
@@ -433,40 +433,28 @@ resizePool calls workerpool.Resize to resize a worker pool when the dynamic conf
 the number of workers changed
 */
 func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, shardID int) {
-	broker.poolCfgs[0][wType].maxWorkerCnt = maxWorkers
+	broker.poolCfgs[shardID][wType].maxWorkerCnt = maxWorkers
 	pool, err := broker.GetWorkerPool(wType, 0, shardID)
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "Can't pool of type", wType, ", shard", shardID, ",error:", err)
 		}
 	} else {
+		logger.GetLogger().Log(logger.Alert, "wType", wType, ", shard", shardID, ",maxWorkers", maxWorkers)
 		pool.Resize(maxWorkers)
 	}
 }
 
 /*
 changeMaxWorkers is called when the dynamic size change during cutover phases PRE and BROOM. it calls to resize specific shard's pool
-ENABLE -> Resize TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER to MIN
-PRE -> Resize TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER to MIN
-CUTOVER -> Resize TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER to STANDARD opscfg config
-BROOM -> Resize TWO_TASK, TWO_TASK_READ to MIN
-(no longer valid) changeMaxWorkers is called when the dynamic config changed, it calls resizePool() for all the pools
 */
 func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	wW := GetNumWWorkers(0)
-	logger.GetLogger().Log(logger.Debug, "shtien GetNumWWorkers(0) =", wW)
 	rW := GetNumRWorkers(0)
-	logger.GetLogger().Log(logger.Debug, "shtien GetNumRWorkers(0) =", rW)
-/*
-        EnablePhId   = 1
-        PrePhId      = 2
-        CutoverPhId  = 3
-        CompletePhId = 4
-        BroomPhId    = 5
-*/
+	logger.GetLogger().Log(logger.Verbose, "CP 1 changeMaxWorkers GetNumRWorkers(0) =", rW, "GetNumWWorkers(0)", wW)
 
 	if phase == EnablePhId {
-	logger.GetLogger().Log(logger.Debug, "shtien changeMaxWorkers for Enable phase")
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Enable phase")
 		broker.resizePool(wtypeRW, wW, 0)
 		broker.resizePool(wtypeRW, 1, 1)
 		if rW != 0 {
@@ -477,7 +465,7 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	}
 
 	if phase == PrePhId {
-	logger.GetLogger().Log(logger.Debug, "shtien changeMaxWorkers for Pre phase")
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Pre phase")
 		broker.resizePool(wtypeRW, wW, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {
@@ -487,7 +475,7 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 		return
 	}
 	if phase == CutoverPhId {
-	logger.GetLogger().Log(logger.Debug, "shtien changeMaxWorkers for Cutover phase")
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Cutover phase")
 		broker.resizePool(wtypeRW, wW, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {
@@ -496,27 +484,6 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 		}
 		return
 	}
-
-
-
-/*
-	for i := 0; i < GetConfig().NumOfShards; i++ {
-		broker.resizePool(wtypeRW, wW, i)
-		if rW != 0 {
-			broker.resizePool(wtypeRO, rW, i)
-		}
-
-		// if TAF enabled, handle stdby as well
-		if GetConfig().EnableTAF {
-			broker.resizePool(wtypeStdBy, wW, i)
-		}
-
-		if GetConfig().EnableWhitelistTest {
-			// only resize shard 0
-			break
-		}
-	}
-*/
 }
 
 // Stopped is called when we are done, it sends a message to the "stopped" channel, which is read by the main mux routine

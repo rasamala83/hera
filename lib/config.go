@@ -376,7 +376,7 @@ func InitConfig() error {
 	var numWorkers int
 	numWorkers = 6
 	//err = config.InitOpsConfigWithName("../opscfg/hera.txt")
-	logger.GetLogger().Log(logger.Alert, "shtien init opscfg") 
+	logger.GetLogger().Log(logger.Alert, "shtien init opscfg")
 	err = config.InitOpsConfig()
 	if err != nil {
 		if logger.GetLogger().V(logger.Info) {
@@ -582,7 +582,6 @@ func (cfg *Config) NumWorkersChW() chan int {
 	return cfg.numWorkersCh
 }
 
-
 // GetBacklogLimit returns the limit for the number of backlogged workers for a certain pool and shard.
 func (cfg *Config) GetBacklogLimit(wtype HeraWorkerType, shard int) int {
 	if wtype == wtypeRO {
@@ -677,11 +676,7 @@ func GetNumWWorkers(shard int) int {
 	return num
 }
 
-// We don't need to specify the PoolByTwoTask(shard id) because
-// if it's PRE -> we always run minimal two_task_cutover pool
-// if it's BROOM -> we always run miniaml two_task pool
-// This handling will be in the process in workerbroker
-func CutoverPhaseResize(min bool, shid ShardByTwoTask) {
+/* func CutoverPhaseResize(min bool, shid ShardByTwoTask) {
 	cfg := config.GetOpsConfig()
 	numWorkers, err := cfg.GetInt(ConfigMaxWorkers)
 	if min {
@@ -714,4 +709,4 @@ func CutoverPhaseResize(min bool, shid ShardByTwoTask) {
 			gAppConfig.numWorkersCh <- numWorkers
 		}
 	}
-}
+} */

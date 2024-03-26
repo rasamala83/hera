@@ -235,6 +235,20 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 		logger.GetLogger().Log(logger.Debug, "poolsize(ready)", pool.activeQ.Len(), " type ", pool.Type, " instance ", pool.InstID)
 	}
 	pool.workers[worker.ID] = worker
+	
+	// Adding for cutover. The change of pool size is at init
+	if (pool.desiredSize < pool.currentSize) && (worker.ID >= pool.desiredSize) {
+		go func(w *WorkerClient) {
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "Pool resized, terminate worker: pid =", worker.pid, ", pool_type =", worker.Type, ", inst =", worker.instID)
+			}
+			w.Terminate()
+		}(worker)
+		//pool.currentSize--	// restartworker actually does the size reduction.
+		pool.poolCond.L.Unlock()
+		return nil
+	}
+
 
 	pool.poolCond.L.Unlock()
 	//
@@ -492,7 +506,7 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 		return nil
 	}
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "Pool::ReturnWorker(start)", worker.pid, worker.Type, worker.instID, "healthy:", pool.GetHealthyWorkersCount())
+		logger.GetLogger().Log(logger.Debug, "Pool::ReturnWorker(start)", pool.dbUname, worker.pid, worker.Type, worker.instID, "healthy:", pool.GetHealthyWorkersCount())
 	}
 
 	if (len(ticket) == 0) || (pool.checkoutTickets[worker] != ticket) {
@@ -516,7 +530,8 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 	if (pool.desiredSize < pool.currentSize) && (worker.ID >= pool.desiredSize) {
 		go func(w *WorkerClient) {
 			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "Pool resized, terminate worker: pid =", worker.pid, ", pool_type =", worker.Type, ", inst =", worker.instID)
+				logger.GetLogger().Log(logger.Info, "Pool resized, terminate worker: pid =", worker.pid, 
+				",worker.ID", worker.ID, "pool.ShardID", pool.ShardID, "pool_type =", worker.Type, ", inst =", worker.instID)
 			}
 			w.Terminate()
 		}(worker)
@@ -640,7 +655,8 @@ func (pool *WorkerPool) getActiveWorker() (worker *WorkerClient) {
 // until the worker eventually calls ReturnWorker to make itself available
 func (pool *WorkerPool) Resize(newSize int) {
 	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "Resizing pool:", pool.Type, pool.currentSize, "->", newSize)
+		logger.GetLogger().Log(logger.Verbose, "Resizing pool:", pool.dbUname, pool.Type, pool.currentSize, "->", newSize,
+			"[currentSize desiredSize newsize]=[", pool.currentSize, pool.desiredSize, newSize)
 	}
 	pool.poolCond.L.Lock()
 	defer pool.poolCond.L.Unlock()
@@ -663,9 +679,11 @@ func (pool *WorkerPool) Resize(newSize int) {
 		pool.currentSize = pool.desiredSize
 	} else {
 		// remove the idle/free workers now. workers not free with ID > pool.desiredSize are terminated in ReturnWorker
+		logger.GetLogger().Log(logger.Alert, "shtien pool.desiredSize", pool.desiredSize, "pool shard id", pool.ShardID, "coshard id", pool.CoShardID)
 		remove := func(item interface{}) bool {
 			worker := item.(*WorkerClient)
 			if worker.ID >= pool.desiredSize {
+				logger.GetLogger().Log(logger.Alert, "shtien pool.desiredSize worker.ID", worker.ID)
 				// run in go routine so it doesn't block
 				go func(w *WorkerClient) {
 					if logger.GetLogger().V(logger.Info) {
@@ -677,7 +695,8 @@ func (pool *WorkerPool) Resize(newSize int) {
 			}
 			return false
 		}
-		pool.activeQ.ForEachRemove(remove)
+		rc := pool.activeQ.ForEachRemove(remove)
+		logger.GetLogger().Log(logger.Info, "shtien rc from ForEachRemove()", rc)
 	}
 }
 
@@ -947,6 +966,8 @@ func (pool *WorkerPool) enforceIntegrity() {
 // The mismatched DBUNAME is not view as changed since no difference. However, since we are in CUTOVER, the connection must be corrected.
 // Maybe we should anyway call enforceintegrity?
 func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
+	logger.GetLogger().Log(logger.Verbose, "CP 20 ChangeCutoverInfo pool:", pool.dbUname, pool.Type,
+		"[currentSize desiredSize]=[", pool.currentSize, pool.desiredSize)
 	if pool.phase == newPhase && pool.dbUname == newDbUname { // nothing changed.
 		logger.GetLogger().Log(logger.Alert, "CP 20 ChangeCutoverInfo, phase and dbuname no change. done.")
 		return

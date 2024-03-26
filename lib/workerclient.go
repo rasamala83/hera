@@ -621,7 +621,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 						//enforce two_task_cutover pool in PRE
 						if coCfg.Phase == PrePhStr {
 							logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg dbuname and workerclient dbuname mismatch in CUTOVER phase [",
-							coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
+								coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
 							errmsg := fmt.Sprintf("CP 11 new workerclient integrity check failed. Expect dbname [%s], %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
 							return errors.New(errmsg)
 						}
@@ -630,7 +630,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 						// enforce two_task pool in Complete
 						if coCfg.Phase == CompletePhStr {
 							logger.GetLogger().Log(logger.Alert, "CP 11 cutovercfg dbuname and workerclient dbuname mismatch in CUTOVER phase [",
-							coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
+								coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
 							errmsg := fmt.Sprintf("CP 11 new workerclient integrity check failed. Expect dbname [%s], %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
 							return errors.New(errmsg)
 						}
@@ -831,12 +831,15 @@ func (worker *WorkerClient) Terminate() error {
 	pid := worker.pid
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, "workerclient pid=", pid, " to be terminated, sending SIGTERM first for gracefull termination")
+		logger.GetLogger().Log(logger.Debug, "CP 25 workerclient pid=", pid, "worker id", worker.ID, "dbuname", worker.dbUname)
+
 	}
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		// right now on Unix erp is always nil
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "workerclient pid=", pid, ", find process error", err.Error())
+			logger.GetLogger().Log(logger.Debug, "CP 25 workerclient find process error pid=", pid, "worker id", worker.ID, "dbuname", worker.dbUname)
 		}
 		syscall.Kill(pid, syscall.SIGKILL)
 		return nil
@@ -864,6 +867,7 @@ func (worker *WorkerClient) Terminate() error {
 	if slept >= 2000 {
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, "workerclient pid=", pid, " sending SIGKILL")
+			logger.GetLogger().Log(logger.Debug, "CP 25 workerclient sebdubg SIGKILL pid=", pid, "worker id", worker.ID, "dbuname", worker.dbUname)
 		}
 		syscall.Kill(pid, syscall.SIGKILL)
 	}
