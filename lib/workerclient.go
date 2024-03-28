@@ -597,10 +597,10 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		}
 
 		//logger.GetLogger().Log(logger.Alert, "CP 11 attachWorker() Cutover enabled. worker.ID", worker.ID,
-			"worker.dbUname", worker.dbUname,
-			"worker.shardID", worker.shardID,
-			"worker.Type", worker.Type,
-			"worker.ConnTwoTask", worker.ConnTwoTask)
+		//	"worker.dbUname", worker.dbUname,
+		//	"worker.shardID", worker.shardID,
+		//	"worker.Type", worker.Type,
+		//	"worker.ConnTwoTask", worker.ConnTwoTask)
 		if coCfg != nil {
 			var wkr2task string
 			if int(worker.ConnTwoTask) == int(ShId2Task) {

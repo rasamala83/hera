@@ -490,7 +490,7 @@ func CheckCfgChange(curcfg CutoverCfg, newcfg CutoverCfg) (bool, int) {
 	if curcfg.ActiveTwoTask != newcfg.ActiveTwoTask {
 		changed = true
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "CP 18 cutover phase change", curcfg.Phase, "->", newcfg.Phase)
+			logger.GetLogger().Log(logger.Info, "CP 18 ActiveTwoTask", curcfg.ActiveTwoTask, "->", newcfg.ActiveTwoTask)
 		}
 		whatchanged |= 0x0020
 	}
