@@ -596,7 +596,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			logger.GetLogger().Log(logger.Alert, "two_task env is not defined at workerclient start")
 		}
 
-		logger.GetLogger().Log(logger.Alert, "CP 11 attachWorker() Cutover enabled. worker.ID", worker.ID,
+		//logger.GetLogger().Log(logger.Alert, "CP 11 attachWorker() Cutover enabled. worker.ID", worker.ID,
 			"worker.dbUname", worker.dbUname,
 			"worker.shardID", worker.shardID,
 			"worker.Type", worker.Type,
@@ -638,7 +638,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 				}
 			}
 		} else {
-			logger.GetLogger().Log(logger.Alert, "CP 11 GetCutoverCfg() return nil most likely during INIT")
+			logger.GetLogger().Log(logger.Alert, "CP 11 workerclient GetCutoverCfg() return nil, likely during INIT")
 		}
 
 	}
@@ -651,7 +651,6 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			logger.GetLogger().Log(logger.Alert, "Can't get pool for", worker, ":", err)
 		}
 	} else {
-		logger.GetLogger().Log(logger.Alert, "CP 11 pool.WorkerReady")
 		pool.WorkerReady(worker)
 	}
 	pool.IncHealthyWorkers()

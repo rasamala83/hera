@@ -315,7 +315,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 				newcfg.ActiveShardId = ShId2TaskCutover
 			} else {
 				logger.GetLogger().Log(logger.Alert, "CP 7 error unrecognized occ2task")
-				newcfg.ActiveTwoTask= "INVALID" 
+				newcfg.ActiveTwoTask = "INVALID"
 				newcfg.ActiveShardId = ShIdUnset
 				// unrecognized
 			}
@@ -338,7 +338,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 				}
 			}
 		}
-		logger.GetLogger().Log(logger.Verbose, "CP 7 finished newcfg[", i, "](two_task, phase, dbuname, wstatus, rstatus)(", records[i].occ2task, records[i].phase, records[i].dbUname, records[i].wstatus, records[i].rstatus, ")")
+		logger.GetLogger().Log(logger.Verbose, "CP 7 finished load record", i, "](two_task, phase, dbuname, wstatus, rstatus)(", records[i].occ2task, records[i].phase, records[i].dbUname, records[i].wstatus, records[i].rstatus, ")")
 
 	}
 

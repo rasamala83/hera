@@ -92,7 +92,6 @@ func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstri
 	if conn.RemoteAddr().Network() == "pipe" {
 		coordinator.isInternal = true
 	}
-	logger.GetLogger().Log(logger.Alert, coordinator.id, "shtien Create new coordinator")
 	return coordinator
 }
 
@@ -686,7 +685,6 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 }
 
 func (crd *Coordinator) resetWorkerInfo() {
-	logger.GetLogger().Log(logger.Debug, crd.id, "shtien reset worker info")
 	crd.worker = nil
 	crd.workerpool = nil
 	crd.ticket = ""
@@ -719,7 +717,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	GetBindEvict().lock.Lock()
 	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
 	GetBindEvict().lock.Unlock()
-	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15")
 
 	if GetConfig().EnableCutover {
 		if crd.curActInfo == nil {
@@ -727,12 +724,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			// 1) instance at init, no cutoverinfo ever available
 			// 2) instance running (already got cutovercfg info), no activeinfo, impossible
 			// so this is instance init, we will let internal query go through without blocking it
-			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15 instance at init, allow query to go through, disable bind")
+			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15 cutover may be at init, continue but disable bind eviction")
 			ok = false
 		} else {
 
 			if crd.curActInfo.Aphase == CutoverPhStr { // diable throttle during cutover
-				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15 cutover phase, disable bind eviction")
+				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15 in cutover phase, skip bind eviction")
 				ok = false
 				// we should also "empty the hashmap"
 			}
@@ -794,7 +791,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		}
 
 	}
-	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 17")
 
 	if worker == nil {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6")

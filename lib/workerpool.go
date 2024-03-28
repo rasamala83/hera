@@ -129,8 +129,8 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 // spawnWorker starts a worker and spawn a routine waiting for the "ready" message
 func (pool *WorkerPool) spawnWorker(wid int) error {
 
-	logger.GetLogger().Log(logger.Alert, "shtein spawnWorker [wid, cutovershardid, pooltype, poolinstId, shardID, pool.moduleName] [",
-		wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, "]")
+	//logger.GetLogger().Log(logger.Alert, "shtien spawnWorker [wid, cutovershardid, pooltype, poolinstId, shardID, pool.moduleName] [",
+	//	wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, "]")
 	worker := NewWorker(wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
 	worker.setState(wsSchd)
@@ -235,7 +235,7 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 		logger.GetLogger().Log(logger.Debug, "poolsize(ready)", pool.activeQ.Len(), " type ", pool.Type, " instance ", pool.InstID)
 	}
 	pool.workers[worker.ID] = worker
-	
+
 	// Adding for cutover. The change of pool size is at init
 	if (pool.desiredSize < pool.currentSize) && (worker.ID >= pool.desiredSize) {
 		go func(w *WorkerClient) {
@@ -248,7 +248,6 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 		pool.poolCond.L.Unlock()
 		return nil
 	}
-
 
 	pool.poolCond.L.Unlock()
 	//
@@ -530,8 +529,8 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 	if (pool.desiredSize < pool.currentSize) && (worker.ID >= pool.desiredSize) {
 		go func(w *WorkerClient) {
 			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "Pool resized, terminate worker: pid =", worker.pid, 
-				",worker.ID", worker.ID, "pool.ShardID", pool.ShardID, "pool_type =", worker.Type, ", inst =", worker.instID)
+				logger.GetLogger().Log(logger.Info, "Pool resized, terminate worker: pid =", worker.pid,
+					",worker.ID", worker.ID, "pool.ShardID", pool.ShardID, "pool_type =", worker.Type, ", inst =", worker.instID)
 			}
 			w.Terminate()
 		}(worker)
