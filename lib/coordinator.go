@@ -849,32 +849,32 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		} else {
 			// either sql is not read, or no rw split disabled, or nor of both
-			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7")
+			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1")
 			if GetConfig().EnableCutover {
-				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 process either a write sql, or a read without RW split. isRead", crd.isRead)
+				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 process either a write sql, or a read without RW split. isRead", crd.isRead)
 				if crd.isInternal {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 cutover runs internal query. isRead", crd.isRead)
+					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 cutover runs internal query. isRead", crd.isRead)
 					workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, int(ShId2Task))
 					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
 
 				} else {
 					// not an internal sql, now need to check the phase
-					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 cutover runs external query", crd.curActInfo.Aphase)
+					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 cutover runs external query", crd.curActInfo.Aphase)
 					if crd.curActInfo.Aphase == EnablePhStr || crd.curActInfo.Aphase == PrePhStr {
-						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 enable phase")
+						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 enable phase")
 						// always go to ShId2Task shard
 						workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, int(ShId2Task))
 						worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
 					} else if crd.curActInfo.Aphase == CompletePhStr {
-						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 Complete phase")
+						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 Complete phase")
 						workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, int(ShId2TaskCutover))
 						worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
 					} else if crd.curActInfo.Aphase == CutoverPhStr {
-						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 7 Cutover phase isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActInfo.Arwstatus, "]")
+						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 Cutover phase isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActInfo.Arwstatus, "]")
 						//in cutover phase, we honor the configuration
 						if crd.isRead {
 							if (crd.curActInfo.Arwstatus & ReadOk) != ReadOk {
-								logger.GetLogger().Log(logger.Alert, "Cutover phase read not allowed 2")
+								logger.GetLogger().Log(logger.Alert, "CP 6.1 Cutover phase read not allowed 2")
 								// TODO: this will disconnect client... we should return a error code but keep the client connected
 								ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrCutoverReadNotAllowed.Error()))
 								crd.respond(ns.Serialized)
@@ -886,7 +886,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 							}
 						} else {
 							if (crd.curActInfo.Arwstatus & WriteOk) != WriteOk {
-								logger.GetLogger().Log(logger.Alert, "Cutover phase write not allowed 2")
+								logger.GetLogger().Log(logger.Alert, "CP 6.1 Cutover phase write not allowed 2")
 								ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrCutoverWriteNotAllowed.Error()))
 								crd.respond(ns.Serialized)
 								// TODO: this will disconnect client... we should return a error code but keep the client connected
@@ -898,7 +898,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						}
 
 					} else {
-						logger.GetLogger().Log(logger.Alert, "C7 cannot determine cutover phase and shard")
+						logger.GetLogger().Log(logger.Alert, "C6.1  cannot determine cutover phase and shard")
 						// anything else, we should error out
 						err = errors.New("coordinator dispatchrequest cannot determine cutover phase and shard, error out")
 						return err

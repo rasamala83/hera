@@ -308,11 +308,14 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 				"], value =", newcfg.RWstatusByDb[newcfg.DbBy2task[newcfg.ActiveTwoTask]])
 
 			if records[i].occ2task == g2TaskName { // set shardid based on ActiveTwoTask.
+				newcfg.ActiveTwoTask = g2TaskName
 				newcfg.ActiveShardId = ShId2Task
 			} else if records[i].occ2task == g2TaskCutoverName {
+				newcfg.ActiveTwoTask = g2TaskCutoverName
 				newcfg.ActiveShardId = ShId2TaskCutover
 			} else {
 				logger.GetLogger().Log(logger.Alert, "CP 7 error unrecognized occ2task")
+				newcfg.ActiveTwoTask= "INVALID" 
 				newcfg.ActiveShardId = ShIdUnset
 				// unrecognized
 			}
@@ -474,14 +477,24 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 
 // Return true if changed, false if the same
 // 0x0000 identical
-// 0x0001 phase
-// 0x0002 2tashShard's dbuname
-// 0x0004 2taskCutoverShard's dbuname
-// 0x0008 2taskShard's RW
-// 0x00016 2taskCutoverShard's RW
+// 0x0001  1 phase
+// 0x0002  2 tashShard's dbuname
+// 0x0004  4 2taskCutoverShard's dbuname
+// 0x0008  8 2taskShard's RW
+// 0x0010 16 2taskCutoverShard's RW
+// 0x0020 32 active_two_task
 func CheckCfgChange(curcfg CutoverCfg, newcfg CutoverCfg) (bool, int) {
 	changed := false
 	whatchanged := 0
+
+	if curcfg.ActiveTwoTask != newcfg.ActiveTwoTask {
+		changed = true
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "CP 18 cutover phase change", curcfg.Phase, "->", newcfg.Phase)
+		}
+		whatchanged |= 0x0020
+	}
+
 	if curcfg.Phase != newcfg.Phase {
 		changed = true
 		if logger.GetLogger().V(logger.Info) {

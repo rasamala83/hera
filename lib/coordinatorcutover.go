@@ -69,6 +69,12 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveInfo {
 		return nil
 	}
 
+	if cocfg.ActiveTwoTask == "NONE" {
+		logger.GetLogger().Log(logger.Alert, "CP 5 no active two task", cocfg)
+	}
+	if cocfg.ActiveTwoTask == "INVALID" {
+		return nil
+	}
 	newActInfo := ActiveInfo{
 		ActShId:   cocfg.ActiveShardId,
 		AdbUname:  cocfg.DbBy2task[cocfg.ActiveTwoTask],
@@ -121,6 +127,8 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	if diff == 0 {
 		logger.GetLogger().Log(logger.Alert, "crd.curActInfo and newActInfo is the same")
 		return interrupt, nil // same cutover config
+	} else {
+		logger.GetLogger().Log(logger.Alert, "crd.curActInfo and newActInfo is different", diff)
 	}
 	var err error
 	if crd.inTransaction {
