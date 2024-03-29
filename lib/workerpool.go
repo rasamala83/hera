@@ -965,8 +965,6 @@ func (pool *WorkerPool) enforceIntegrity() {
 // The mismatched DBUNAME is not view as changed since no difference. However, since we are in CUTOVER, the connection must be corrected.
 // Maybe we should anyway call enforceintegrity?
 func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
-	logger.GetLogger().Log(logger.Verbose, "CP 20 ChangeCutoverInfo pool:", pool.dbUname, pool.Type,
-		"[currentSize desiredSize]=[", pool.currentSize, pool.desiredSize)
 	if pool.phase == newPhase && pool.dbUname == newDbUname { // nothing changed.
 		logger.GetLogger().Log(logger.Alert, "CP 20 ChangeCutoverInfo, phase and dbuname no change. done.")
 		return

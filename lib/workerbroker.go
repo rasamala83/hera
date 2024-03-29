@@ -451,21 +451,22 @@ changeMaxWorkers is called when the dynamic size change during cutover phases PR
 func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	wW := GetNumWWorkers(0)
 	rW := GetNumRWorkers(0)
+	minSize := 1
 	logger.GetLogger().Log(logger.Verbose, "CP 1 changeMaxWorkers GetNumRWorkers(0) =", rW, "GetNumWWorkers(0)", wW)
 
 	if phase == EnablePhId {
 		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Enable phase")
 		broker.resizePool(wtypeRW, wW, 0)
-		broker.resizePool(wtypeRW, 1, 1)
+		broker.resizePool(wtypeRW, minSize, 1)
 		if rW != 0 {
 			broker.resizePool(wtypeRO, rW, 0)
-			broker.resizePool(wtypeRO, 1, 1)
+			broker.resizePool(wtypeRO, minSize, 1)
 		}
 		return
 	}
 
-	if phase == PrePhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Pre phase")
+	if phase == PrePhId || phase == CutoverPhId || phase == CompletePhId {
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Pre/Cutover/Complete")
 		broker.resizePool(wtypeRW, wW, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {
@@ -474,12 +475,13 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 		}
 		return
 	}
-	if phase == CutoverPhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Cutover phase")
-		broker.resizePool(wtypeRW, wW, 0)
+
+	if phase == BroomPhId {
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Broom phase")
+		broker.resizePool(wtypeRW, minSize, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {
-			broker.resizePool(wtypeRO, rW, 0)
+			broker.resizePool(wtypeRO, minSize, 0)
 			broker.resizePool(wtypeRO, rW, 1)
 		}
 		return
