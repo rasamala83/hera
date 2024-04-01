@@ -634,8 +634,9 @@ func writeCutoverLog(ctx context.Context) error {
 		if cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&ReadOk == ReadOk {
 			rs = "Y"
 		}
+		curTime:= strconv.FormatInt(time.Now().Unix(), 10)
 		var BindInValues = []string{gModuleName, hostname, g2TaskName,
-			cfg.DbBy2task[g2TaskName], cfg.Phase, ws, rs, strconv.Itoa(cfg.UpdateTime)} // change to populate as int
+			cfg.DbBy2task[g2TaskName], cfg.Phase, ws, rs, curTime} // change to populate as int
 		for i := 0; i < 8; i++ {
 			bindIns = append(bindIns, sql.Named(BindInNames[i], BindInValues[i]))
 		}
