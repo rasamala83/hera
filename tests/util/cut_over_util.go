@@ -1,15 +1,12 @@
 package util
 
 import (
+	"bufio"
 	"bytes"
 	"context"
-	"crypto/x509"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/paypal/hera/client/gosqldriver/tcp"
-	"github.com/paypal/hera/client/gosqldriver/tls"
-	"github.com/paypal/hera/utility/logger"
 	"io"
 	"log"
 	"net/http"
@@ -28,13 +25,21 @@ var readMutex sync.Mutex
 var writeMutex sync.Mutex
 var txnMutex sync.Mutex
 
+var maxRetryCount = 5
+var binaryPushDone = false
 var READ = "ReadType"
 var WRITE = "WriteType"
 var TXN = "TXNType"
+var STOP = "stop"
+var DumpLogs = "dumpLogs"
+var CutOverEnable = "CUT_OVER_ENABLE"
+var CutOverPre = "CUT_OVER_PRE"
+var CutOverPhaseI = "CUT_OVER_PHASE_1"
+var CutOverPhaseII = "CUT_OVER_PHASE_2"
+var CutOverPhaseIII = "CUT_OVER_PHASE_3"
+var CutOverComplete = "CUT_OVER_COMPLETE"
 
-var occHost = "10.183.162.56"
-var occPort = "10101"
-var oracleHost = "10.183.162.56"
+var heraBoxHost = "10.183.162.56"
 
 type DatabaseServices struct {
 	ServiceName string
@@ -50,52 +55,14 @@ type DBStatus struct {
 }
 
 type DBTxn struct {
-	DBConnection  *sql.Conn
-	DBContext     context.Context
+	DBConnection  TestConnection
 	DBTransaction *sql.Tx
-}
-
-func SetUpHeraConnection(certPath string) (string, string, error) {
-	var tlsEnv = os.Getenv("TLS")
-	host := "1:" + occHost + ":" + occPort
-	driverName := "heratls"
-
-	if len(tlsEnv) > 0 && tlsEnv == "1" {
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, "tls enabled")
-		}
-		tls.HeraTLSDrv.TLSCfg.InsecureSkipVerify = true
-		dat, err := os.ReadFile(certPath)
-		if err != nil {
-			return "", "", err
-		}
-
-		rootPEM := string(dat)
-		roots := x509.NewCertPool()
-		ok := roots.AppendCertsFromPEM([]byte(rootPEM))
-		if !ok {
-			return "", "", fmt.Errorf("failed to parse root certificate")
-		}
-		tls.HeraTLSDrv.TLSCfg.RootCAs = roots
-		tls.HeraTLSDrv.Ssl = true
-		key := []byte{166, 35, 129, 232, 126, 80, 214, 71, 152, 247, 2, 185, 25, 128, 2, 174, 145,
-			38, 48, 107, 60, 129, 228, 137, 87, 72, 176, 144, 194, 163, 237, 11}
-		tls.HeraTLSDrv.EncryptedAuthKey = key
-	} else {
-		host = occHost + ":" + occPort
-		driverName = "hera"
-		tcp.RegisterHeraDriver()
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, "tls disabled")
-		}
-	}
-	return host, driverName, nil
 }
 
 func dbService(dbUniqueName string, serviceName string, action string) []DBStatus {
 	var status []DBStatus
 
-	response, err := http.Get("http://" + oracleHost + ":8000/occ/db_service?action=" + action +
+	response, err := http.Get("http://" + heraBoxHost + ":8000/occ/db_service?action=" + action +
 		"&service_name=" + serviceName + "&db_unique_name=" + dbUniqueName)
 	if err != nil {
 		panic(err)
@@ -117,29 +84,120 @@ func CleanCutOverTable(t *testing.T) {
 	QueryOracle(t, query, "True", "False")
 }
 
+func splitBySpace(input string) []string {
+	words := strings.Split(input, " ")
+	var fields []string
+
+	for _, word := range words {
+		if word != "" {
+			fields = append(fields, word)
+		}
+	}
+	return fields
+}
+
+func ValidateStateLog(t *testing.T, expected map[string]int) {
+	fmt.Println("Validating State Logs")
+	retryCount := 0
+	for {
+		url := "http://" + heraBoxHost + ":8000/occ/logs?path=/x/web/LIVE/occ/state-logs/current"
+		response, err := http.Get(url)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		byteArray, err := io.ReadAll(response.Body)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		str := string(byteArray)
+		buf := bytes.NewBufferString(str)
+		scanner := bufio.NewScanner(buf)
+		for scanner.Scan() {
+			line := scanner.Text()
+			words := splitBySpace(line)
+			expectedWorkerCount, exists := expected[words[2]]
+			if exists {
+				accept, _ := strconv.Atoi(words[4])
+				wait, _ := strconv.Atoi(words[5])
+				if expectedWorkerCount != accept+wait && retryCount == maxRetryCount {
+					t.Fatalf("State Log Validation failed for %s at %s %s - Expected Worker Count: %d vs Actual %d",
+						words[2], words[0], words[1], expectedWorkerCount, accept+wait)
+				} else if expectedWorkerCount == accept+wait {
+					delete(expected, words[2])
+				} else if expectedWorkerCount != accept+wait && retryCount < maxRetryCount {
+					fmt.Printf("State Log Validation failed for %s at %s %s - "+
+						"Expected Worker Count: %d vs Actual %d - retrying after 5 seconds\n",
+						words[2], words[0], words[1], expectedWorkerCount, accept+wait)
+					break
+				}
+			}
+		}
+		if retryCount > maxRetryCount || len(expected) == 0 {
+			break
+		}
+		retryCount += 1
+		time.Sleep(5 * time.Second)
+		fmt.Println("Retry - Validating State Logs")
+	}
+	for key := range expected {
+		t.Fatalf("Unable to find state log for %s", key)
+	}
+}
+
 func MoveCutOverPhase(t *testing.T, phase string, comment string) {
 	switch phase {
-	case "pre":
-		query := "update pypl_occ_cutover set cutover_phase='pre', remarks='" + comment +
-			"' where dbuname='HERADB_ONE' and occ_name='occ'"
+
+	case CutOverEnable:
+		CleanCutOverTable(t)
+		query := "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'Y', 'Y', 'ENABLE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER', 'N', 'N', 'ENABLE', '" +
+			comment + "')"
 		QueryOracle(t, query, "False", "False")
 		QueryOracle(t, query, "True", "False")
-		query = "update pypl_occ_cutover set cutover_phase='pre', remarks='" + comment +
+		break
+
+	case CutOverPre:
+		query := "update pypl_occ_cutover set cutover_phase='PRE', remarks='" + comment +
+			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='PRE', remarks='" + comment +
+			"' where dbuname='HERADB_TWO' and occ_name='occ'\\n"
+		QueryOracle(t, query, "False", "False")
+		QueryOracle(t, query, "True", "False")
+		break
+
+	case CutOverPhaseI:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
+			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
 			"' where dbuname='HERADB_TWO' and occ_name='occ'"
 		QueryOracle(t, query, "False", "False")
 		QueryOracle(t, query, "True", "False")
 		break
-	case "enable":
-		CleanCutOverTable(t)
-		query := "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'Y', 'Y', 'enable', '" +
-			comment + "')"
-		QueryOracle(t, query, "False", "False")
-		QueryOracle(t, query, "True", "False")
-		query = "insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER', 'N', 'N', 'enable', '" +
-			comment + "')"
+
+	case CutOverPhaseII:
+		query := "update pypl_occ_cutover set read_status='N', remarks='" + comment +
+			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set read_status='Y', remarks='" + comment +
+			"' where dbuname='HERADB_TWO' and occ_name='occ'"
 		QueryOracle(t, query, "False", "False")
 		QueryOracle(t, query, "True", "False")
 		break
+
+	case CutOverPhaseIII:
+		query := "update pypl_occ_cutover set write_status='Y', remarks='" + comment +
+			"' where dbuname='HERADB_TWO' and occ_name='occ'"
+		QueryOracle(t, query, "False", "False")
+		QueryOracle(t, query, "True", "False")
+		break
+
+	case CutOverComplete:
+		query := "update pypl_occ_cutover set cutover_phase='COMPLETE', dbuname='HERADB_TWO', remarks='" + comment +
+			"' where occ_name='occ';"
+		QueryOracle(t, query, "False", "False")
+		QueryOracle(t, query, "True", "False")
+		break
+
 	default:
 		t.Fatalf("Unknown cutover phase %s.\n", phase)
 	}
@@ -147,7 +205,7 @@ func MoveCutOverPhase(t *testing.T, phase string, comment string) {
 
 func OCCConfig(t *testing.T, key string, value string, filename string) {
 	fmt.Printf("Changing occ config in file %s: key: %s, value: %s\n", filename, key, value)
-	url := "http://" + oracleHost + ":8000/occ/occ_config?key=" + key + "&value=" + value + "&filename=" + filename
+	url := "http://" + heraBoxHost + ":8000/occ/occ_config?key=" + key + "&value=" + value + "&filename=" + filename
 	response, err := http.Get(url)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -158,42 +216,59 @@ func OCCConfig(t *testing.T, key string, value string, filename string) {
 	}
 }
 
-func OCCBinarySetup(t *testing.T, filename string) string {
+func OCCBinarySetup(t *testing.T, filename string) {
+	if binaryPushDone {
+		return
+	}
+	binaryPushDone = true
 	fmt.Printf("Pushing mux binary from %s\n", filename)
 	client := &http.Client{
-		Timeout: time.Second * 10,
+		Timeout: time.Second * 60,
 	}
 
-	url := "http://" + oracleHost + ":8000?filename=mux"
+	url := "http://" + heraBoxHost + ":8000?filename=mux"
 	b, err := os.ReadFile(filename)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(b))
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
+	retryCount := 0
 
-	req.Header.Set("Content-Type", "application/octet-stream")
-	resp, _ := client.Do(req)
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf(strconv.Itoa(resp.StatusCode))
+	for {
+		req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(b))
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+
+		req.Header.Set("Content-Type", "application/octet-stream")
+		resp, _ := client.Do(req)
+		if resp == nil {
+			if retryCount >= maxRetryCount {
+				t.Fatalf("unable to push the binary to Herabox setup")
+			}
+			retryCount += 1
+			fmt.Println("sleeping 5 sec before retrying")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf(strconv.Itoa(resp.StatusCode))
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Failed while reading response %s", err)
+		}
+		if strings.Contains(string(body), "ORA-") {
+			t.Fatalf("Failed while reading response %s", body)
+		}
+		break
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed while reading response %s", err)
-	}
-	if strings.Contains(string(body), "ORA-") {
-		t.Fatalf("Failed while reading response %s", body)
-	}
-	return string(body)
 }
 
 func StopOCCDocker(t *testing.T) {
-	fmt.Println("restarting occ")
-	url := "http://" + oracleHost + ":8000/docker_support?container=occ&action=stop"
+	fmt.Println("Stopping occ docker")
+	url := "http://" + heraBoxHost + ":8000/docker_support?container=occ&action=stop"
 	response, err := http.Get(url)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -205,8 +280,8 @@ func StopOCCDocker(t *testing.T) {
 }
 
 func StartOCCDocker(t *testing.T) {
-	fmt.Println("restarting occ")
-	url := "http://" + oracleHost + ":8000/docker_support?container=occ&action=start"
+	fmt.Println("Starting occ docker")
+	url := "http://" + heraBoxHost + ":8000/docker_support?container=occ&action=start"
 	response, err := http.Get(url)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -219,7 +294,7 @@ func StartOCCDocker(t *testing.T) {
 
 func RestartOCC(t *testing.T) {
 	fmt.Println("restarting occ")
-	url := "http://" + oracleHost + ":8000/occ/restart_occ"
+	url := "http://" + heraBoxHost + ":8000/occ/restart_occ"
 	response, err := http.Get(url)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -231,7 +306,7 @@ func RestartOCC(t *testing.T) {
 }
 
 func QueryOracle(t *testing.T, query string, cutOver string, dbaUser string) string {
-	url := "http://" + oracleHost + ":8000/run_query?cut_over=" + cutOver + "&dba_user=" + dbaUser
+	url := "http://" + heraBoxHost + ":8000/run_query?cut_over=" + cutOver + "&dba_user=" + dbaUser
 	jsonStr := "{\"query\":\"" + strings.Replace(query, strconv.Itoa(int('"')), "'", -1) + "\"" +
 		", \"dba_user\": \"" + dbaUser + "\",\"cut_over\":\"" + cutOver + "\"}"
 
@@ -285,9 +360,9 @@ func LockUnlockUser(t *testing.T, action string, cutOver bool) []DBStatus {
 	} else {
 		fmt.Printf("%s user on main db\n", action)
 	}
-	url := "http://" + oracleHost + ":8000/occ/lock_user?cut_over=" + co
+	url := "http://" + heraBoxHost + ":8000/occ/lock_user?cut_over=" + co
 	if action == "unlock" {
-		url = "http://" + oracleHost + ":8000/occ/unlock_user?cut_over=" + co
+		url = "http://" + heraBoxHost + ":8000/occ/unlock_user?cut_over=" + co
 	}
 	response, err := http.Get(url)
 	if err != nil {
@@ -306,7 +381,7 @@ func LockUnlockUser(t *testing.T, action string, cutOver bool) []DBStatus {
 
 func DefaultTns(t *testing.T) {
 	fmt.Println("Move TNS to Default Value")
-	response, err := http.Get("http://" + oracleHost + ":8000/\"default_tns\"")
+	response, err := http.Get("http://" + heraBoxHost + ":8000/\"default_tns\"")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -316,9 +391,19 @@ func DefaultTns(t *testing.T) {
 	}
 }
 
+// EnableCutOver /*
+/*
+ 1. stop occ docker
+ 2. push tns with cut over details
+ 3. enable cut over env variable for occ
+ 4. start occ docker
+ 5. copy the new mux binary
+ 6. disable/enable read/write split
+ 7. restart occ with sig hup command
+*/
 func EnableCutOver(t *testing.T, enableRWSplit bool) {
 	fmt.Println("EnableCutOver")
-	response, err := http.Get("http://" + oracleHost + ":8000/enable_cut_over")
+	response, err := http.Get("http://" + heraBoxHost + ":8000/enable_cut_over")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -326,19 +411,42 @@ func EnableCutOver(t *testing.T, enableRWSplit bool) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	OCCBinarySetup(t, os.Getenv("GOPATH")+"/src/bin/mux")
 	if !enableRWSplit {
 		OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
 	}
-
-	MoveCutOverPhase(t, "enable", "TestCutOverEnable")
+	EnableDebugLog(t)
+	MoveCutOverPhase(t, CutOverEnable, "TestCutOverEnable")
 	RestartOCC(t)
-
 }
 
+func EnableDebugLog(t *testing.T) {
+	OCCConfig(t, "log_level", "4", "/x/web/LIVE/occ/occ.cdb")
+	OCCConfig(t, "log_level", "4", "/x/web/LIVE/occ/hera.txt")
+	OCCConfig(t, "opscfg.occ.server.log_level", "4", "/x/web/LIVE/opscfg/occ.cdb")
+}
+
+func PushTNSForComplete(t *testing.T) {
+	fmt.Println("PushTNSForComplete")
+	response, err := http.Get("http://" + heraBoxHost + ":8000/enable_cut_over?always_secondary=True")
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	_, err = io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+}
+
+// ResetOCCDocker /**
+/*
+1. Stop OCC Docker container
+2. Push default TNS File (without cutover)
+3. Disable CLOC_CUTOVER env variable to disable cutover
+4. Start OCC Docker
+*/
 func ResetOCCDocker(t *testing.T) {
 	fmt.Println("ResetOCCDocker")
-	response, err := http.Get("http://" + oracleHost + ":8000/reset")
+	response, err := http.Get("http://" + heraBoxHost + ":8000/reset")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -359,7 +467,7 @@ func KillSessions(t *testing.T, cutOver bool, serviceName string) []DBStatus {
 	} else {
 		fmt.Printf("Kill Session for main db\n")
 	}
-	response, err := http.Get("http://" + oracleHost + ":8000/occ/kill_session?cut_over=" + co + "&service_name=" + serviceName)
+	response, err := http.Get("http://" + heraBoxHost + ":8000/occ/kill_session?cut_over=" + co + "&service_name=" + serviceName)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -408,7 +516,7 @@ func GetDBStatus() ([]DBStatus, map[string]map[string]bool) {
 	var status []DBStatus
 
 	activeResponse := make(map[string]map[string]bool)
-	response, err := http.Get("http://" + oracleHost + ":8000/occ/status_from_db")
+	response, err := http.Get("http://" + heraBoxHost + ":8000/occ/status_from_db")
 	if err != nil {
 		panic(err)
 	}
@@ -483,34 +591,14 @@ func slowQuery(txn *sql.Tx, expectedId int, sec int, wg *sync.WaitGroup) {
 	}
 }
 
-func GetConnection() (*sql.Conn, context.Context, error) {
-	pwd, _ := os.Getwd()
-	host, driverName, err := SetUpHeraConnection(pwd + "/../../certs/client_test.cert")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	db, err := sql.Open(driverName, host)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ctx := context.Background()
-
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	return conn, ctx, nil
-}
-
 func ValidateReadWorkerID(ReadWaitTime int, expectedId int, wg *sync.WaitGroup) {
-	conn, ctx, err := GetConnection()
-	if err != nil {
-		panic(err)
+	c := TestConnection{}
+	c.GetConnection()
+	if c.Err != nil {
+		panic(c.conn)
 	}
-
-	txn, err := conn.BeginTx(ctx, nil)
+	defer c.Close()
+	txn, err := c.conn.BeginTx(c.context, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -519,32 +607,34 @@ func ValidateReadWorkerID(ReadWaitTime int, expectedId int, wg *sync.WaitGroup) 
 }
 
 func writeBeginTxn() *DBTxn {
-	conn, ctx, err := GetConnection()
-	if err != nil {
-		panic(err)
+	c := TestConnection{}
+	c.GetConnection()
+	if c.Err != nil {
+		panic(c.Err)
 	}
-	txn, err := conn.BeginTx(ctx, nil)
+	defer c.Close()
+	txn, err := c.conn.BeginTx(c.context, nil)
 	if err != nil {
 		panic(err)
 	}
 	insertQuery := "insert into occ_test values(id_seq.NEXTVAL, 'hold-record', 1)"
-	_, err = txn.ExecContext(ctx, insertQuery)
+	_, err = txn.ExecContext(c.context, insertQuery)
 	if err != nil {
 		txn.Rollback()
 		panic(err)
 	}
 
-	return &DBTxn{DBConnection: conn, DBContext: ctx, DBTransaction: txn}
+	return &DBTxn{DBConnection: c, DBTransaction: txn}
 }
 
 func validateDBID(dbTxn *DBTxn, dbId int, dbName string) {
 
 	query := "select * from db_id_test"
-	stmt, err := dbTxn.DBTransaction.PrepareContext(dbTxn.DBContext, query)
+	stmt, err := dbTxn.DBTransaction.PrepareContext(dbTxn.DBConnection.context, query)
 	if err != nil {
 		panic(err)
 	}
-	rows, err := stmt.QueryContext(dbTxn.DBContext)
+	rows, err := stmt.QueryContext(dbTxn.DBConnection.context)
 	if err != nil {
 		panic(err)
 	}
@@ -613,34 +703,7 @@ func ValidateAfterCutOverAfterGracePeriod(t *testing.T, queryType string, cts Cl
 	}
 }
 
-func validateReadTraffic(t *testing.T, cts ClientTrafficStats, lastGoodKnownTraffic int64,
-	cutOverTime int64, utc int64) {
-	if cutOverTime > 0 {
-		if utc < lastGoodKnownTraffic {
-			ValidateBeforeCutOver(t, READ, cts, utc, lastGoodKnownTraffic)
-		}
-
-		// if current stat is after read cut-over and gracePeriodInSeconds - all read should have stopped in database 1
-		if utc > cutOverTime {
-			ValidateAfterCutOverAfterGracePeriod(t, READ, cts, utc, cutOverTime)
-		}
-	} else {
-		ValidateBeforeCutOver(t, READ, cts, utc, lastGoodKnownTraffic)
-	}
-
-}
-
-// ValidateTraffic /*
-/*
-   lastGoodKnownTraffic - time before touching any of the service
-   readCutOverTime - time at which read is moved to new DB
-   writeStopTime - time at which write is stopped in old DB
-   writeCutOverTime - time at which write is completely moved to new DB
-   recoverTime - time at which write started moving to new DB
-*/
-
-func ValidateTraffic(t *testing.T, trafficStats map[int64]ClientTrafficStats, lastGoodKnownTraffic int64,
-	readCutOverTime int64, writeStopTime int64, writeCutOverTime int64, recoverTime int64) {
+func sortStats(trafficStats map[int64]ClientTrafficStats) []int64 {
 	keys := make([]int64, 0)
 	for k, _ := range trafficStats {
 		keys = append(keys, k)
@@ -648,69 +711,65 @@ func ValidateTraffic(t *testing.T, trafficStats map[int64]ClientTrafficStats, la
 	sort.Slice(keys, func(i, j int) bool {
 		return keys[i] < keys[j]
 	})
+	return keys
+}
 
-	lastElement := keys[len(keys)-1:][0]
-	lastElement = lastElement - 5
+func ValidateFailureTraffic(t *testing.T, trafficStats map[int64]ClientTrafficStats, queryType string,
+	startTime int64, endTime int64) {
+	fmt.Printf("Validating Failure traffic for %s from %d to %d\n", queryType, startTime, endTime)
+	for _, utc := range sortStats(trafficStats) {
 
-	validatedStopTime := false
-	validatedCutOverTime := false
-	validatedPostCutover := false
-
-	fmt.Println("Validating if Read/Write Traffic moved to second db")
-	for _, utc := range keys {
-		// ignore last 5 seconds data
-		if utc >= lastElement {
-			break
+		if utc < startTime || utc > endTime {
+			continue
 		}
+
 		cts := trafficStats[utc]
 
-		validateReadTraffic(t, cts, lastGoodKnownTraffic, readCutOverTime, utc)
-
-		if utc < lastGoodKnownTraffic {
-			ValidateBeforeCutOver(t, WRITE, cts, utc, lastGoodKnownTraffic)
-			ValidateBeforeCutOver(t, TXN, cts, utc, lastGoodKnownTraffic)
-			validatedStopTime = true
-		}
-
-		if writeCutOverTime > 0 && utc > writeCutOverTime {
-			ValidateAfterCutOverAfterGracePeriod(t, WRITE, cts, utc, writeCutOverTime)
-			ValidateAfterCutOverAfterGracePeriod(t, TXN, cts, utc, writeCutOverTime)
-			validatedPostCutover = true
-		}
-
-		/*
-		 if in cut-over time
-		*/
-		if writeStopTime > 0 && recoverTime > 0 && utc > writeStopTime && utc < recoverTime {
-			if cts.stats[WRITE][0].failureCount == 0 || cts.stats[WRITE][1].successCount > 0 ||
-				cts.stats[WRITE][2].successCount > 0 {
-				t.Fatalf("Write is not failing during cutover")
+		for dbId := 1; dbId < 3; dbId++ {
+			if cts.stats[queryType][dbId].successCount != 0 {
+				t.Fatalf("UTC: %d, Expected %s Query to fail but found in db %d", utc, queryType, dbId)
 			}
+		}
 
-			failure := cts.stats[READ][0].failureCount + cts.stats[WRITE][0].failureCount + cts.stats[TXN][0].failureCount
-			db1Success := cts.stats[READ][1].successCount + cts.stats[WRITE][1].successCount + cts.stats[TXN][1].successCount
-			db2Success := cts.stats[READ][2].successCount + cts.stats[WRITE][2].successCount + cts.stats[TXN][2].successCount
+		if cts.stats[queryType][0].failureCount == 0 {
+			t.Fatalf("UTC: %d, Expected failure for %s - but no failure found", utc, queryType)
+		}
 
-			if failure == 0 || cts.stats[TXN][1].successCount > 0 ||
-				db1Success+db2Success > 0 {
-				t.Fatalf("UTC: %d, writeStopTime:%d, writeCutOverTime:%d "+
-					"Write is not failing during cutover Failure : %d, "+
-					"db1Success: %d, db2Success: %d", utc, writeStopTime, writeCutOverTime,
-					failure, db1Success, db2Success)
-			}
-			validatedCutOverTime = true
+	}
+}
+
+func ValidateSuccessTraffic(t *testing.T, trafficStats map[int64]ClientTrafficStats, queryType string,
+	startTime int64, endTime int64, dbIdWithTraffic int, dbIdNoTraffic int) {
+
+	fmt.Printf("Validating Success traffic for %s in DB:%d from %d to %d\n", queryType, dbIdWithTraffic, startTime, endTime)
+	for _, utc := range sortStats(trafficStats) {
+
+		if utc < startTime || utc > endTime {
+			continue
+		}
+
+		cts := trafficStats[utc]
+		if cts.stats[queryType][dbIdWithTraffic].successCount == 0 {
+			t.Fatalf("UTC: %d, Expected %s Query in DB: %d - but not found", utc, queryType, dbIdWithTraffic)
+		}
+
+		if cts.stats[queryType][dbIdWithTraffic].failureCount != 0 {
+			t.Fatalf("UTC: %d, Expected %s Query to succeed in DB: %d - but failed", utc, queryType, dbIdWithTraffic)
+		}
+
+		if cts.stats[queryType][dbIdNoTraffic].successCount != 0 {
+			t.Fatalf("UTC: %d, Not expecting %s Query in DB: %d - but found", utc, queryType, dbIdWithTraffic)
+		}
+
+		if cts.stats[queryType][dbIdNoTraffic].failureCount != 0 {
+			t.Fatalf("UTC: %d, Not expecting %s Query in DB: %d - but found as failures", utc, queryType, dbIdWithTraffic)
+		}
+
+		if cts.stats[queryType][0].failureCount > 0 || cts.stats[queryType][1].failureCount > 0 {
+			t.Fatalf("UTC: %d, Expected No %s failure. DB1: %d failed, DB2: %d failed", utc, queryType,
+				cts.stats[queryType][0].failureCount, cts.stats[queryType][1].failureCount)
 		}
 	}
-	if !validatedCutOverTime {
-		t.Fatalf("did not do validatedCutOverTime")
-	}
-	if !validatedStopTime {
-		t.Fatalf("did not do validatedStopTime")
-	}
-	if !validatedPostCutover {
-		t.Fatalf("did not do validatedPostCutover")
-	}
-
 }
 
 func ValidateConnectionIntegrity(WriteWorkerCount int, ReadWorkerCount int, ReadWaitSeconds int,
@@ -744,37 +803,71 @@ func ValidateConnectionIntegrity(WriteWorkerCount int, ReadWorkerCount int, Read
 
 }
 
-func ValidateWorkerCount(dbUniqueName string, serviceName string,
-	expectedWorkerCount int, variance int,
-	databaseServices []DBStatus, t *testing.T) {
-	fmt.Printf("Validating %s:%s has atleast %d workers connected to db\n",
-		dbUniqueName, serviceName, expectedWorkerCount-variance)
-	foundWorker := false
-	for _, db := range databaseServices {
-		for _, service := range db.DatabaseServices {
-			if strings.TrimSpace(db.DBUniqueName) == dbUniqueName &&
-				strings.TrimSpace(service.ServiceName) == serviceName && service.Active {
-				foundWorker = true
-				if service.WorkerCount+variance < expectedWorkerCount ||
-					service.WorkerCount-variance > expectedWorkerCount {
-					t.Fatalf("Failed for worker count in %s:%s - expected/actual %d/%d",
-						strings.TrimSpace(db.DBUniqueName),
-						strings.TrimSpace(service.ServiceName),
-						expectedWorkerCount, service.WorkerCount)
-				} else {
-					fmt.Printf("Validation for %s:%s - Success:\n ExpectedWorker Count: %d\n Actual WorkerCount(allowed Variance): "+
-						"%d(%d)", strings.TrimSpace(db.DBUniqueName), strings.TrimSpace(service.ServiceName),
-						expectedWorkerCount, service.WorkerCount, variance)
+func ValidateWorkerCountFromDatabase(dbUniqueName string, serviceName string,
+	expectedWorkerCount int, t *testing.T) {
+	fmt.Printf("Validating %s:%s has %d workers connected to db\n",
+		dbUniqueName, serviceName, expectedWorkerCount)
+	retryCount := 0
+	retry := false
+	validationSuccess := false
+	workerFound := false
+
+	// retry in case of temp failures
+	for {
+		validationSuccess = false
+		workerFound = false
+		// load status from database
+		databaseServices, _ := GetDBStatus()
+
+		// for each database
+		for _, db := range databaseServices {
+
+			// for each database service
+			for _, service := range db.DatabaseServices {
+				if strings.TrimSpace(db.DBUniqueName) == dbUniqueName &&
+					strings.TrimSpace(service.ServiceName) == serviceName && service.Active {
+					workerFound = true
+					if service.WorkerCount != expectedWorkerCount {
+						if retryCount >= maxRetryCount {
+							t.Fatalf("Failed for worker count in %s:%s - expected/actual %d/%d",
+								strings.TrimSpace(db.DBUniqueName),
+								strings.TrimSpace(service.ServiceName),
+								expectedWorkerCount, service.WorkerCount)
+						} else {
+							retry = true
+							fmt.Printf("Retry: Failed for worker count in %s:%s - expected/actual %d/%d\n",
+								strings.TrimSpace(db.DBUniqueName),
+								strings.TrimSpace(service.ServiceName),
+								expectedWorkerCount, service.WorkerCount)
+							break
+						}
+					} else {
+						fmt.Printf("Validation for %s:%s - Success:\n ExpectedWorker Count: %d\n Actual WorkerCount: "+
+							"%d\n", strings.TrimSpace(db.DBUniqueName), strings.TrimSpace(service.ServiceName),
+							expectedWorkerCount, service.WorkerCount)
+						validationSuccess = true
+						break
+					}
 				}
 			}
+			if retry || validationSuccess {
+				break
+			}
 		}
+
+		if retryCount >= maxRetryCount || validationSuccess {
+			break
+		}
+		retryCount += 1
+		fmt.Println("Sleeping for 5 seconds and retrying validation")
+		time.Sleep(5 * time.Second)
 	}
-	if expectedWorkerCount >= 0 && !foundWorker {
+	if expectedWorkerCount >= 0 && !validationSuccess {
 		t.Fatalf("Failed for worker count in %s:%s, expectedWorkerCount: %d", strings.TrimSpace(dbUniqueName),
 			strings.TrimSpace(serviceName), expectedWorkerCount)
 	}
 
-	if expectedWorkerCount == -1 && foundWorker {
+	if expectedWorkerCount == -1 && workerFound {
 		t.Fatalf("Service should not be up and running %s:%s", strings.TrimSpace(dbUniqueName),
 			strings.TrimSpace(serviceName))
 	}

@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"sync"
 	"time"
 )
 
-var CT = ClientTraffic{ReadTraffic: true, WriteTraffic: true, TransactionTraffic: true, StopRun: make(chan bool)}
+var CT = ClientTraffic{ReadTraffic: true, WriteTraffic: true, TransactionTraffic: true, RunMsg: make(chan string)}
 
 type queryStats struct {
 	successCount int
@@ -18,7 +19,7 @@ type queryStats struct {
 }
 
 type ClientTraffic struct {
-	StopRun            chan bool
+	RunMsg             chan string
 	ReadTraffic        bool
 	WriteTraffic       bool
 	TransactionTraffic bool
@@ -28,12 +29,29 @@ type ClientTrafficStats struct {
 	stats map[string]map[int]*queryStats
 }
 
+func (ct ClientTraffic) getNextValFromTxn(txn *sql.Tx, ctx context.Context) (int, error) {
+	query := "select id_seq.NEXTVAL FROM dual"
+	stmt, _ := txn.PrepareContext(ctx, query)
+	rows, err := stmt.Query()
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	rows.Next()
+	var id int
+	if err := rows.Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
 func (ct ClientTraffic) getNextVal(conn *sql.Conn, ctx context.Context) (int, error) {
 	query := "select id_seq.NEXTVAL FROM dual"
 	rows, err := conn.QueryContext(ctx, query)
 	if err != nil {
 		return 0, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var id int
 		if err := rows.Scan(&id); err != nil {
@@ -44,41 +62,49 @@ func (ct ClientTraffic) getNextVal(conn *sql.Conn, ctx context.Context) (int, er
 	return 0, errors.New("should not have reached")
 }
 
-func (ct ClientTraffic) writeInTxn(conn *sql.Conn, ctx context.Context) (int, error) {
-	txn, err := conn.BeginTx(ctx, nil)
+func (ct ClientTraffic) WriteInTxn(c TestConnection) (int, error) {
+
+	txn, err := c.conn.BeginTx(c.context, nil)
 	if err != nil {
+		txn.Rollback()
 		return 0, err
 	}
-	insertQuery := "insert into occ_test values(id_seq.NEXTVAL, 'txn-record', 1)"
+	c.txn = txn
 
-	_, err = txn.ExecContext(ctx, insertQuery)
+	insertQuery := "insert into occ_test values(id_seq.NEXTVAL, ?, ?)"
+	stmt, _ := c.txn.PrepareContext(c.context, insertQuery)
+	_, err = stmt.Exec("txn-record", 1)
 	if err != nil {
 		txn.Rollback()
 		return 0, err
 	}
 
-	dbId, err := ct.identifyDBTxn(txn)
+	dbId, err := ct.identifyDBTxn(txn, c.context)
 	if err != nil {
+		txn.Rollback()
 		return 0, err
 	}
 
-	id, err := ct.getNextVal(conn, ctx)
-	if err != nil {
-		return 0, err
+	id, Err := ct.getNextValFromTxn(c.txn, c.context)
+	if Err != nil {
+		txn.Rollback()
+		return 0, Err
 	}
 	insertQuery = fmt.Sprintf("insert into occ_test values(%d, 'txnExample', 1)", id)
 
-	_, err = txn.ExecContext(ctx, insertQuery)
-	if err != nil {
+	stmt, _ = c.txn.PrepareContext(c.context, insertQuery)
+	_, Err = stmt.Exec()
+	if Err != nil {
 		txn.Rollback()
-		return 0, err
+		return 0, Err
 	}
 
 	updateQuery := fmt.Sprintf("update occ_test set version = 2 where id =%d", id)
-	_, err = txn.ExecContext(ctx, updateQuery)
-	if err != nil {
+	stmt, _ = c.txn.PrepareContext(c.context, updateQuery)
+	_, Err = stmt.Exec()
+	if Err != nil {
 		txn.Rollback()
-		return 0, err
+		return 0, Err
 	}
 
 	err = txn.Commit()
@@ -91,22 +117,20 @@ func (ct ClientTraffic) writeInTxn(conn *sql.Conn, ctx context.Context) (int, er
 
 }
 
-func (ct ClientTraffic) identifyDBTxn(txn *sql.Tx) (int, error) {
+func (ct ClientTraffic) identifyDBTxn(txn *sql.Tx, ctx context.Context) (int, error) {
 	query := "select id FROM db_id_test"
-	rows, err := txn.Query(query)
+	stmt, _ := txn.PrepareContext(ctx, query)
+	rows, err := stmt.Query()
 	if err != nil {
 		return 0, err
 	}
 	defer rows.Close()
-
-	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
-			return 0, err
-		}
-		return id, nil
+	rows.Next()
+	var id int
+	if err := rows.Scan(&id); err != nil {
+		return 0, err
 	}
-	return 0, errors.New("should not have reached")
+	return id, nil
 }
 
 func (ct ClientTraffic) identifyDB(conn *sql.Conn, ctx context.Context) (int, error) {
@@ -169,12 +193,19 @@ func (ct ClientTraffic) CreateCounter(utc int64, counterType string, CTS map[int
 
 func (ct ClientTraffic) txnTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	ct.CreateCounter(n, TXN, CTS)
-
-	conn, ctx, err := GetConnection()
 	dbId := 0
-	if err == nil {
-		dbId, err = ct.writeInTxn(conn, ctx)
+	var err error
+
+	c := TestConnection{}
+	c.GetConnection()
+
+	if c.Err != nil {
+		ct.incrementFailure(TXN, dbId, CTS[n].stats)
+		return
 	}
+
+	defer c.Close()
+	dbId, err = ct.WriteInTxn(c)
 	if err != nil {
 		ct.incrementFailure(TXN, dbId, CTS[n].stats)
 	} else {
@@ -185,30 +216,37 @@ func (ct ClientTraffic) txnTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	ct.CreateCounter(n, WRITE, CTS)
 	id := 0
-	conn, ctx, err := GetConnection()
+	c := TestConnection{}
+	c.GetConnection()
 	failed := true
+
+	if c.Err != nil {
+		ct.incrementFailure(WRITE, id, CTS[n].stats)
+		return
+	}
+
+	defer c.Close()
+	insertQuery := "insert into occ_test values(id_seq.NEXTVAL, 'write-record', 1)"
+
+	txn, err := c.conn.BeginTx(c.context, nil)
+
+	if err != nil {
+		ct.incrementFailure(WRITE, id, CTS[n].stats)
+		txn.Rollback()
+		return
+	}
+	_, err = txn.ExecContext(c.context, insertQuery)
+
 	if err == nil {
-		defer conn.Close()
-		insertQuery := "insert into occ_test values(id_seq.NEXTVAL, 'write-record', 1)"
-
-		txn, err := conn.BeginTx(ctx, nil)
-
+		id, err = ct.identifyDBTxn(txn, c.context)
 		if err == nil {
-			id, err = ct.identifyDBTxn(txn)
-			if err == nil {
-				_, err = txn.ExecContext(ctx, insertQuery)
-				if err == nil {
-					err = txn.Commit()
-					failed = false
-				} else {
-					txn.Rollback()
-				}
-			} else {
-				txn.Rollback()
-			}
+			err = txn.Commit()
+			failed = false
 		} else {
 			txn.Rollback()
 		}
+	} else {
+		txn.Rollback()
 	}
 
 	if failed {
@@ -222,11 +260,23 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	ct.CreateCounter(n, READ, CTS)
 	id := 0
-	conn, ctx, err := GetConnection()
-	if err == nil {
-		defer conn.Close()
-		id, err = ct.identifyDB(conn, ctx)
+	var err error
+	c := TestConnection{}
+	c.GetConnection()
+	if c.Err != nil {
+		if c.Err.Error() == "Failed to read server info" {
+			fmt.Println("Enabling TLS on Client Side as server side it is enabled")
+			os.Setenv("TLS", "1")
+			return
+		} else {
+			ct.incrementFailure(READ, id, CTS[n].stats)
+			return
+		}
 	}
+
+	defer c.Close()
+	id, err = ct.identifyDB(c.conn, c.context)
+
 	if err != nil {
 		ct.incrementFailure(READ, id, CTS[n].stats)
 	} else {
@@ -259,42 +309,62 @@ func (ct ClientTraffic) dumpStats(CTS map[int64]ClientTrafficStats) {
 
 }
 
-func (ct ClientTraffic) SendClientTraffic(wg *sync.WaitGroup) chan map[int64]ClientTrafficStats {
+func (ct ClientTraffic) SendClientTraffic(wg *sync.WaitGroup) (chan map[int64]ClientTrafficStats, chan map[int64]ClientTrafficStats) {
 	wg.Add(1)
 	CTSChan := make(chan map[int64]ClientTrafficStats)
-	go ct.traffic(wg, ct.StopRun, CTSChan)
-	return CTSChan
+	DumpChan := make(chan map[int64]ClientTrafficStats)
+	go ct.traffic(wg, ct.RunMsg, CTSChan, DumpChan)
+	return CTSChan, DumpChan
 }
 
 func (ct ClientTraffic) StopClientTraffic(CTSChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
-	ct.StopRun <- true
+	ct.RunMsg <- STOP
 	d := <-CTSChan
 	ct.dumpStats(d)
 	return d
 }
 
-func (ct ClientTraffic) traffic(wg *sync.WaitGroup, stopRun chan bool, CTChan chan map[int64]ClientTrafficStats) {
+func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
+	fmt.Println("DumpTrafficStat")
+	ct.RunMsg <- DumpLogs
+	d := <-DumpLogChan
+	ct.dumpStats(d)
+	return d
+}
+
+func (ct ClientTraffic) TearDown() {
+	ct.RunMsg <- STOP
+}
+
+func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
+	CTChan chan map[int64]ClientTrafficStats, DumpChan chan map[int64]ClientTrafficStats) {
 	defer wg.Done()
 
 	CTS := make(map[int64]ClientTrafficStats)
 
-	cnt := 0
+	started := false
 	fmt.Println("Sending Client Traffic")
 	for {
 		select {
-		case <-stopRun:
-			fmt.Println("Stopping Client Traffic")
-			CTChan <- CTS
-			return
+		case inp := <-runMsg:
+			switch inp {
+			case STOP:
+				fmt.Println("Stopping Client Traffic")
+				CTChan <- CTS
+				return
+			case DumpLogs:
+				fmt.Println("dumping logs")
+				DumpChan <- CTS
+			}
 		default:
 			n := time.Now().Unix()
-			if cnt == 0 {
+			if !started {
 				fmt.Printf("Traffic StartTime %d\n", n)
 			}
 			go ct.readTraffic(CTS, n)
 			go ct.txnTraffic(CTS, n)
 			go ct.writeTraffic(CTS, n)
-			cnt += 1
+			started = true
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
