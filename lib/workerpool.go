@@ -268,7 +268,7 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 //	way to do this except to pass in the sqlhash as a parameter.
 //
 // @param timeoutMs[0] timeout in milliseconds. default to adaptive queue timeout.
-func (pool *WorkerPool) GetWorker(sqlhash int32, timeoutMs ...int) (worker *WorkerClient, t string, err error) {
+func (pool *WorkerPool) GetWorker(sqlhash int32, crdIsRead bool, timeoutMs ...int) (worker *WorkerClient, t string, err error) {
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, "Pool::GetWorker(start) type:", pool.Type, ", instance:", pool.InstID, ", active: ", pool.activeQ.Len(), "healthy:", pool.GetHealthyWorkersCount())
 	}
@@ -480,7 +480,7 @@ func (pool *WorkerPool) GetWorker(sqlhash int32, timeoutMs ...int) (worker *Work
 	if wchLen > 0 {
 		workerclient.DrainResponseChannel(0 /*no wait to minimize the latency*/)
 	}
-
+	workerclient.crdIsRead = crdIsRead
 	return workerclient, ticket, nil
 }
 
@@ -993,4 +993,55 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 		pool.enforceIntegrity()
 		logger.GetLogger().Log(logger.Alert, "CP 20 Phase changed only,  call enforce workerpool integrity")
 	}
+}
+
+/*
+check all active workers and send abort command based on read and write status during cutover
+*/
+func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
+	if pool == nil || (!GetConfig().EnableCutover) {
+		return
+	}
+
+	logger.GetLogger().Log(logger.Verbose, "CP 29 invoked")
+	cnt := 0
+	var workers []*WorkerClient
+	pool.poolCond.L.Lock()
+	for i := 0; i < pool.currentSize; i++ {
+		logger.GetLogger().Log(logger.Verbose, "CP 29 pool shid", pool.CoShardID, "current size", pool.currentSize)
+
+		if pool.workers[i] != nil {
+			if pool.workers[i].Status == wsBusy || pool.workers[i].Status == wsWait {
+				if stopR && stopW {
+					workers = append(workers, pool.workers[i])
+
+				} else if stopR && (pool.workers[i].crdIsRead) {
+					workers = append(workers, pool.workers[i])
+
+				} else if stopW && (!pool.workers[i].crdIsRead) {
+					workers = append(workers, pool.workers[i])
+				}
+			}
+			cnt++
+		}
+	}
+	pool.poolCond.L.Unlock()
+
+	for _, w := range workers {
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "CP 29 stop worker by stopR ", stopR, ", stopW", stopW, "w.pid =",
+				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
+		}
+
+		select {
+		case w.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false}:
+		default:
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", w.pid)
+			}
+		}
+	}
+
+	logger.GetLogger().Log(logger.Verbose, "CP 29 end of StopWorker", pool.phase, pool.dbUname)
+
 }

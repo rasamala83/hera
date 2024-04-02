@@ -445,6 +445,7 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 					} else {
 						//this is wrong - why ? how it got nothing , only happen during init? and what to proceed.
 						logger.GetLogger().Log(logger.Alert, "crd.curActInfo is nil!")
+						hangup = true
 					}
 					if err != nil {
 						handled = true
@@ -791,9 +792,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					return err
 				}
 				if crd.isInternal {
-					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
+					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead, 0 /*no backlog timeout*/)
 				} else {
-					worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead)
 				}
 				if err != nil {
 					if logger.GetLogger().V(logger.Warning) {
@@ -809,7 +810,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					if err != nil {
 						return err
 					}
-					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
+					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead, 0 /*no backlog timeout*/)
 				} else {
 					// external read sql
 					if (crd.curActInfo.Aphase == CutoverPhStr) && (crd.curActInfo.Arwstatus != ReadOk) {
@@ -820,7 +821,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					if err != nil {
 						return err
 					}
-					worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead)
 					if err != nil {
 						return err
 					}
@@ -832,9 +833,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			if GetConfig().EnableCutover == false {
 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
 				if crd.isInternal {
-					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
+					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead, 0 /*no backlog timeout*/)
 				} else {
-					worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead)
 				}
 				if err != nil {
 					if logger.GetLogger().V(logger.Warning) {
@@ -854,7 +855,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 error", err)
 						return err
 					}
-					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /* no backlog timeout*/)
+					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead, 0 /* no backlog timeout*/)
 					if err != nil {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 error", err)
 						return err
@@ -896,7 +897,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 error", err)
 						return err
 					}
-					worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead)
 					if err != nil {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 error", err)
 						return err
@@ -922,7 +923,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					if err != nil {
 						return err
 					}
-					worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead)
 					if err != nil {
 						if logger.GetLogger().V(logger.Warning) {
 							logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool during shardswitch", err)
@@ -963,7 +964,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
 							return err
 						}
-						worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+						worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead)
 						if err != nil {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
 							return err
@@ -980,7 +981,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
 							return err
 						}
-						worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+						worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead)
 						if err != nil {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
 							return err
@@ -1014,7 +1015,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
 							return err
 						}
-						worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+						worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead)
 						if err != nil {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
 							return err

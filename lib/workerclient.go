@@ -99,6 +99,8 @@ type WorkerClient struct {
 	shardID       int              // also reused in cutover
 	racID         int              // for RAC maintenance, the rac ID where the worker connected
 	dbUname       string           // the database name where the worker connected
+	// when coordinator uses this worker via GetWorker(), we will reset this.
+	crdIsRead bool
 
 	//
 	// sending data message from worker to coordinator (owner == doRead thread)

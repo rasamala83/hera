@@ -166,8 +166,6 @@ func (broker *WorkerBroker) init() error {
 
 		if GetConfig().EnableCutover {
 			// as the worker pool is setting up configs, we don't know the state of cutover
-			// safer approach is to flex up at 20%. Next change is either flex up to full or reduce to 2 conn depending
-			// on what phase it is
 			broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s) / 2
 			switch s {
 			case int(ShId2Task):
@@ -445,9 +443,13 @@ func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, sha
 	}
 }
 
-/*
-changeMaxWorkers is called when the dynamic size change during cutover phases PRE and BROOM. it calls to resize specific shard's pool
-*/
+// Phase    |two_task | two_task_cutover
+// Enable   |100%     | 1
+// Pre      |100%     | 100%
+// Cutover  |100%     | 100%
+// Complete |100%     | 100%
+// Broom    |1  | 100%
+/* when given a cutover phase, the function resizes the workerpool size accordingly. */
 func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	wW := GetNumWWorkers(0)
 	rW := GetNumRWorkers(0)

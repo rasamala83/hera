@@ -69,17 +69,18 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveInfo {
 		return nil
 	}
 
-	if cocfg.ActiveTwoTask == "NONE" {
-		logger.GetLogger().Log(logger.Alert, "CP 5 no active two task", cocfg)
-	}
-	if cocfg.ActiveTwoTask == "INVALID" {
-		return nil
-	}
-	newActInfo := ActiveInfo{
-		ActShId:   cocfg.ActiveShardId,
-		AdbUname:  cocfg.DbBy2task[cocfg.ActiveTwoTask],
-		Aphase:    cocfg.Phase,
-		Arwstatus: cocfg.RWstatusByDb[cocfg.DbBy2task[cocfg.ActiveTwoTask]],
+	var newActInfo ActiveInfo
+	if cocfg.ActiveTwoTask == UnsetStr {
+		logger.GetLogger().Log(logger.Alert, "CP 5 convert to ActiveInfo : no active DB ", cocfg)
+		newActInfo.ActShId = ShIdUnset
+		newActInfo.AdbUname = UnsetStr
+		newActInfo.Aphase = cocfg.Phase
+	} else {
+		actDb := cocfg.DbBy2task[cocfg.ActiveTwoTask]
+		newActInfo.ActShId = cocfg.ActiveShardId
+		newActInfo.AdbUname = actDb
+		newActInfo.Aphase = cocfg.Phase
+		newActInfo.Arwstatus = cocfg.RWstatusByDb[actDb]
 	}
 	logger.GetLogger().Log(logger.Alert, "CP 5 convert cfg to newActInfo (ActShId, AdbUname, Aphase, Arwstatus)=(", newActInfo.ActShId, newActInfo.AdbUname, newActInfo.Aphase, newActInfo.Arwstatus, ")")
 	return &newActInfo
@@ -103,14 +104,19 @@ d. return bool -> hang up or not, int -> shard id
 hang up conditions
 1. active two_task has changed from last tracked active info in this coordinator
 2. active two_task is unchanged but RWstatus disabled from enabled.
+3. if no active config can be constructed, return hangup true
 */
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
 
-	//curActInfo     *ActiveInfo    // maybe we don't need this, just use the CutoverInfo (atomic) directly
-	//curCOCfg
-	if crd.curActInfo == nil && GetCutoverCfg() == nil {
+	if GetCutoverCfg() == nil {
 		logger.GetLogger().Log(logger.Alert, crd.id, "shtien PreprocessCutover at init")
+		return true, nil
 	}
+
+	if crd.curActInfo == nil {
+		logger.GetLogger().Log(logger.Alert, crd.id, "shtien PreprocessCutover crd.curActInfo is nil")
+	}
+
 	interrupt := false // if txn should be disrupted
 	newActInfo := cvtActiveInfo(GetCutoverCfg())
 	if newActInfo == nil {
