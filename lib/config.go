@@ -29,7 +29,12 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-//The Config contains all the static configuration
+type Resize struct {
+	maxWorker int
+	shid      ShardByTwoTask
+}
+
+// The Config contains all the static configuration
 type Config struct {
 	CertChainFile   string
 	KeyFile         string // leave blank for no SSL
@@ -80,11 +85,11 @@ type Config struct {
 	// time_skew_threshold_error(15)
 	TimeSkewThresholdErrorSec int
 	// max_stranded_time_interval(2000)
-	StrandedWorkerTimeoutMs int
+	StrandedWorkerTimeoutMs         int
 	HighLoadStrandedWorkerTimeoutMs int
-	HighLoadSkipInitiateRecoverPct int
-	HighLoadPct int
-	InitLimitPct int
+	HighLoadSkipInitiateRecoverPct  int
+	HighLoadPct                     int
+	InitLimitPct                    int
 
 	// the worker scheduler policy
 	LifoScheduler bool
@@ -110,7 +115,7 @@ type Config struct {
 	HostnamePrefix       map[string]string
 	ShardingCrossKeysErr bool
 
-	CfgFromTns					bool
+	CfgFromTns                  bool
 	CfgFromTnsOverrideNumShards int // -1 no-override
 	CfgFromTnsOverrideTaf       int // -1 no-override, 0 override-false, 1 override-true
 	CfgFromTnsOverrideRWSplit   int // -1 no-override, readChildPct
@@ -132,6 +137,11 @@ type Config struct {
 	TAFBinDuration       int
 	TAFAllowSlowEveryX   int
 	TAFNormallySlowCount int
+
+	// Enable cutver - create source and target connections
+	EnableCutover            bool
+	CutoverCfgReloadInterval int
+	CutoverPostfix           string
 
 	// for testing, enabling profile
 	EnableProfile     bool
@@ -156,8 +166,8 @@ type Config struct {
 	// when numWorkers changes, it will write to this channel, for worker manager to update
 	numWorkersCh chan int
 
-	EnableConnLimitCheck bool
-	EnableQueryBindBlocker bool
+	EnableConnLimitCheck         bool
+	EnableQueryBindBlocker       bool
 	QueryBindBlockerMinSqlPrefix int
 
 	// taf testing
@@ -169,7 +179,7 @@ type Config struct {
 	EnableDanglingWorkerRecovery bool
 
 	GoStatsInterval int
-	RandomStartMs int
+	RandomStartMs   int
 
 	// The max number of database connections to be established per second
 	MaxDbConnectsPerSec int
@@ -274,9 +284,8 @@ func InitConfig() error {
 	gAppConfig.StrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("max_stranded_time_interval", 2000)
 	gAppConfig.HighLoadStrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("high_load_max_stranded_time_interval", 600111)
 	gAppConfig.HighLoadSkipInitiateRecoverPct = cdb.GetOrDefaultInt("high_load_skip_initiate_recover_pct", 80)
-	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 130) // >100 disabled
+	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 130)   // >100 disabled
 	gAppConfig.InitLimitPct = cdb.GetOrDefaultInt("init_limit_pct", 125) // >100 disabled
-
 
 	gAppConfig.StateLogInterval = cdb.GetOrDefaultInt("state_log_interval", 1)
 	if gAppConfig.StateLogInterval <= 0 {
@@ -300,7 +309,7 @@ func InitConfig() error {
 			gAppConfig.ChildExecutable = "postgresworker"
 		}
 	} else {
-	// db type is not supported
+		// db type is not supported
 		return errors.New("database type must be either Oracle or MySQL")
 	}
 
@@ -360,23 +369,30 @@ func InitConfig() error {
 	if gAppConfig.EnableTAF {
 		InitTAF(gAppConfig.NumOfShards)
 	}
-	// TODO:
-	gAppConfig.NumStdbyDbs = 1
+	// DB Cutover
+	gAppConfig.EnableCutover = cdb.GetOrDefaultBool("enable_cutover", false)
+	gAppConfig.CutoverCfgReloadInterval = cdb.GetOrDefaultInt("cutover_cfg_reload_interval", 2)
 
 	var numWorkers int
 	numWorkers = 6
 	//err = config.InitOpsConfigWithName("../opscfg/hera.txt")
+	logger.GetLogger().Log(logger.Alert, "shtien init opscfg")
 	err = config.InitOpsConfig()
 	if err != nil {
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "Error initializing ops config:", err.Error())
+			logger.GetLogger().Log(logger.Alert, "Error initializing ops config:", err.Error())
 		}
 	} else {
+		logger.GetLogger().Log(logger.Alert, "shtien init opscfg proceed")
 		cfg := config.GetOpsConfig()
 		numWorkersOpscfg, err := cfg.GetInt(ConfigMaxWorkers)
 		if err == nil {
 			numWorkers = numWorkersOpscfg
-		} // continue on error
+			logger.GetLogger().Log(logger.Alert, "shtien OpsConfig GetInt(ConfigMaxWorkers)", numWorkersOpscfg)
+		} else {
+			logger.GetLogger().Log(logger.Alert, "shtien OpsConfig GetInt(ConfigMaxWorkers) error", err.Error())
+		}
+		// continue on error
 		gOpsConfig = &OpsConfig{
 			logLevel:               cfg.GetOrDefaultInt("log_level", logLevel),
 			numWorkers:             uint32(numWorkers),
@@ -388,7 +404,9 @@ func InitConfig() error {
 			satRecoverThrottleRate: uint32(cfg.GetOrDefaultInt("saturation_recover_throttle_rate", 0)),
 		}
 		logger.SetLogVerbosity(int32(gOpsConfig.logLevel))
+		/* comment this out to see if init works
 		gAppConfig.numWorkersCh <- numWorkers
+		*/
 	}
 
 	gAppConfig.ReadonlyPct = cdb.GetOrDefaultInt("readonly_children_pct", 0)
@@ -425,9 +443,8 @@ func InitConfig() error {
 	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", "10.0"),
 		"%f", &gAppConfig.BindEvictionDecrPerSec)
 
-	gAppConfig.SkipEvictRegex= cdb.GetOrDefaultString("skip_eviction_host_prefix","")
-	gAppConfig.EvictRegex= cdb.GetOrDefaultString("eviction_host_prefix", "")
-
+	gAppConfig.SkipEvictRegex = cdb.GetOrDefaultString("skip_eviction_host_prefix", "")
+	gAppConfig.EvictRegex = cdb.GetOrDefaultString("eviction_host_prefix", "")
 
 	gAppConfig.BouncerEnabled = cdb.GetOrDefaultBool("bouncer_enabled", true)
 	gAppConfig.BouncerStartupDelay = cdb.GetOrDefaultInt("bouncer_startup_delay", 10)
@@ -560,6 +577,11 @@ func (cfg *Config) NumWorkersCh() <-chan int {
 	return cfg.numWorkersCh
 }
 
+// NumWorkersCh returns the channel where to update number of workers change
+func (cfg *Config) NumWorkersChW() chan int {
+	return cfg.numWorkersCh
+}
+
 // GetBacklogLimit returns the limit for the number of backlogged workers for a certain pool and shard.
 func (cfg *Config) GetBacklogLimit(wtype HeraWorkerType, shard int) int {
 	if wtype == wtypeRO {
@@ -653,3 +675,38 @@ func GetNumWWorkers(shard int) int {
 	}
 	return num
 }
+
+/* func CutoverPhaseResize(min bool, shid ShardByTwoTask) {
+	cfg := config.GetOpsConfig()
+	numWorkers, err := cfg.GetInt(ConfigMaxWorkers)
+	if min {
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "Error reading max_connections when running minimal cutover size", err.Error())
+			}
+		} else {
+			if int(shid) < int(MaxDbInCutover) {
+				//gAppConfig.numWorkersCh <- numWorkers
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, "running minimal max_connections")
+				}
+				gAppConfig.numWorkersCh <- int(shid)
+			} else {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "error running minimal max_connections", shid)
+				}
+			}
+		}
+	} else {
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "Error reading max_connections when running normal cutover size", err.Error())
+			}
+		} else {
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "Changing max_connections from", gOpsConfig.numWorkers, "to", numWorkers)
+			}
+			gAppConfig.numWorkersCh <- numWorkers
+		}
+	}
+} */

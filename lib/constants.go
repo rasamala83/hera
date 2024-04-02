@@ -29,6 +29,7 @@ const (
 	EvtNAmeTafBklg = "BKLG"
 
 	EvtTypeSharding           = "SHARDING"
+	EvtTypeCutover            = "CUTOVER"
 	EvtTypeMux                = "HERAMUX"
 	EvtNameBadShardID         = "bad_shard_id"
 	EvtNameUnkKey             = "unknown_key_name"
@@ -77,8 +78,11 @@ var (
 	ErrNoScuttleIdPredicate,
 	ErrCrossKeysDML,
 	ErrQueryBindBlocker,
+	ErrNotInternal,
 	ErrOther,
-	ErrReqParseFail error
+	ErrReqParseFail,
+	ErrCutoverReadNotAllowed,
+	ErrCutoverWriteNotAllowed error
 )
 
 // Initializes error strings with a prefix like "HERA"
@@ -108,6 +112,9 @@ func MkErr(prefix string) {
 	ErrQueryBindBlocker = errors.New(prefix + "-207: dba query bind blocker")
 	ErrOther = errors.New(prefix + "-1000: unknown error")
 	ErrReqParseFail = errors.New("Request error")
+	ErrCutoverReadNotAllowed = errors.New(prefix + "-500: active db cutover no read allowed")
+	ErrCutoverWriteNotAllowed = errors.New(prefix + "-501: active db cutover no write allowed")
+
 }
 
 // Configuration entry names
@@ -117,6 +124,7 @@ const (
 )
 
 type dbtype int
+type ShardByTwoTask int
 
 // Database typoe constants
 const (
@@ -136,4 +144,11 @@ const (
 
 const (
 	SrcPrefixAppKey string = "srcPrefixApp"
+)
+
+const (
+	ShId2Task        ShardByTwoTask = 0
+	ShId2TaskCutover ShardByTwoTask = 1
+	MaxDbInCutover   ShardByTwoTask = 2
+	ShIdUnset        ShardByTwoTask = 3
 )
