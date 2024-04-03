@@ -113,25 +113,25 @@ func Run() {
 		if !GetConfig().EnableSharding && !GetConfig().EnableTAF {
 			logicdbId := os.Getenv("TWO_TASK_CUTOVER")
 			if logicdbId != "" {
-				logger.GetLogger().Log(logger.Alert, "shtien retrieved TWO_TASK_CUTOVER", logicdbId) 
 
-				val, ok := tnsnames[logicdbId]
-				if ok && GetConfig().ReadonlyPct > 0 { // r/w split enabled
-					logicdbId = os.Getenv("TWO_TASK_OCC_CUTOVER")
-					val, ok = tnsnames[logicdbId]
-				}
+				_, ok := tnsnames[logicdbId]
 				if ok {
-					// condition meet
-					logger.GetLogger().Log(logger.Alert, "shtien retrieved", logicdbId, "value", val) 
-					logger.GetLogger().Log(logger.Alert, "successfully enable cutover feature")
-					GetConfig().EnableCutover = true
-				} else {
-					logger.GetLogger().Log(logger.Alert, "not enable cutover feature")
+					logger.GetLogger().Log(logger.Alert, "Found TWO_TASK_CUTOVER", logicdbId)
+					if GetConfig().ReadonlyPct > 0 { // r/w split enabled
+						rlogicdbId := os.Getenv("TWO_TASK_OCC_CUTOVER")
+						_, ok = tnsnames[rlogicdbId]
+						if ok {
+							logger.GetLogger().Log(logger.Alert, "found [ TWO_TASK_CUTOVER, TWO_TASK_OCC_CUTOVER ] = [", logicdbId, ",", rlogicdbId)
+						}
+					}
+					if ok {
+						GetConfig().EnableCutover = true
+						logger.GetLogger().Log(logger.Alert, "enable cutover feature")
+					}
 				}
 			}
 		}
 	}
-	logger.GetLogger().Log(logger.Alert, "checkpoint 3")
 
 	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
 		if logger.GetLogger().V(logger.Alert) {
@@ -168,7 +168,6 @@ func Run() {
 	}
 
 	pool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, 0)
-	logger.GetLogger().Log(logger.Info, "shtien GetWorkerPool(wtypeRW, 0, 0)")
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RW, 0, 0:", err)
@@ -191,7 +190,7 @@ func Run() {
 	}
 
 	logger.GetLogger().Log(logger.Alert, "shtien wait for seconds")
-	time.Sleep(time.Second * 6)
+	time.Sleep(time.Second * 3)
 	logger.GetLogger().Log(logger.Alert, "end of seconds wait")
 	if GetConfig().EnableCutover {
 		err = InitCutoverCfg(*namePtr)

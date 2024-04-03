@@ -467,8 +467,8 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 		return
 	}
 
-	if phase == PrePhId || phase == CutoverPhId || phase == CompletePhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Pre/Cutover/Complete")
+	if phase == PrePhId || phase == CutoverPhId {
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Pre/Cutover")
 		broker.resizePool(wtypeRW, wW, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {
@@ -478,8 +478,8 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 		return
 	}
 
-	if phase == BroomPhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Broom phase")
+	if phase == BroomPhId || phase == CompletePhId {
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Complete/Broom phase")
 		broker.resizePool(wtypeRW, minSize, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {

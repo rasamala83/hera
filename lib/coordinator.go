@@ -92,6 +92,8 @@ func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstri
 	if conn.RemoteAddr().Network() == "pipe" {
 		coordinator.isInternal = true
 	}
+
+	logger.GetLogger().Log(logger.Verbose, coordinator.id, "create new coordinator")
 	return coordinator
 }
 
@@ -337,17 +339,7 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 	}
 
 	deferr := crd.dispatchRequest(request)
-	if crd.worker == nil {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "crd.worker is nil after dispatchRequest()")
-	} else {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "crd.worker is not nil after dispatchRequest()")
-	}
 	crd.processError(deferr)
-	if crd.worker == nil {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "crd.worker is nil after dispatchRequest() 2")
-	} else {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "crd.worker is not nil after dispatchRequest() 2")
-	}
 	return (deferr == nil)
 }
 
@@ -440,11 +432,11 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 				} else if GetConfig().EnableCutover {
 					hangup, err := crd.PreprocessCutover(nss) // to populate the cutover needed info, cutovershard and dbuname. dbuname checked each txn
 					if crd.curActInfo != nil {
-						logger.GetLogger().Log(logger.Alert, "Post PreprocessCutover (ActShId, AdbUname, Aphase, Arwstatus)=(",
+						logger.GetLogger().Log(logger.Alert, "PreprocessCutover done active (ShId, dbUname, phase, rwstatus)=(",
 							crd.curActInfo.ActShId, crd.curActInfo.AdbUname, crd.curActInfo.Aphase, crd.curActInfo.Arwstatus, ")")
 					} else {
 						//this is wrong - why ? how it got nothing , only happen during init? and what to proceed.
-						logger.GetLogger().Log(logger.Alert, "crd.curActInfo is nil!")
+						logger.GetLogger().Log(logger.Alert, "crd.curActInfo is nil! This shoudn't happen, hang up on client")
 						hangup = true
 					}
 					if err != nil {
@@ -1002,7 +994,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 							return ErrCutoverWriteNotAllowed
 						}
 					}
-					logger.GetLogger().Log(logger.Alert, crd.id, "CP 6.3 CUTOVER phase done check RW, check worker shard id next")
 
 					if worker.shardID != int(crd.curActInfo.ActShId) {
 						logger.GetLogger().Log(logger.Warning, crd.id, "CP 6.3 CUTOVER phase, existing worker shid diff from active sh", worker.shardID, crd.curActInfo.ActShId)
@@ -1012,12 +1003,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						tgtshard = crd.curActInfo.ActShId
 						workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wType, 0, int(tgtshard))
 						if err != nil {
-							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
+							logger.GetLogger().Log(logger.Warning, crd.id, "CP 6.3 error", err)
 							return err
 						}
 						worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead)
 						if err != nil {
-							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
+							logger.GetLogger().Log(logger.Warning, crd.id, "CP 6.3 error", err)
 							return err
 						}
 						if !crd.inTransaction {
