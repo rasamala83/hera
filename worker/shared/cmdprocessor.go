@@ -209,17 +209,29 @@ func (cp *CmdProcessor) ProcessCmd(ns *netstring.Netstring) error {
 outloop:
 	switch ns.Cmd {
 	case common.CmdClientCalCorrelationID:
+		// The below parsing expects the value to be of the format: CorrId=Val&IgnoreTail
+		// Usually, CorrId is at the beginning of the request. For now, minimal parsing should be sufficient. 
+		// To-do: Do a full parse if required
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, "CmdClientCalCorrelationID:", string(ns.Payload), string(ns.Serialized))
 		}
 		cp.m_corr_id = "unset"
-		if len(string(ns.Payload)) > 0 {
-			splits := strings.Split(string(ns.Payload), "=")
-			if (len(splits) == 2) && (len(splits[1]) > 0) {
-				logger.GetLogger().Log(logger.Verbose, "splits:", len(splits), splits[0], splits[1])
-				cp.m_corr_id = splits[1]
+		if ns != nil {
+			cid := string(ns.Payload)
+			pos := strings.Index(cid, "&")
+			if pos != -1 {
+				cid = cid[:pos]
+			}
+			pos = strings.Index(cid, "=")
+			if pos != -1 && strings.Compare(cid[:pos], "CorrId") == 0 {
+				if len(cid[pos+1:]) > 0 && len(cid[pos+1:]) <= 32 {
+					cp.m_corr_id = cid[pos+1:]
+					logger.GetLogger().Log(logger.Verbose, "corr_id_=",cp.m_corr_id)
+				} else {
+					logger.GetLogger().Log(logger.Verbose, "CmdClientCalCorrelationID: corrid not in expected format:", string(ns.Payload))
+				}
 			} else {
-				logger.GetLogger().Log(logger.Warning, "CmdClientCalCorrelationID: Payload not in expected K=V format:", string(ns.Payload))
+				logger.GetLogger().Log(logger.Verbose, "CmdClientCalCorrelationID: Payload not in expected format:", string(ns.Payload))
 			}
 		}
 	case common.CmdClientInfo:
@@ -227,22 +239,26 @@ outloop:
 			logger.GetLogger().Log(logger.Verbose, "CmdClientInfo:", string(ns.Payload), string(ns.Serialized))
 		}
 		if len(string(ns.Payload)) > 0 {
-			splits := strings.Split(string(ns.Payload), "|")
-			if (len(splits) == 2) {
-				logger.GetLogger().Log(logger.Verbose, "len clientApplication:", len(splits[0]))
-				logger.GetLogger().Log(logger.Verbose, "len poolStack:", len(splits[1]))
-				if len(splits[0]) == 0 {
-					logger.GetLogger().Log(logger.Verbose, "clientApplication: unknown")
-				} else {
-					logger.GetLogger().Log(logger.Verbose, "clientApplication:", splits[0])
-				}
-				logger.GetLogger().Log(logger.Verbose, "poolStack:", splits[1])
-				//
-				// @TODO Add CLIENT_INFO event inside calSessionTxn
-				//
-			} else {
-				logger.GetLogger().Log(logger.Debug, "CmdClientInfo: Payload not in expected Client&PoolStack format:", string(ns.Payload))
-			}
+			logger.GetLogger().Log(logger.Verbose, "len clientApplication:", len(string(ns.Payload)))
+			logger.GetLogger().Log(logger.Verbose, "clientApplication:", string(ns.Payload))
+			// splits := strings.Split(string(ns.Payload), "|")
+			// if (len(splits) == 2) {
+			// 	logger.GetLogger().Log(logger.Verbose, "len clientApplication:", len(splits[0]))
+			// 	logger.GetLogger().Log(logger.Verbose, "len poolStack:", len(splits[1]))
+			// 	if len(splits[0]) == 0 {
+			// 		logger.GetLogger().Log(logger.Verbose, "clientApplication: unknown")
+			// 	} else {
+			// 		logger.GetLogger().Log(logger.Verbose, "clientApplication:", splits[0])
+			// 	}
+			// 	logger.GetLogger().Log(logger.Verbose, "poolStack:", splits[1])
+			// 	//
+			// 	// @TODO Add CLIENT_INFO event inside calSessionTxn
+			// 	//
+			// } else {
+			// 	logger.GetLogger().Log(logger.Debug, "CmdClientInfo: Payload not in expected Client&PoolStack format:", string(ns.Payload))
+			// }
+		} else {
+			logger.GetLogger().Log(logger.Verbose, "clientApplication: unknown")
 		}
 	case common.CmdPrepare, common.CmdPrepareV2, common.CmdPrepareSpecial:
 		cp.dedicated = true
@@ -661,9 +677,9 @@ outloop:
 					if writeCols[i].Valid {
 						outstr = cp.adapter.ProcessResult(cts[i].DatabaseTypeName(), writeCols[i].String)
 					}
-					if logger.GetLogger().V(logger.Debug) {
+					/* if logger.GetLogger().V(logger.Debug) {
 						logger.GetLogger().Log(logger.Debug, "query result", outstr)
-					}
+					} // causes high volume logs and can cause CI test issues */
 					nss = append(nss, netstring.NewNetstringFrom(common.RcValue, []byte(outstr)))
 				}
 			}

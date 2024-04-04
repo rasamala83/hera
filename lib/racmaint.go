@@ -22,9 +22,9 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
@@ -43,14 +43,14 @@ type racAct struct {
 	delay  bool
 }
 
-
 type racCfgKey struct {
-	inst int
+	inst   int
 	module string
 }
 
 // MaxRacID is the maximum number of racs supported
 const MaxRacID = 16
+
 var curTime int64
 var hostName string
 
@@ -148,10 +148,6 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 	}
 	defer rows.Close()
 
-	// TODO: we could have this cal transaction however, it is no longer needed since
-	// there is an EXEC cal transaction by the worker
-	evt := cal.NewCalEvent("FETCH_MGMT", fmt.Sprintf("MAINT_%d", shard), cal.TransOK, "")
-	evt.Completed()
 	for rows.Next() {
 		row := racCfg{}
 		// use NullXYZ types for NULLABLE db columns
@@ -185,7 +181,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 			cfgKey.inst = row.inst
 			cfgKey.module = row.module
 			_, ok := prev[cfgKey]
-			if (false == ok) {
+			if false == ok {
 				racRow := racCfg{}
 				racRow.inst = row.inst
 				racRow.status = "U"
@@ -195,17 +191,28 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 			}
 			if row.tm != prev[cfgKey].tm || (row.status != prev[cfgKey].status) {
 				racReq := racAct{instID: row.inst, tm: row.tm, delay: true}
-				if row.status == "R" {
+				switch row.status {
+				case "R":
 					racReq.delay = true
-				} else if row.status == "F" {
+				case "F":
 					racReq.delay = false
-				} else {
+				case "U":
+					racReq.tm = 0 //This avoid accidental recycle of worker
+				default:
 					// any invalid command void the action
 					racReq.tm = 0
 					evt := cal.NewCalEvent("RACMAINT", "invalid_status", cal.TransOK, "")
+					evt.AddDataInt("inst", int64(row.inst))
+					evt.AddDataStr("module", row.module)
+					evt.AddDataStr("status", row.status)
+					evt.AddDataInt("tm", int64(row.tm))
+					evt.AddDataStr("priv_status", prev[cfgKey].status)
 					evt.Completed()
 				}
 
+				// Code flow will gets executed irrespective of valid or in-valid status but actual recycle of workers
+				//controlled by `racReq.tm`.
+				//`racReq.tm` value we are setting to "0" in-case of status "U" or "unknown" status.
 				var workerpool *WorkerPool
 				if strings.HasSuffix(row.module, "_TAF") {
 					workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeStdBy, 0, shard)

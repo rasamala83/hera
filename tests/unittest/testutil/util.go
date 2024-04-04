@@ -79,12 +79,13 @@ func BackupAndClear(logbasename, grpName string) {
 	bakname := ""
 	for {
 		bakname = fmt.Sprintf("%s%d.log", logbasename, num)
+		num += 1
 		_, err := os.Stat(bakname)
 		if os.IsNotExist(err) {
 			break
 		}
 	}
-	logname := logbasename+".log"
+	logname := logbasename + ".log"
 	/* nowStr := time.Now().Format("15:04:05.000000")
 	f, err := os.OpenFile(logname, os.O_APPEND, 0666)
 	if err == nil {
@@ -105,12 +106,15 @@ func BackupAndClear(logbasename, grpName string) {
 }
 
 func RunMysql(sql string) (string, error) {
-        cmd := exec.Command("mysql","-h",os.Getenv("mysql_ip"),"-p1-testDb","-uroot", "heratestdb")
-        cmd.Stdin = strings.NewReader(sql)
-        var cmdOutBuf bytes.Buffer
-        cmd.Stdout = &cmdOutBuf
-        cmd.Run()
-	return cmdOutBuf.String(), nil
+	cmd := exec.Command("mysql", "-h", os.Getenv("mysql_ip"), "-p1-testDb", "-uroot", "heratestdb")
+	cmd.Stdin = strings.NewReader(sql)
+	var cmdOutBuf bytes.Buffer
+	cmd.Stdout = &cmdOutBuf
+	err := cmd.Run()
+	if err != nil {
+		logger.GetLogger().Log(logger.Debug, "RunMysql", "sql=", sql, "err=", err, "out=", cmdOutBuf.String())
+	}
+	return cmdOutBuf.String(), err
 }
 
 func RunDML(dml string) error {
@@ -179,4 +183,36 @@ func RegexCountFile(regex string, filename string) int {
 	}
 	//fmt.Println("DONE searching "+regex)
 	return count
+}
+
+func Fatal(msg ...interface{}) {
+	fmt.Println(msg...)
+	os.Exit(2)
+}
+func Fatalf(str string, msg ...interface{}) {
+	fmt.Printf(str, msg...)
+	os.Exit(1)
+}
+
+func ClearLogsData() {
+	heraFile, err := os.OpenFile(runFolder+"/hera.log", os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to clear Hera log file")
+		return
+	}
+	defer heraFile.Close()
+
+	statelogFile, err := os.OpenFile(runFolder+"/state.log", os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to clear Hera log file")
+		return
+	}
+	defer statelogFile.Close()
+
+	calLogFile, err := os.OpenFile(runFolder+"/cal.log", os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to clear Hera log file")
+		return
+	}
+	defer calLogFile.Close()
 }
