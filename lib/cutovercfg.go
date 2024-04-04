@@ -278,7 +278,14 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 
 	same = isCfgSame(records[0].occ2task, records[1].occ2task) // occ_two_task cannot be the same
 	if same {
-		return fmt.Errorf("CP 7 error cutovercfg query result has same two_task [%s, %s] [%s, %s]",
+		return fmt.Errorf("CP 7 error cutover cfg can't have same two_task [%s, %s] [%s, %s]",
+			records[0].occ2task, records[0].dbUname,
+			records[1].occ2task, records[1].dbUname)
+	}
+
+	same = isCfgSame(records[0].dbUname, records[1].dbUname)
+	if same {
+		return fmt.Errorf("CP 7 error cutovercfg can't have same dbuname [%s, %s] [%s, %s]",
 			records[0].occ2task, records[0].dbUname,
 			records[1].occ2task, records[1].dbUname)
 	}
@@ -334,7 +341,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 					evt := cal.NewCalEvent(EvtTypeCutover, "CP 7 cfgerror_dual_active", cal.TransOK, "dual active db cfg")
 					evt.Completed()
 					newcfg.ActiveTwoTask = UnsetStr // just to be safe.
-					// maybe we should also error out
+					newcfg.ActiveShardId = ShIdUnset
 				}
 			}
 		}
@@ -346,14 +353,17 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 	if active == 0 {
 		if newcfg.Phase == EnablePhStr || newcfg.Phase == PrePhStr {
 			newcfg.ActiveTwoTask = g2TaskName
+			newcfg.ActiveShardId = ShId2Task
 		}
 
 		if newcfg.Phase == CompletePhStr || newcfg.Phase == BroomPhStr {
 			newcfg.ActiveTwoTask = g2TaskCutoverName // reset to two_task_cutover
+			newcfg.ActiveShardId = ShId2TaskCutover
 		}
 		if newcfg.Phase == CutoverPhStr {
 			// set it to None, this can be valid
 			newcfg.ActiveTwoTask = UnsetStr // reset to two_task
+			newcfg.ActiveShardId = ShIdUnset
 		}
 		logger.GetLogger().Log(logger.Alert, "CP 7 no active DB reset newcfg.ActiveTwoTask based on cutover phase ", newcfg.ActiveTwoTask)
 	}
@@ -380,10 +390,9 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 		}
 		for shid := 0; shid < int(MaxDbInCutover); shid++ {
 			for t := 0; t <= maxtype; t++ {
-				logger.GetLogger().Log(logger.Alert, "CP 14 INIT [shid, wtype][", shid, ",", t, "]")
 				wpool, initerr := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 				if initerr != nil {
-					logger.GetLogger().Log(logger.Alert, "CP 14 INIT Error [shid, wtype] [", shid, ",", t, "]", err.Error())
+					logger.GetLogger().Log(logger.Alert, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]", err.Error())
 				} else {
 					if wpool != nil {
 						if shid == int(ShId2Task) {
@@ -393,7 +402,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 							wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[g2TaskCutoverName])
 						}
 					} else {
-						logger.GetLogger().Log(logger.Alert, "CP 14 INIT can't get workerpool [shid, type] [", shid, ",", t, "]")
+						logger.GetLogger().Log(logger.Alert, "loadCutoverCfg() can't get workerpool [shid, type] [", shid, ",", t, "]")
 					}
 					wpool = nil
 				}
@@ -407,12 +416,11 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 			logger.GetLogger().Log(logger.Alert, "CP 14 detected cutovercfg change", changed, changedAttr)
 			doAbortWorker(*precfg, newcfg)
 
-			// gCutoverCfg.Store(&newcfg)
 			// 1. Coordinator could retrieve (pull per sql) the new cfg after gCutoverCfg.Store(&newcfg)
 			// 2. we notify workerpool to update (push once) when the two_task to dbname mapping is changed.
-			// Comments: Every sql invokes the check and load latest cutover cfg but workerpool takes time to process and recycle workers that (dbuname) mismatch.
+			// Comments: Every sql invokes the check and load latest global copy of cutovercfg but workerpool takes time to process and recycle workers on (dbuname) mismatch.
 			// During the period, the dispatch can detect mismatch (between coordinator and workerpool) and fail that request.
-			// or shall we delay Store call?
+
 			//
 			// only works for wtypeRW and wtypeRO in cutover
 			maxtype := int(wtypeRW)
@@ -428,15 +436,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 					if err != nil {
 						logger.GetLogger().Log(logger.Alert, "CP 14 error cutovercfg failed to udpate workerpool ", shid, t)
 					} else {
-						// workerpool tracks phase, dbuname.
-						// if phase unchanges but dbuname change
-						// Return true if changed, false if the same
-						// 0x0000 identical
-						// 0x0001 phase
-						// 0x0002 2tashShard's dbuname
-						// 0x0004 2taskCutoverShard's dbuname
-						// 0x0008 2taskShard's RW
-						// 0x00016 2taskCutoverShard's RW
+						// workerpool tracks phase, dbuname and enforce integrity at Pre, Cutover, Complete
 						if wpool != nil {
 							logger.GetLogger().Log(logger.Alert, "CP 14 got the workerpool [shid, type] [", shid, ",", t, "]")
 							// integrity is mainly for the workerpool phase + dbuname
