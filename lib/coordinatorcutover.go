@@ -20,24 +20,24 @@ type CutoverCfg struct {
 */
 
 // Active shard means the shard either take R, W, or RW sql.
-// If no shard is active, the ActiveInfo should container empty strings.
+// If no shard is active, the ActiveDbInfo should container empty strings.
 // Each coordinator will pull the CutoverCfg to check if there is any update.
-// The information is stored in a structure ActiveInfo as for which shard and RW, R, or W
+// The information is stored in a structure ActiveDbInfo as for which shard and RW, R, or W
 //
 // Or, should we let the cutoverCfg to "push" the change to the coordinator? is it possible and better? where does the coordinator is tracked?
-type ActiveInfo struct {
-	ActShId    ShardByTwoTask // active pool shard id
-	Aphase     string         // current cutover phase
-	AdbUname   string         // Active DB_UNAME
-	Arwstatus  int            // dbuname --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
+type ActiveDbInfo struct {
+	ShId       ShardByTwoTask // active pool shard id
+	Phase      string         // current cutover phase
+	DbUname    string         // Active DB_UNAME
+	RwStatus   int            // dbuname --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
 	SessionCfg CutoverCfg     // tracking the cfg used in the session
 }
 
-func copyActCOInfo(destInfo *ActiveInfo, srcInfo ActiveInfo) {
-	destInfo.ActShId = srcInfo.ActShId
-	destInfo.Aphase = srcInfo.Aphase
-	destInfo.Arwstatus = srcInfo.Arwstatus
-	destInfo.AdbUname = srcInfo.AdbUname
+func copyActCOInfo(destInfo *ActiveDbInfo, srcInfo ActiveDbInfo) {
+	destInfo.ShId = srcInfo.ShId
+	destInfo.Phase = srcInfo.Phase
+	destInfo.RwStatus = srcInfo.RwStatus
+	destInfo.DbUname = srcInfo.DbUname
 }
 
 // Compare existing ActiveCOInfo with new cfg.
@@ -46,43 +46,55 @@ func copyActCOInfo(destInfo *ActiveInfo, srcInfo ActiveInfo) {
 // (00010) 2 if dbuname changes
 // (00100) 4 if phase changes (may force shard id )
 // (01000) 8 if RWStatus changes
-func compActiveInfo(cur ActiveInfo, new ActiveInfo) int {
+func compActiveInfo(cur ActiveDbInfo, new ActiveDbInfo) int {
 	flag := 0
-	if cur.ActShId != new.ActShId {
+	if cur.ShId != new.ShId {
 		flag |= 0x0001
 	}
-	if cur.AdbUname != new.AdbUname {
+	if cur.DbUname != new.DbUname {
 		flag |= 0x0002
 	}
-	if cur.Aphase != new.Aphase {
+	if cur.Phase != new.Phase {
 		flag |= 0x0004
 	}
-	if cur.Arwstatus != new.Arwstatus {
+	if cur.RwStatus != new.RwStatus {
 		flag |= 0x0008
 	}
 	return flag
 }
 
 // Build the ActiveCOInfo from CutoverCfg.
-func cvtActiveInfo(cocfg *CutoverCfg) *ActiveInfo {
+func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 	if cocfg == nil {
 		return nil
 	}
-
-	var newActInfo ActiveInfo
-	if cocfg.ActiveTwoTask == UnsetStr {
-		logger.GetLogger().Log(logger.Alert, "CP 5 convert to ActiveInfo : no active DB ", cocfg)
-		newActInfo.ActShId = ShIdUnset
-		newActInfo.AdbUname = UnsetStr
-		newActInfo.Aphase = cocfg.Phase
+	var newActInfo ActiveDbInfo
+	if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
+		newActInfo.ShId = ShId2Task
+		newActInfo.DbUname = cocfg.DbBy2task[g2TaskName]
+		newActInfo.Phase = cocfg.Phase
+		newActInfo.RwStatus = (ReadOk | WriteOk)
+	} else if cocfg.Phase == CompletePhStr || cocfg.Phase == BroomPhStr {
+		newActInfo.ShId = ShId2TaskCutover
+		newActInfo.DbUname = cocfg.DbBy2task[g2TaskCutoverName]
+		newActInfo.Phase = cocfg.Phase
+		newActInfo.RwStatus = (ReadOk | WriteOk)
 	} else {
-		actDb := cocfg.DbBy2task[cocfg.ActiveTwoTask]
-		newActInfo.ActShId = cocfg.ActiveShardId
-		newActInfo.AdbUname = actDb
-		newActInfo.Aphase = cocfg.Phase
-		newActInfo.Arwstatus = cocfg.RWstatusByDb[actDb]
+		//cutover or unknown phase
+		if cocfg.ActiveTwoTask == UnsetStr {
+			logger.GetLogger().Log(logger.Alert, "CP 5 convert to ActiveInfo: no active DB in cutover phase", cocfg)
+			newActInfo.ShId = ShIdUnset
+			newActInfo.DbUname = UnsetStr
+			newActInfo.Phase = cocfg.Phase
+		} else {
+			actDb := cocfg.DbBy2task[cocfg.ActiveTwoTask]
+			newActInfo.DbUname = actDb
+			newActInfo.Phase = cocfg.Phase
+			newActInfo.ShId = cocfg.ActiveShardId
+			newActInfo.RwStatus = cocfg.RWstatusByDb[actDb]
+		}
 	}
-	logger.GetLogger().Log(logger.Alert, "CP 5 convert cfg to newActInfo (ActShId, AdbUname, Aphase, Arwstatus)=(", newActInfo.ActShId, newActInfo.AdbUname, newActInfo.Aphase, newActInfo.Arwstatus, ")")
+	logger.GetLogger().Log(logger.Alert, "CP 5 convert cfg to newActInfo (ShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
 	return &newActInfo
 }
 
@@ -109,12 +121,12 @@ hang up conditions
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
 
 	if GetCutoverCfg() == nil {
-		logger.GetLogger().Log(logger.Alert, crd.id, "shtien PreprocessCutover at init")
+		logger.GetLogger().Log(logger.Alert, crd.id, "PreprocessCutover at init")
 		return true, nil
 	}
 
-	if crd.curActInfo == nil {
-		logger.GetLogger().Log(logger.Alert, crd.id, "shtien PreprocessCutover crd.curActInfo is nil")
+	if crd.curActDb == nil {
+		logger.GetLogger().Log(logger.Alert, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
 	}
 
 	interrupt := false // if txn should be disrupted
@@ -124,12 +136,12 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		return interrupt, nil
 	}
 
-	if crd.curActInfo == nil {
+	if crd.curActDb == nil {
 		// TODO. are we doing the right thing? need to check if we have missed some init case.
 		logger.GetLogger().Log(logger.Alert, "crd.curActInfo is nil")
-		crd.curActInfo = newActInfo
+		crd.curActDb = newActInfo
 	}
-	diff := compActiveInfo(*crd.curActInfo, *newActInfo)
+	diff := compActiveInfo(*crd.curActDb, *newActInfo)
 	if diff == 0 {
 		logger.GetLogger().Log(logger.Alert, "crd.curActInfo and newActInfo is the same")
 		return interrupt, nil // same cutover config
@@ -140,15 +152,15 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	if crd.inTransaction {
 		// worker could be in a long txn, break it if needed.
 		if (diff & 0x0001) == 0x0001 {
-			if newActInfo.Aphase == PrePhStr || newActInfo.Aphase == EnablePhStr {
-				if newActInfo.ActShId != ShId2Task {
+			if newActInfo.Phase == PrePhStr || newActInfo.Phase == EnablePhStr {
+				if newActInfo.ShId != ShId2Task {
 					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. prior to cutover phase config using ShId2TaskCutover!")
 				}
-			} else if newActInfo.Aphase == CompletePhStr || newActInfo.Aphase == BroomPhStr {
-				if newActInfo.ActShId != ShId2TaskCutover {
+			} else if newActInfo.Phase == CompletePhStr || newActInfo.Phase == BroomPhStr {
+				if newActInfo.ShId != ShId2TaskCutover {
 					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. post cutover phase config using ShId2Task!")
 				}
-			} else if newActInfo.Aphase == CutoverPhStr {
+			} else if newActInfo.Phase == CutoverPhStr {
 				//cutover phase, swithc worker pool
 				logger.GetLogger().Log(logger.Alert, crd.id, "cutover phase worker pool switch")
 				interrupt = true
@@ -169,20 +181,20 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		if (diff & 0x0008) == 0x0008 {
 			// if this has a stop to read or write, we will take action by stopping the intransaction
 			// rw status, 1 R, 2 W, 3 RW, 0 NRNW
-			if newActInfo.Aphase == CutoverPhStr {
-				if crd.curActInfo.Arwstatus > newActInfo.Arwstatus { // either W or R or both RW are newly disabled.
-					if newActInfo.Arwstatus == 0 {
+			if newActInfo.Phase == CutoverPhStr {
+				if crd.curActDb.RwStatus > newActInfo.RwStatus { // either W or R or both RW are newly disabled.
+					if newActInfo.RwStatus == 0 {
 						interrupt = true //we will check this later
 						err = errors.New("cutover stop in-txn")
 					}
-					if newActInfo.Arwstatus&0x0001 == 0 { // read is disabled now
+					if newActInfo.RwStatus&0x0001 == 0 { // read is disabled now
 						// stop READ
 						if crd.isRead {
 							interrupt = true // we will check this later
 							err = errors.New("cutover stop in-txn read")
 						}
 					}
-					if newActInfo.Arwstatus&0x0002 == 0 { // write is disabled now
+					if newActInfo.RwStatus&0x0002 == 0 { // write is disabled now
 						// stop WRTIE
 						if !crd.isRead {
 							interrupt = true // we will check this later
@@ -192,14 +204,14 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				}
 			}
 		}
-		copyActCOInfo(crd.curActInfo, *newActInfo)      // now coordinator has updated with latest info
-		crd.shard.shardID = int(crd.curActInfo.ActShId) // we will need shardID in dispatchRequest(). hm..
+		copyActCOInfo(crd.curActDb, *newActInfo)   // now coordinator has updated with latest info
+		crd.shard.shardID = int(crd.curActDb.ShId) // we will need shardID in dispatchRequest(). hm..
 		return interrupt, err
 	} else {
 		// worker is not in transactions
 		// we will just load the new cfg and update the crd flags as needed.
-		copyActCOInfo(crd.curActInfo, *newActInfo)
-		crd.shard.shardID = int(crd.curActInfo.ActShId)
+		copyActCOInfo(crd.curActDb, *newActInfo)
+		crd.shard.shardID = int(crd.curActDb.ShId)
 		return false, nil // allow to proceed
 	}
 }
