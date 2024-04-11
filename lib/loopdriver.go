@@ -67,7 +67,7 @@ func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {
 		// now set the shard ID
 		fields := strings.Split(url, ":")
 
-		if (len(fields) == 4) && (GetConfig().EnableSharding) {
+		if (len(fields) == 3) && (GetConfig().EnableSharding) {
 			ns := netstring.NewNetstringFrom(common.CmdSetShardID, []byte(fields[1]))
 			cli.Write(ns.Serialized)
 			ns, err := netstring.NewNetstring(cli)
