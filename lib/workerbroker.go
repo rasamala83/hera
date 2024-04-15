@@ -24,6 +24,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/paypal/hera/config"
 	"github.com/paypal/hera/utility"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -41,8 +42,9 @@ const (
 
 // WorkerPoolCfg is a configuration structure to keep setups for each type of worker pool
 type WorkerPoolCfg struct {
-	maxWorkerCnt int // each instance of a worker type has the same max worker count.
-	instCnt      int // number of instances (e.g. standbys) in a type of worker pool.
+	maxWorkerCnt int            // each instance of a worker type has the same max worker count.
+	instCnt      int            // number of instances (e.g. standbys) in a type of worker pool.
+	p2t          ShardByTwoTask // used for cutover purpose
 }
 
 // WorkerBroker is managing the workers, starting the worker pools, and restarting workers when needed
@@ -64,7 +66,7 @@ type WorkerBroker struct {
 	// and restart the stopped workers.
 	//
 	pidworkermap map[int32]*WorkerClient
-	lock sync.Mutex
+	lock         sync.Mutex
 
 	//
 	// loaded from cfg once and used later.
@@ -97,13 +99,16 @@ func GetWorkerBrokerInstance() *WorkerBroker {
  * private method to set up different worker pools
  *
  * @TODO pull types and sizes from config
+ * 2/1/2024 with cutover enabled, we can't flex up to full yet.
+ * We don't know which phase it is in.
  */
 func (broker *WorkerBroker) init() error {
 	broker.stopped = make(chan struct{})
 	broker.maxShardSize = GetConfig().NumOfShards
-	if (broker.maxShardSize == 0) || !(GetConfig().EnableSharding) {
+	if broker.maxShardSize == 0 {
 		broker.maxShardSize = 1
 	}
+
 	//
 	// MAX_NUM_STANDBY = 10
 	//
@@ -111,9 +116,32 @@ func (broker *WorkerBroker) init() error {
 	if maxStndbySize > 10 {
 		maxStndbySize = 10
 	}
+	/* comment this out as we don't send data during config init for max_connections
 	MaxWorkerSize := <-GetConfig().NumWorkersCh()
+	*/
+	logger.GetLogger().Log(logger.Alert, "checkpoint 4")
+	cfg := config.GetOpsConfig()
+	if cfg == nil {
+		logger.GetLogger().Log(logger.Alert, "GetOpsConfig return nil")
+	}
+	MaxWorkerSize, err := config.GetOpsConfig().GetInt(ConfigMaxWorkers)
+	//MaxWorkerSize := 10
+	//var err error = nil
+	logger.GetLogger().Log(logger.Alert, "checkpoint 5")
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, "error loading max_connections from opscfg", err.Error())
+		// continue on error
+		MaxWorkerSize = 6
+
+	}
+
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "num_standby_dbs", maxStndbySize, "max_worker", MaxWorkerSize)
+	}
+
+	if GetConfig().EnableCutover {
+		broker.maxShardSize = int(MaxDbInCutover)     // during cutover it must be two db
+		GetConfig().NumOfShards = int(MaxDbInCutover) // overwrite config
 	}
 
 	//
@@ -122,6 +150,8 @@ func (broker *WorkerBroker) init() error {
 	broker.workerpools = make([](map[HeraWorkerType][]*WorkerPool), broker.maxShardSize)
 	broker.poolCfgs = make([](map[HeraWorkerType]*WorkerPoolCfg), broker.maxShardSize)
 	var workercnt int
+
+	logger.GetLogger().Log(logger.Alert, "shtien MaxShardSize", broker.maxShardSize)
 	for s := 0; s < broker.maxShardSize; s++ {
 		//
 		// setup broker configuration, inst and worker size can be loaded from cdb
@@ -134,9 +164,38 @@ func (broker *WorkerBroker) init() error {
 			broker.poolCfgs[s][wtypeRO].instCnt = 1
 		}
 
+		if GetConfig().EnableCutover {
+			// as the worker pool is setting up configs, we don't know the state of cutover
+			broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s) / 2
+			switch s {
+			case int(ShId2Task):
+				broker.poolCfgs[s][wtypeRO].p2t = ShId2Task
+			case int(ShId2TaskCutover):
+				broker.poolCfgs[s][wtypeRO].p2t = ShId2TaskCutover
+
+			default:
+				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset // ??
+				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
+			}
+		}
+		logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRO].maxWorkerCnt", broker.poolCfgs[s][wtypeRO].maxWorkerCnt)
+
 		broker.poolCfgs[s][wtypeRW] = new(WorkerPoolCfg)
 		broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s)
 		broker.poolCfgs[s][wtypeRW].instCnt = 1
+		if GetConfig().EnableCutover {
+			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s) / 2
+			switch s {
+			case int(ShId2Task):
+				broker.poolCfgs[s][wtypeRW].p2t = ShId2Task
+			case int(ShId2TaskCutover):
+				broker.poolCfgs[s][wtypeRW].p2t = ShId2TaskCutover
+			default:
+				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset // ??
+				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
+			}
+		}
+		logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRW].maxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt)
 
 		broker.poolCfgs[s][wtypeStdBy] = new(WorkerPoolCfg)
 		if GetConfig().EnableTAF {
@@ -154,7 +213,7 @@ func (broker *WorkerBroker) init() error {
 		for t := 0; t < int(wtypeTotalCount); t++ {
 			poolcfg := broker.poolCfgs[s][HeraWorkerType(t)]
 			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "init pool ", poolcfg)
+				logger.GetLogger().Log(logger.Verbose, "init pool [sh:", s, "][workercnt", poolcfg.maxWorkerCnt, "][instCnt", poolcfg.instCnt, "][p2t", poolcfg.p2t, "]")
 			}
 			workercnt += (poolcfg.instCnt * poolcfg.maxWorkerCnt)
 			broker.workerpools[s][HeraWorkerType(t)] = make([]*WorkerPool, poolcfg.instCnt)
@@ -183,7 +242,7 @@ func (broker *WorkerBroker) RestartWorkerPool(_moduleName string) error {
 		for t := 0; t < int(wtypeTotalCount); t++ {
 			poolcfg := broker.poolCfgs[s][HeraWorkerType(t)]
 			for i := 0; i < poolcfg.instCnt; i++ {
-				err = broker.workerpools[s][HeraWorkerType(t)][i].Init(HeraWorkerType(t), poolcfg.maxWorkerCnt, i, s, _moduleName)
+				err = broker.workerpools[s][HeraWorkerType(t)][i].Init(HeraWorkerType(t), poolcfg.p2t, poolcfg.maxWorkerCnt, i, s, _moduleName)
 				if err != nil {
 					if logger.GetLogger().V(logger.Alert) {
 						logger.GetLogger().Log(logger.Alert, "failed to start workerpool", err)
@@ -204,7 +263,9 @@ func (broker *WorkerBroker) GetWorkerPoolCfgs() (pCfgs []map[HeraWorkerType]*Wor
 
 // GetWorkerPool get the worker pool object for the type and id
 // ids holds optional paramenters.
-//   ids[0] == instance id; ids[1] == shard id.
+//
+//	ids[0] == instance id; ids[1] == shard id.
+//
 // if a particular id is not set, it defaults to 0.
 // TODO: interchange sid <--> instId since instId is not yet used
 func (broker *WorkerBroker) GetWorkerPool(wType HeraWorkerType, ids ...int) (workerbroker *WorkerPool, err error) {
@@ -257,8 +318,9 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 		cfgWorkerChange := GetConfig().NumWorkersCh()
 		for {
 			select {
-			case <-cfgWorkerChange:
-				broker.changeMaxWorkers()
+			case ph := <-cfgWorkerChange:
+				logger.GetLogger().Log(logger.Verbose, "worker size change, cutover phase is ", ph)
+				broker.changeMaxWorkers(ph)
 			//
 			// Block until a signal is received.
 			//
@@ -365,43 +427,66 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 }
 
 /*
-	resizePool calls workerpool.Resize to resize a worker pool when the dynamic configuration of
-	the number of workers changed
+resizePool calls workerpool.Resize to resize a worker pool when the dynamic configuration of
+the number of workers changed
 */
 func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, shardID int) {
-	broker.poolCfgs[0][wType].maxWorkerCnt = maxWorkers
+	broker.poolCfgs[shardID][wType].maxWorkerCnt = maxWorkers
 	pool, err := broker.GetWorkerPool(wType, 0, shardID)
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "Can't pool of type", wType, ", shard", shardID, ",error:", err)
 		}
 	} else {
+		logger.GetLogger().Log(logger.Alert, "wType", wType, ", shard", shardID, ",maxWorkers", maxWorkers)
 		pool.Resize(maxWorkers)
 	}
 }
 
-/*
-	changeMaxWorkers is called when the dynamic config changed, it calls resizePool() for all the pools
-*/
-func (broker *WorkerBroker) changeMaxWorkers() {
+// Phase    |two_task | two_task_cutover
+// Enable   |100%     | 1
+// Pre      |100%     | 100%
+// Cutover  |100%     | 100%
+// Complete |100%     | 100%
+// Broom    |1  | 100%
+/* when given a cutover phase, the function resizes the workerpool size accordingly. */
+func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	wW := GetNumWWorkers(0)
 	rW := GetNumRWorkers(0)
+	minSize := 1
+	logger.GetLogger().Log(logger.Verbose, "CP 1 changeMaxWorkers GetNumRWorkers(0) =", rW, "GetNumWWorkers(0)", wW)
 
-	for i := 0; i < GetConfig().NumOfShards; i++ {
-		broker.resizePool(wtypeRW, wW, i)
+	if phase == EnablePhId {
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Enable phase")
+		broker.resizePool(wtypeRW, wW, 0)
+		broker.resizePool(wtypeRW, minSize, 1)
 		if rW != 0 {
-			broker.resizePool(wtypeRO, rW, i)
+			broker.resizePool(wtypeRO, rW, 0)
+			broker.resizePool(wtypeRO, minSize, 1)
 		}
+		return
+	}
 
-		// if TAF enabled, handle stdby as well
-		if GetConfig().EnableTAF {
-			broker.resizePool(wtypeStdBy, wW, i)
+	if phase == PrePhId || phase == CutoverPhId {
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Pre/Cutover")
+		broker.resizePool(wtypeRW, wW, 0)
+		broker.resizePool(wtypeRW, wW, 1)
+		if rW != 0 {
+			broker.resizePool(wtypeRO, rW, 0)
+			broker.resizePool(wtypeRO, rW, 1)
 		}
+		return
+	}
 
-		if GetConfig().EnableWhitelistTest {
-			// only resize shard 0
-			break
+	if phase == BroomPhId || phase == CompletePhId {
+		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Complete/Broom phase")
+		broker.resizePool(wtypeRW, minSize, 0)
+		broker.resizePool(wtypeRW, wW, 1)
+		if rW != 0 {
+			broker.resizePool(wtypeRO, minSize, 0)
+			broker.resizePool(wtypeRO, rW, 1)
 		}
+		return
 	}
 }
 

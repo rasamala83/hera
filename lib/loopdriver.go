@@ -50,8 +50,10 @@ func RegisterLoopDriver(f ConnHandlerFunc) {
 	sql.Register("heraloop", drvLoop)
 }
 
-/**
+/*
+*
 URL: <ShardID>:<PoolType>:<PoolID>
+New: URL: <Role>:<ShardID>:<PoolType>:<PoolId>
 TODO: add another parameter for debugging/troubleshooting, IDing the client
 */
 func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {
@@ -64,8 +66,9 @@ func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {
 	if len(url) > 0 {
 		// now set the shard ID
 		fields := strings.Split(url, ":")
+
 		if (len(fields) == 3) && (GetConfig().EnableSharding) {
-			ns := netstring.NewNetstringFrom(common.CmdSetShardID, []byte(fields[0]))
+			ns := netstring.NewNetstringFrom(common.CmdSetShardID, []byte(fields[1]))
 			cli.Write(ns.Serialized)
 			ns, err := netstring.NewNetstring(cli)
 			if err != nil {
@@ -75,9 +78,28 @@ func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {
 				return nil, fmt.Errorf("HERA_SET_SHARD_ID response: %s", string(ns.Serialized))
 			}
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "HERA loop driver driver, opened to shard", fields[0])
+				logger.GetLogger().Log(logger.Debug, "HERA loop driver driver, opened to DB by role %s shard %s", fields[0], fields[1])
 			}
 		}
+
+		if (len(fields) == 4) && (GetConfig().EnableCutover) {
+			// cutover does not support sharded database.
+			// reuse the setShardId
+			// shardId: 0 (two_task), 1(two_task_cutover)
+			ns := netstring.NewNetstringFrom(common.CmdSetShardID, []byte(fields[1]))
+			cli.Write(ns.Serialized)
+			ns, err := netstring.NewNetstring(cli)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to set shardID: %s", err.Error())
+			}
+			if ns.Cmd != common.RcOK {
+				return nil, fmt.Errorf("HERA_SET_CUTOVER_ID response: %s", string(ns.Serialized))
+			}
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, "HERA loop driver driver, opened to DB by role %s shard %s", fields[0], fields[1])
+			}
+		}
+
 	}
 	return gosqldriver.NewHeraConnection(cli), nil
 }

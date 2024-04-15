@@ -892,57 +892,6 @@ func validateDBID(dbTxn *DBTxn, dbId int, dbName string) {
 	}
 }
 
-func ValidateBeforeCutOver(t *testing.T, queryType string, cts ClientTrafficStats, utc int64, trafficStopTime int64) {
-	if cts.stats[queryType][2].successCount > 0 || cts.stats[queryType][2].failureCount > 0 {
-		t.Fatalf("UTC: %d, Traffic Stop Time: %d - %s Traffic moved to second DB before cut-over", utc, trafficStopTime, queryType)
-	}
-
-	if cts.stats[queryType][1].successCount == 0 {
-		t.Fatalf("UTC: %d, Traffic Stop Time: %d - %s Traffic missing in db1 before cutover", utc, trafficStopTime, queryType)
-	}
-
-	if cts.stats[queryType][1].failureCount > 0 {
-		t.Fatalf("UTC: %d, Traffic Stop Time: %d - %s Traffic failing in db1 before cutover %d", utc, trafficStopTime, queryType, cts.stats[queryType][1].failureCount)
-	}
-
-	if cts.stats[queryType][0].failureCount > 0 {
-		t.Fatalf("UTC: %d, Traffic Stop Time: %d - %s Traffic failing in db before cutover", utc, trafficStopTime, queryType)
-	}
-}
-
-func ValidateAfterCutOverBeforeGrace(t *testing.T, queryType string, cts ClientTrafficStats) {
-	if cts.stats[queryType][2].successCount == 0 {
-		t.Fatalf("%s Traffic did not move to second DB", queryType)
-	}
-
-	if cts.stats[queryType][2].failureCount > 0 || cts.stats[queryType][1].failureCount > 0 {
-		t.Fatalf("%s Traffic failing in db1/2 before cutover", queryType)
-	}
-}
-
-func ValidateAfterCutOverAfterGracePeriod(t *testing.T, queryType string, cts ClientTrafficStats,
-	utc int64, cutOverTime int64) {
-	if cts.stats[queryType][1].successCount > 0 {
-		t.Fatalf("UTC: %d, CutOverTime: %d, %s Traffic did not move to second DB after grace period",
-			utc, cutOverTime, queryType)
-	}
-
-	if cts.stats[queryType][2].failureCount > 0 || cts.stats[queryType][1].failureCount > 0 {
-		t.Fatalf("UTC: %d, CutOverTime: %d, %s Traffic failing in db1/2 before cutover",
-			utc, cutOverTime, queryType)
-	}
-
-	if cts.stats[queryType][2].successCount == 0 {
-		t.Fatalf("UTC: %d, CutOverTime: %d, %s no traffic found in db2 after cutover",
-			utc, cutOverTime, queryType)
-	}
-
-	if cts.stats[queryType][0].failureCount > 0 {
-		t.Fatalf("UTC: %d, CutOverTime: %d, %s Traffic failing in both DB's",
-			utc, cutOverTime, queryType)
-	}
-}
-
 func sortStats(trafficStats map[int64]ClientTrafficStats) []int64 {
 	keys := make([]int64, 0)
 	for k, _ := range trafficStats {

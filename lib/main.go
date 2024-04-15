@@ -95,6 +95,44 @@ func Run() {
 	//
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
+	logger.GetLogger().Log(logger.Alert, "checkpoint 2")
+	tnsnames, err := FindTns()
+	// Rapid cutover is enabled when meeting the following both conditions at start-up
+	// Also, cutover feature is mutually exclusive to sharding and taf.
+	//
+	// 1. TWO_TASK_CUTOVER is defined. e.g. TWO_TASK_CUTOVER=CLOC_CUTOVER
+	// 2. The CLOC_CUTOVER is defined in tnsnames.ora
+	// maybe we should have another condition as master control.
+	// (?) 3. occ.cdb has cutover_enabled = true.
+	GetConfig().EnableCutover = false
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, "FindTns() failed. Skip checking for cutover enablement", err.Error())
+	} else if tnsnames == nil {
+		logger.GetLogger().Log(logger.Alert, "FindTns() return nil")
+	} else {
+		if !GetConfig().EnableSharding && !GetConfig().EnableTAF {
+			logicdbId := os.Getenv("TWO_TASK_CUTOVER")
+			if logicdbId != "" {
+
+				_, ok := tnsnames[logicdbId]
+				if ok {
+					logger.GetLogger().Log(logger.Alert, "Found TWO_TASK_CUTOVER", logicdbId)
+					if GetConfig().ReadonlyPct > 0 { // r/w split enabled
+						rlogicdbId := os.Getenv("TWO_TASK_OCC_CUTOVER")
+						_, ok = tnsnames[rlogicdbId]
+						if ok {
+							logger.GetLogger().Log(logger.Alert, "found [ TWO_TASK_CUTOVER, TWO_TASK_OCC_CUTOVER ] = [", logicdbId, ",", rlogicdbId)
+						}
+					}
+					if ok {
+						GetConfig().EnableCutover = true
+						logger.GetLogger().Log(logger.Alert, "enable cutover feature")
+					}
+				}
+			}
+		}
+	}
+
 	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
@@ -108,13 +146,14 @@ func Run() {
 
 	GetStateLog().SetStartTime(time.Now())
 
-	go func() {
+	// retiring opscfg plan for formal cleanup later.
+	/* go func() {
 		sleep := time.Duration(GetConfig().ConfigReloadTimeMs)
 		for {
 			time.Sleep(time.Millisecond * sleep)
 			CheckOpsConfigChange()
 		}
-	}()
+	}() */
 
 	CheckEnableProfiling()
 	GoStats()
@@ -137,6 +176,7 @@ func Run() {
 	}
 	for {
 		if pool.GetHealthyWorkersCount() > 0 {
+			logger.GetLogger().Log(logger.Alert, "shtien got healthy worker")
 			break
 		} else {
 			if GetConfig().EnableTAF {
@@ -147,6 +187,19 @@ func Run() {
 			}
 		}
 		time.Sleep(time.Millisecond * 100)
+	}
+
+	logger.GetLogger().Log(logger.Alert, "shtien wait for seconds")
+	time.Sleep(time.Second * 3)
+	logger.GetLogger().Log(logger.Alert, "end of seconds wait")
+	if GetConfig().EnableCutover {
+		err = InitCutoverCfg(*namePtr)
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err)
+			}
+			FullShutdown()
+		}
 	}
 	var lsn Listener
 	if GetConfig().KeyFile != "" {
@@ -164,6 +217,7 @@ func Run() {
 			FullShutdown()
 		}
 	}
+
 	InitRacMaint(*namePtr)
 
 	srv := NewServer(lsn, HandleConnection)
