@@ -25,19 +25,33 @@ var readMutex sync.Mutex
 var writeMutex sync.Mutex
 var txnMutex sync.Mutex
 
-var maxRetryCount = 5
+var maxRetryCount = 8
 var binaryPushDone = false
 var READ = "ReadType"
 var WRITE = "WriteType"
 var TXN = "TXNType"
 var STOP = "stop"
 var DumpLogs = "dumpLogs"
+var CreateTable = "CUT_OVER_CREATE"
+var CleanCutOver = "CUT_OVER_CLEAN"
 var CutOverEnable = "CUT_OVER_ENABLE"
+var CutOverEnableWrongOCC = "CUT_OVER_ENABLE_WRONG_OCC"
+var CutOverEnableInvalidUniqueName = "CUT_OVER_ENABLE_INVALID_UNIQUE_NAME"
+var CutOverEnableInvalidTNS = "CUT_OVER_ENABLE_INVALID_TNS"
+var CutOverEnableInvalidPhase = "CUT_OVER_ENABLE_INVALID_PHASE"
+var CutOverEnableInvalidRead = "CUT_OVER_ENABLE_INVALID_READ"
+var CutOverEnableInvalidWrite = "CUT_OVER_ENABLE_INVALID_WRITE"
+var CutOverEnableDualWrite = "CUT_OVER_ENABLE_DUAL_WRITE"
+var CutOverEnableDualRead = "CUT_OVER_ENABLE_DUAL_READ"
+var CutOverEnableWriteNoRead = "CUT_OVER_ENABLE_WRITE_NO_READ"
 var CutOverPre = "CUT_OVER_PRE"
 var CutOverPhaseI = "CUT_OVER_PHASE_1"
 var CutOverPhaseII = "CUT_OVER_PHASE_2"
 var CutOverPhaseIII = "CUT_OVER_PHASE_3"
 var CutOverComplete = "CUT_OVER_COMPLETE"
+var CutOverBroom = "CUT_OVER_BROOM"
+var DeleteCutOverTable = "CUT_OVER_TABLE_DELETE"
+var CutOverEnableInvalidNumRows = "CUT_OVER_INVALID_NUM_ROWS"
 
 var heraBoxHost = "10.183.162.56"
 
@@ -78,12 +92,6 @@ func dbService(dbUniqueName string, serviceName string, action string) []DBStatu
 	return status
 }
 
-func CleanCutOverTable(t *testing.T) {
-	query := "delete from pypl_occ_cutover"
-	QueryOracle(t, query, "False", "False")
-	QueryOracle(t, query, "True", "False")
-}
-
 func splitBySpace(input string) []string {
 	words := strings.Split(input, " ")
 	var fields []string
@@ -94,6 +102,52 @@ func splitBySpace(input string) []string {
 		}
 	}
 	return fields
+}
+
+func InitialSetup(t *testing.T) []DBStatus {
+	println("********************************")
+	println("SETTING THE ENV TO INITIAL SETUP")
+	println("********************************")
+
+	OCCBinarySetup(t, os.Getenv("GOPATH")+"/src/bin/mux")
+	ResetOCCDocker(t)
+
+	// disable read write split feature
+	OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
+	//EnableDebugLog(t)
+
+	// delete all the entries in the cut over metadata table
+	MoveCutOverPhase(t, DeleteCutOverTable, "InitialSetup", true, true)
+
+	// restart occ (without restarting docker) to pick the changes
+	RestartOCC(t)
+
+	// prepare db to initial state
+	StartDBService("HERADB_ONE", "herabox_primary_srv", t)
+	StartDBService("HERADB_TWO", "herabox_secondary_srv", t)
+
+	ShutDownDBService("HERADB_ONE", "herabox_secondary_srv", t)
+	ShutDownDBService("HERADB_TWO", "herabox_primary_srv", t)
+
+	LockUnlockUser(t, "unlock", false)
+
+	// validate if we are good in initial state
+	dbStatus, _ := GetDBStatus()
+	for _, db := range dbStatus {
+		for _, service := range db.DatabaseServices {
+			if strings.TrimSpace(db.DBUniqueName) == "HERADB_TWO" &&
+				strings.TrimSpace(service.ServiceName) == "herabox_primary_srv" && service.WorkerCount > 0 {
+				KillSessions(t, true, "herabox_primary_srv")
+				fmt.Println("Sleeping for 120 seconds for connection to jump back to main db")
+				time.Sleep(120 * time.Second)
+			}
+		}
+	}
+	dbStatus = LockUnlockUser(t, "unlock", true)
+	println("********************************")
+	println("END OF INITIAL SETUP")
+	println("********************************")
+	return dbStatus
 }
 
 func ValidateStateLog(t *testing.T, expected map[string]int) {
@@ -134,6 +188,9 @@ func ValidateStateLog(t *testing.T, expected map[string]int) {
 		}
 		if retryCount > maxRetryCount || len(expected) == 0 {
 			break
+		} else {
+			fmt.Println("Still need to validate:")
+			fmt.Println(expected)
 		}
 		retryCount += 1
 		time.Sleep(5 * time.Second)
@@ -144,17 +201,118 @@ func ValidateStateLog(t *testing.T, expected map[string]int) {
 	}
 }
 
-func MoveCutOverPhase(t *testing.T, phase string, comment string) {
+func execute(t *testing.T, query string, primary bool, secondary bool, ignoreORA bool, dbaUser string) {
+	if primary {
+		resp := QueryOracle(t, query, "False", dbaUser)
+		if strings.Contains(resp, "ORA-") && !ignoreORA {
+			t.Fatalf("Failed while reading response %s", resp)
+		}
+	}
+
+	if secondary {
+		resp := QueryOracle(t, query, "True", dbaUser)
+		if strings.Contains(resp, "ORA-") && !ignoreORA {
+			t.Fatalf("Failed while reading response %s", resp)
+		}
+	}
+}
+
+func MoveCutOverPhase(t *testing.T, phase string, comment string, primary bool, secondary bool) {
+	println("********************************")
+	println("     " + phase + "       ")
+	println("********************************")
+
 	switch phase {
 
+	case CleanCutOver:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+	case CreateTable:
+		query := "create table pypl_occ_cutover" +
+			"(  dbuname varchar2(50) not null," +
+			"   occ_name varchar2(50) not null," +
+			"   occ_two_task varchar2(30) not null," +
+			"   read_status char(1) not null," +
+			"   write_status char(1) not null," +
+			"   cutover_phase varchar(10)  not null," +
+			"   remarks varchar2(500)," +
+			"   constraint \\\"check_read_status_chk\\\" CHECK (read_status IN ('Y','N','X' )) ENABLE," +
+			"   constraint \\\"check_write_status_chk\\\" CHECK (write_status IN ('Y','N','X' )) ENABLE," +
+			"   constraint \\\"check_cutover_phase_chk\\\" CHECK (cutover_phase IN ('ENABLE','PRE','CUTOVER','COMPLETE','BROOM', 'invalid' )) ENABLE" +
+			")"
+		execute(t, query, primary, secondary, false, "True")
+
+		query = "create unique index pypl_occ_cutover_pk on pypl_occ_cutover(dbuname,occ_name,occ_two_task)"
+		execute(t, query, primary, secondary, false, "True")
+
+		query = "create index pypl_occ_cutover_dbun_idx on pypl_occ_cutover(dbuname)"
+		execute(t, query, primary, secondary, false, "True")
+
+		query = "create index pypl_occ_cutover_occname_idx on pypl_occ_cutover(occ_name)"
+		execute(t, query, primary, secondary, false, "True")
+
+		//query = "create public synonym pypl_occ_cutover for pypl_occ_cutover"
+		//execute(t, query, primary, secondary, false, "True")
+
+		query = "grant all on pypl_occ_cutover to clocapp"
+		execute(t, query, primary, secondary, false, "True")
+
+		break
+
 	case CutOverEnable:
-		CleanCutOverTable(t)
-		query := "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'Y', 'Y', 'ENABLE', '" +
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'Y', 'Y', 'ENABLE', '" +
 			comment + "');\\n" +
 			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER', 'N', 'N', 'ENABLE', '" +
 			comment + "')"
-		QueryOracle(t, query, "False", "False")
-		QueryOracle(t, query, "True", "False")
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case CutOverEnableWrongOCC:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ-wrong', 'CLOC', 'Y', 'Y', 'ENABLE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ-wrong', 'CLOC_CUTOVER', 'N', 'N', 'ENABLE', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case CutOverEnableInvalidUniqueName:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE_INVALID', 'occ', 'CLOC', 'Y', 'Y', 'ENABLE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO_INVALID', 'occ', 'CLOC_CUTOVER', 'N', 'N', 'ENABLE', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case CutOverEnableInvalidTNS:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC_INVALID', 'Y', 'Y', 'ENABLE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER_INVALID', 'N', 'N', 'ENABLE', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case CutOverEnableInvalidPhase:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'Y', 'Y', 'invalid', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER', 'N', 'N', 'invalid', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPre:
@@ -162,8 +320,7 @@ func MoveCutOverPhase(t *testing.T, phase string, comment string) {
 			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='PRE', remarks='" + comment +
 			"' where dbuname='HERADB_TWO' and occ_name='occ'\\n"
-		QueryOracle(t, query, "False", "False")
-		QueryOracle(t, query, "True", "False")
+		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPhaseI:
@@ -171,8 +328,7 @@ func MoveCutOverPhase(t *testing.T, phase string, comment string) {
 			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
 			"' where dbuname='HERADB_TWO' and occ_name='occ'"
-		QueryOracle(t, query, "False", "False")
-		QueryOracle(t, query, "True", "False")
+		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPhaseII:
@@ -180,24 +336,92 @@ func MoveCutOverPhase(t *testing.T, phase string, comment string) {
 			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set read_status='Y', remarks='" + comment +
 			"' where dbuname='HERADB_TWO' and occ_name='occ'"
-		QueryOracle(t, query, "False", "False")
-		QueryOracle(t, query, "True", "False")
+		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPhaseIII:
 		query := "update pypl_occ_cutover set write_status='Y', remarks='" + comment +
 			"' where dbuname='HERADB_TWO' and occ_name='occ'"
-		QueryOracle(t, query, "False", "False")
-		QueryOracle(t, query, "True", "False")
+		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverComplete:
-		query := "update pypl_occ_cutover set cutover_phase='COMPLETE', dbuname='HERADB_TWO', remarks='" + comment +
-			"' where occ_name='occ';"
-		QueryOracle(t, query, "False", "False")
-		QueryOracle(t, query, "True", "False")
+		query := "update pypl_occ_cutover set cutover_phase='COMPLETE', remarks='" + comment +
+			"' where occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
 		break
 
+	case CutOverBroom:
+		query := "update pypl_occ_cutover set cutover_phase='BROOM', remarks='" + comment +
+			"' where occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case DeleteCutOverTable:
+		query := "drop table pypl_occ_cutover"
+		execute(t, query, primary, secondary, true, "True")
+		break
+
+	case CutOverEnableInvalidNumRows:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'Y', 'Y', 'ENABLE', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
+		break
+	case CutOverEnableInvalidRead:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'X', 'Y', 'ENABLE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER', 'X', 'N', 'ENABLE', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case CutOverEnableInvalidWrite:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'Y', 'X', 'ENABLE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER', 'N', 'X', 'ENABLE', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case CutOverEnableWriteNoRead:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'N', 'Y', 'ENABLE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER', 'N', 'N', 'ENABLE', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
+		break
+	case CutOverEnableDualWrite:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'Y', 'Y', 'ENABLE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER', 'N', 'Y', 'ENABLE', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
+		break
+	case CutOverEnableDualRead:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'CLOC', 'Y', 'Y', 'ENABLE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'CLOC_CUTOVER', 'Y', 'N', 'ENABLE', '" +
+			comment + "')"
+		execute(t, query, primary, secondary, false, "False")
+		break
 	default:
 		t.Fatalf("Unknown cutover phase %s.\n", phase)
 	}
@@ -292,6 +516,23 @@ func StartOCCDocker(t *testing.T) {
 	}
 }
 
+func IsContainerUp(t *testing.T, name string) bool {
+	fmt.Printf("Checking Docker Status of %s\n", name)
+	url := "http://" + heraBoxHost + ":8000/docker_support?container=" + name + "&action=status"
+	response, err := http.Get(url)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	resp, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if strings.TrimSpace(string(resp)) == "true" {
+		return true
+	}
+	return false
+}
+
 func RestartOCC(t *testing.T) {
 	fmt.Println("restarting occ")
 	url := "http://" + heraBoxHost + ":8000/occ/restart_occ"
@@ -307,7 +548,7 @@ func RestartOCC(t *testing.T) {
 
 func QueryOracle(t *testing.T, query string, cutOver string, dbaUser string) string {
 	url := "http://" + heraBoxHost + ":8000/run_query?cut_over=" + cutOver + "&dba_user=" + dbaUser
-	jsonStr := "{\"query\":\"" + strings.Replace(query, strconv.Itoa(int('"')), "'", -1) + "\"" +
+	jsonStr := "{\"query\":\"" + query + "\"" +
 		", \"dba_user\": \"" + dbaUser + "\",\"cut_over\":\"" + cutOver + "\"}"
 
 	fmt.Printf("Running SQL: %s, cutOver=%s\n", strings.Replace(query, strconv.Itoa(int('"')), "'", -1), cutOver)
@@ -325,9 +566,7 @@ func QueryOracle(t *testing.T, query string, cutOver string, dbaUser string) str
 	if err != nil {
 		t.Fatalf("Failed while reading response %s", err)
 	}
-	if strings.Contains(string(body), "ORA-") {
-		t.Fatalf("Failed while reading response %s", body)
-	}
+
 	return string(body)
 }
 
@@ -399,11 +638,14 @@ func DefaultTns(t *testing.T) {
  4. start occ docker
  5. copy the new mux binary
  6. disable/enable read/write split
- 7. restart occ with sig hup command
 */
-func EnableCutOver(t *testing.T, enableRWSplit bool) {
+func EnableCutOver(t *testing.T, enableRWSplit bool, enableShard bool) {
 	fmt.Println("EnableCutOver")
-	response, err := http.Get("http://" + heraBoxHost + ":8000/enable_cut_over")
+	url := "http://" + heraBoxHost + ":8000/enable_cut_over"
+	if enableShard {
+		url += "?shard=True"
+	}
+	response, err := http.Get(url)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -414,27 +656,24 @@ func EnableCutOver(t *testing.T, enableRWSplit bool) {
 	if !enableRWSplit {
 		OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
 	}
-	EnableDebugLog(t)
-	MoveCutOverPhase(t, CutOverEnable, "TestCutOverEnable")
-	RestartOCC(t)
+	//EnableDebugLog(t)
 }
 
 func EnableDebugLog(t *testing.T) {
 	OCCConfig(t, "log_level", "4", "/x/web/LIVE/occ/occ.cdb")
 	OCCConfig(t, "log_level", "4", "/x/web/LIVE/occ/hera.txt")
 	OCCConfig(t, "opscfg.occ.server.log_level", "4", "/x/web/LIVE/opscfg/occ.cdb")
+	OCCConfig(t, "cal_handler", "file", "/x/web/LIVE/occ/cal_client.cdb")
+	OCCConfig(t, "cal_log_file", "./logs/logCalClient.txt", "/x/web/LIVE/occ/cal_client.cdb")
 }
 
-func PushTNSForComplete(t *testing.T) {
-	fmt.Println("PushTNSForComplete")
-	response, err := http.Get("http://" + heraBoxHost + ":8000/enable_cut_over?always_secondary=True")
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	_, err = io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
+func EnableSharding(t *testing.T) {
+	OCCConfig(t, "enable_sharding", "true", "/x/web/LIVE/occ/occ.cdb")
+	OCCConfig(t, "num_shards", "2", "/x/web/LIVE/occ/occ.cdb")
+	OCCConfig(t, "shard_key_name", "id", "/x/web/LIVE/occ/occ.cdb")
+	//OCCConfig(t, "sharding_algo", "hash", "/x/web/LIVE/occ/occ.cdb")
+	OCCConfig(t, "management_table_prefix", "pypl_occ", "/x/web/LIVE/occ/occ.cdb")
+
 }
 
 // ResetOCCDocker /**
@@ -518,7 +757,8 @@ func GetDBStatus() ([]DBStatus, map[string]map[string]bool) {
 	activeResponse := make(map[string]map[string]bool)
 	response, err := http.Get("http://" + heraBoxHost + ":8000/occ/status_from_db")
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		return status, activeResponse
 	}
 	responseData, err := io.ReadAll(response.Body)
 	if err != nil {
@@ -727,11 +967,13 @@ func ValidateFailureTraffic(t *testing.T, trafficStats map[int64]ClientTrafficSt
 
 		for dbId := 1; dbId < 3; dbId++ {
 			if cts.stats[queryType][dbId].successCount != 0 {
+				CT.DumpStats(trafficStats)
 				t.Fatalf("UTC: %d, Expected %s Query to fail but found in db %d", utc, queryType, dbId)
 			}
 		}
 
 		if cts.stats[queryType][0].failureCount == 0 {
+			CT.DumpStats(trafficStats)
 			t.Fatalf("UTC: %d, Expected failure for %s - but no failure found", utc, queryType)
 		}
 
@@ -750,22 +992,27 @@ func ValidateSuccessTraffic(t *testing.T, trafficStats map[int64]ClientTrafficSt
 
 		cts := trafficStats[utc]
 		if cts.stats[queryType][dbIdWithTraffic].successCount == 0 {
+			CT.DumpStats(trafficStats)
 			t.Fatalf("UTC: %d, Expected %s Query in DB: %d - but not found", utc, queryType, dbIdWithTraffic)
 		}
 
 		if cts.stats[queryType][dbIdWithTraffic].failureCount != 0 {
+			CT.DumpStats(trafficStats)
 			t.Fatalf("UTC: %d, Expected %s Query to succeed in DB: %d - but failed", utc, queryType, dbIdWithTraffic)
 		}
 
 		if cts.stats[queryType][dbIdNoTraffic].successCount != 0 {
+			CT.DumpStats(trafficStats)
 			t.Fatalf("UTC: %d, Not expecting %s Query in DB: %d - but found", utc, queryType, dbIdWithTraffic)
 		}
 
 		if cts.stats[queryType][dbIdNoTraffic].failureCount != 0 {
+			CT.DumpStats(trafficStats)
 			t.Fatalf("UTC: %d, Not expecting %s Query in DB: %d - but found as failures", utc, queryType, dbIdWithTraffic)
 		}
 
 		if cts.stats[queryType][0].failureCount > 0 || cts.stats[queryType][1].failureCount > 0 {
+			CT.DumpStats(trafficStats)
 			t.Fatalf("UTC: %d, Expected No %s failure. DB1: %d failed, DB2: %d failed", utc, queryType,
 				cts.stats[queryType][0].failureCount, cts.stats[queryType][1].failureCount)
 		}
@@ -815,13 +1062,13 @@ func ValidateWorkerCountFromDatabase(dbUniqueName string, serviceName string,
 	// retry in case of temp failures
 	for {
 		validationSuccess = false
+		retry = false
 		workerFound = false
 		// load status from database
 		databaseServices, _ := GetDBStatus()
 
 		// for each database
 		for _, db := range databaseServices {
-
 			// for each database service
 			for _, service := range db.DatabaseServices {
 				if strings.TrimSpace(db.DBUniqueName) == dbUniqueName &&
@@ -842,9 +1089,9 @@ func ValidateWorkerCountFromDatabase(dbUniqueName string, serviceName string,
 							break
 						}
 					} else {
-						fmt.Printf("Validation for %s:%s - Success:\n ExpectedWorker Count: %d\n Actual WorkerCount: "+
-							"%d\n", strings.TrimSpace(db.DBUniqueName), strings.TrimSpace(service.ServiceName),
-							expectedWorkerCount, service.WorkerCount)
+						//fmt.Printf("Validation for %s:%s - Success:\n ExpectedWorker Count: %d\n Actual WorkerCount: "+
+						//	"%d\n", strings.TrimSpace(db.DBUniqueName), strings.TrimSpace(service.ServiceName),
+						//	expectedWorkerCount, service.WorkerCount)
 						validationSuccess = true
 						break
 					}
@@ -855,7 +1102,7 @@ func ValidateWorkerCountFromDatabase(dbUniqueName string, serviceName string,
 			}
 		}
 
-		if retryCount >= maxRetryCount || validationSuccess {
+		if retryCount >= maxRetryCount || validationSuccess || expectedWorkerCount == -1 {
 			break
 		}
 		retryCount += 1

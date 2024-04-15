@@ -284,7 +284,7 @@ func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	}
 }
 
-func (ct ClientTraffic) dumpStats(CTS map[int64]ClientTrafficStats) {
+func (ct ClientTraffic) DumpStats(CTS map[int64]ClientTrafficStats) {
 	fmt.Println("**************")
 	fmt.Println("QueryStats")
 	fmt.Println("**************")
@@ -320,7 +320,7 @@ func (ct ClientTraffic) SendClientTraffic(wg *sync.WaitGroup) (chan map[int64]Cl
 func (ct ClientTraffic) StopClientTraffic(CTSChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
 	ct.RunMsg <- STOP
 	d := <-CTSChan
-	ct.dumpStats(d)
+	//ct.DumpStats(d)
 	return d
 }
 
@@ -328,7 +328,6 @@ func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTraffic
 	fmt.Println("DumpTrafficStat")
 	ct.RunMsg <- DumpLogs
 	d := <-DumpLogChan
-	ct.dumpStats(d)
 	return d
 }
 
@@ -365,7 +364,7 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 			go ct.txnTraffic(CTS, n)
 			go ct.writeTraffic(CTS, n)
 			started = true
-			time.Sleep(300 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 		}
 	}
 
