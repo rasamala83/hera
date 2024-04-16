@@ -5,15 +5,10 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/paypal/hera/client/gosqldriver"
 	"github.com/paypal/hera/tests/util"
-	"github.com/paypal/hera/utility/logger"
 	"sync"
 	"testing"
 	"time"
 )
-
-func init() {
-	logger.CreateLogger("log.txt", "UT", logger.Info)
-}
 
 func TestCutOverPositive(t *testing.T) {
 
