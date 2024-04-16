@@ -9,6 +9,7 @@ COPY oracle-instant-client-19.17.0.0.tar.gz oracle-instant-client-19.17.0.0.tar.
 
 RUN mkdir -p /usr/local/go$CURRENT_GO_VERSION
 RUN mkdir -p /x/home/oracle/product/
+RUN mkdir -p /pypl/
 
 RUN apt-get update && \
     apt-get install -y alien && \
@@ -24,6 +25,10 @@ RUN mkdir -p /opt/instantclient_19_17/sdk/include && \
 
 RUN mkdir -p /go$CURRENT_GO_VERSION/src/pypl_patch
 COPY ./go${CURRENT_GO_VERSION}_patch/* /go${CURRENT_GO_VERSION}/src/pypl_patch
+COPY env.sh /pypl/
+COPY comp.sh /pypl/
+COPY dep.sh /pypl/
+COPY test.sh /pypl/
 
 WORKDIR  /usr/local/go$CURRENT_GO_VERSION/go/
 RUN patch -p1 < /go${CURRENT_GO_VERSION}/src/pypl_patch/sessionID.patch && \
