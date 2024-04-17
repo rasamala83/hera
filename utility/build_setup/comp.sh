@@ -1,21 +1,37 @@
-CURRENT_GO_VERSION="go1.18.2"
-echo "Setting the env"
-export BASEPATH=$PATH
-export GOPATH=/$CURRENT_GO_VERSION
-export GOBIN=/$CURRENT_GO_VERSION/bin
-mkdir -p $GOBIN
-export GOROOT=/usr/local/$CURRENT_GO_VERSION/go
-export GO111MODULE="auto"
-export GOFLAGS="-count=1"
-export PATH=$GOPATH/bin:/usr/local/$CURRENT_GO_VERSION/bin:$BASEPATH
-export PATH=/x/opt/pp/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
-export PATH=$GOROOT/bin/:/x/opt/pp/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/lib
-export PKG_CONFIG_PATH=/x/opt/ppopenssl-1.0.1e/lib/pkgconfig
+source /pypl/env.sh
 cd $GOPATH/src
 cd github.com/paypal/hera/
+go mod tidy
+mkdir $GOROOT/src/utility
+cp -af ../../../utility/* $GOROOT/src/utility/
+go get github.com/youmark/pkcs8
+rm -rf /go1.18.2/pkg/mod/github.com/youmark/pkcs8\@v0.0.0-20201027041543-1326539a0a0a/*
+cp ../../youmark/pkcs8/* /go1.18.2/pkg/mod/github.com/youmark/pkcs8\@v0.0.0-20201027041543-1326539a0a0a/
 echo "compiling..."
-$GOROOT/bin/go install github.com/paypal/hera/{mux,watchdog,worker/mysqlworker,worker/postgresworker}
+
+
+if [ "$COMPILE_MUX" == "true" ]
+then
+   $GOROOT/bin/go install github.com/paypal/hera/mux
+else
+    echo "If you want to complile mux set env COMPILE_MUX to true"
+fi
+
+if [ "$COMPILE_WATCHDOG" == "true" ]
+then
+   $GOROOT/bin/go install github.com/paypal/hera/watchdog
+else
+    echo "If you want to complile watchdog set env COMPILE_WATCHDOG to true"
+fi
+
+if [ "$COMPILE_WORKER" == "true" ]
+then
+   $GOROOT/bin/go install github.com/paypal/hera/worker/mysqlworker
+   $GOROOT/bin/go install github.com/paypal/hera/worker/postgresworker
+else
+    echo "If you want to complile worker set env COMPILE_WORKER to true"
+fi
+
 
 if [ "$COMPCC" == "true" ]
 then
