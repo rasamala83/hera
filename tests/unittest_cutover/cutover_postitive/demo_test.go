@@ -51,19 +51,21 @@ func TestCutOverDemo(t *testing.T) {
 	beforeCutOverStart := time.Now().Unix()
 
 	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	util.CT.DumpStats(trafficStats)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeCutOverStart-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeCutOverStart-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeCutOverStart-3, 1, 2)
 
 	count := 0
 	for {
-		util.CT.DumpStats(util.CT.DumpTrafficStat(respChan))
+		trafficStats = util.CT.DumpTrafficStat(dumpChan)
+		util.CT.DumpStats(trafficStats)
 		_, activeResponse := util.GetDBStatus()
 		fmt.Println(activeResponse)
 		fmt.Println("Sleeping for 10 seconds")
 		time.Sleep(10 * time.Second)
 		count += 1
-		if count >= 2 {
+		if count >= 60 {
 			break
 		}
 	}

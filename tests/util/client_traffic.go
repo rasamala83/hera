@@ -179,8 +179,9 @@ func (ct ClientTraffic) checkAndCreateStruct(utc int64, CTS map[int64]ClientTraf
 
 func (ct ClientTraffic) CreateCounter(utc int64, counterType string, CTS map[int64]ClientTrafficStats) {
 	ct.checkAndCreateStruct(utc, CTS)
-
+	m := ct.getMutexForType(counterType)
 	statMutex.Lock()
+	m.Lock()
 	_, ok := CTS[utc].stats[counterType]
 	if !ok {
 		CTS[utc].stats[counterType][0] = &queryStats{}
@@ -188,7 +189,7 @@ func (ct ClientTraffic) CreateCounter(utc int64, counterType string, CTS map[int
 		CTS[utc].stats[counterType][2] = &queryStats{}
 	}
 	statMutex.Unlock()
-
+	m.Unlock()
 }
 
 func (ct ClientTraffic) txnTraffic(CTS map[int64]ClientTrafficStats, n int64) {
