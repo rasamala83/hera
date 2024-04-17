@@ -84,7 +84,7 @@ func main() {
 	}
 }
 
-//Check whether path exist or not
+// Check whether path exist or not
 func isExist(filePath *string) bool {
 	_, err := os.Stat(*filePath)
 	if err == nil {
@@ -96,7 +96,7 @@ func isExist(filePath *string) bool {
 	return false
 }
 
-//Load configfile if it fails to load then return error
+// Load configfile if it fails to load then return error
 func initializeConfig() (config.Config, error) {
 	currentDir, abserr := filepath.Abs(filepath.Dir(os.Args[0]))
 
@@ -117,14 +117,14 @@ func initializeConfig() (config.Config, error) {
 	logFile = currentDir + logFile
 	logLevel := cdb.GetOrDefaultInt("log_level", logger.Info)
 
-	err = logger.CreateLogger(logFile, "PROXY", int32(logLevel))
+	err = logger.CreateLogger(logFile, "PROXY", int32(logLevel), true)
 	if err != nil {
 		return nil, err
 	}
 	return cdb, nil
 }
 
-//Initializes state-log
+// Initializes state-log
 func initializeStateLog() error {
 	currentDir, absperr := filepath.Abs(filepath.Dir(os.Args[0]))
 	if absperr != nil {
@@ -144,7 +144,7 @@ func initializeStateLog() error {
 	return nil
 }
 
-//Write watchdog process details to a file
+// Write watchdog process details to a file
 func writePidToFile(currentDir string, cdb config.Config) error {
 	pidFile := cdb.GetOrDefaultString("pid_file", "occ.pid")
 	pidFile = currentDir + pidFile

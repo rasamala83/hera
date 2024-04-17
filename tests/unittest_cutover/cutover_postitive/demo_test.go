@@ -12,7 +12,7 @@ import (
 func TestCutOverDemo(t *testing.T) {
 	// bring the setup to initial state
 	//OCC running with only one db in TNS, no env set for cut over, cut over table is empty
-	logger.CreateLogger("log.txt", "UT", logger.Alert)
+	logger.CreateLogger("log.txt", "UT", logger.Alert, false)
 
 	util.InitialSetup(t)
 

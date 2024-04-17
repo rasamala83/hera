@@ -20,9 +20,9 @@ package shared
 import (
 	"fmt"
 	"math/rand"
-	"path/filepath"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -61,7 +61,7 @@ type workerConfig struct {
 func Start(adapter CmdProcessorAdapter) {
 	currentDir, abserr := filepath.Abs(filepath.Dir(os.Args[0]))
 	if abserr != nil {
-		currentDir = "./"  
+		currentDir = "./"
 	} else {
 		currentDir = currentDir + "/"
 	}
@@ -81,9 +81,9 @@ func Start(adapter CmdProcessorAdapter) {
 		logPrefix = "WORKER"
 	}
 	logPrefix += fmt.Sprintf(" %d", os.Getpid())
-	
+
 	logfilename := currentDir + cfg.GetOrDefaultString("log_file", "hera.log")
-	err = logger.CreateLogger(logfilename, logPrefix, int32(logLevel))
+	err = logger.CreateLogger(logfilename, logPrefix, int32(logLevel), true)
 	if err != nil {
 		return
 	}
