@@ -97,7 +97,7 @@ func CreateLogger(fileName string, procName string, severity int32) error {
 		return fmt.Errorf("Failed! open log file")
 	}
 	// redirect stdout and stderr to this file
-	dup(int(file.Fd()))
+	//dup(int(file.Fd()))
 	createLogger(file, procName, severity)
 	return nil
 }
