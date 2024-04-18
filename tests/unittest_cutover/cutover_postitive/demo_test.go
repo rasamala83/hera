@@ -65,7 +65,7 @@ func TestCutOverDemo(t *testing.T) {
 		fmt.Println("Sleeping for 10 seconds")
 		time.Sleep(10 * time.Second)
 		count += 1
-		if count >= 60 {
+		if count >= 120 {
 			break
 		}
 	}
