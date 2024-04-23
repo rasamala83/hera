@@ -20,9 +20,9 @@ package shared
 import (
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -81,7 +81,6 @@ func Start(adapter CmdProcessorAdapter) {
 		logPrefix = "WORKER"
 	}
 	logPrefix += fmt.Sprintf(" %d", os.Getpid())
-
 	logfilename := currentDir + cfg.GetOrDefaultString("log_file", "hera.log")
 	err = logger.CreateLogger(logfilename, logPrefix, int32(logLevel))
 	if err != nil {
