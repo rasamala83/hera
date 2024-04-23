@@ -5,14 +5,13 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/paypal/hera/client/gosqldriver"
 	"github.com/paypal/hera/tests/util"
-	"github.com/paypal/hera/utility/logger"
 	"sync"
 	"testing"
 	"time"
 )
 
 func TestCutOverPositive(t *testing.T) {
-	logger.CreateLoggerInternal("log.txt", "UT", logger.Alert, false)
+
 	// bring the setup to initial state
 	//OCC running with only one db in TNS, no env set for cut over, cut over table is empty
 	util.InitialSetup(t)

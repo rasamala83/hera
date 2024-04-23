@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/paypal/hera/utility/logger"
 	"io"
 	"log"
 	"net/http"
@@ -105,6 +106,7 @@ func splitBySpace(input string) []string {
 }
 
 func InitialSetup(t *testing.T) []DBStatus {
+	_ = logger.CreateLoggerInternal("log.txt", "UT", logger.Alert, false)
 	println("********************************")
 	println("SETTING THE ENV TO INITIAL SETUP")
 	println("********************************")
