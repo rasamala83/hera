@@ -83,7 +83,7 @@ func Start(adapter CmdProcessorAdapter) {
 	logPrefix += fmt.Sprintf(" %d", os.Getpid())
 
 	logfilename := currentDir + cfg.GetOrDefaultString("log_file", "hera.log")
-	err = logger.CreateLogger(logfilename, logPrefix, int32(logLevel), true)
+	err = logger.CreateLogger(logfilename, logPrefix, int32(logLevel))
 	if err != nil {
 		return
 	}

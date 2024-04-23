@@ -251,7 +251,7 @@ func InitConfig() error {
 	logFile = currentDir + logFile
 	logLevel := cdb.GetOrDefaultInt("log_level", logger.Info)
 
-	err = logger.CreateLogger(logFile, "PROXY", int32(logLevel), true)
+	err = logger.CreateLogger(logFile, "PROXY", int32(logLevel))
 	if err != nil {
 		FullShutdown()
 	}
