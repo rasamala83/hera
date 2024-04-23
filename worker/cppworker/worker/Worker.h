@@ -205,6 +205,9 @@ protected:
 
 	void set_txn_time_offset(bool _reset=false);
 
+	// support action during cutover
+	virtual void cutover_support();
+
 protected:
 	bool check_max_requests_and_lifespan();
 	std::string m_protocol_version;

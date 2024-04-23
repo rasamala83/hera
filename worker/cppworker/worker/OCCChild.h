@@ -341,6 +341,11 @@ public:
 
 	//break long oci call to prevent hang on long query
 	int break_oci_call();
+
+	// start/stop check and set user_role
+	int check_set_user_role();
+
+
 protected:
 	
 	// do idle processing: check cache expiration and send heartbeat
@@ -523,6 +528,10 @@ private:
 	void check_OCI_SUCCESS_WITH_INFO(int& _rc, const char* _message, LogLevelEnum _log_level);
 
 	void set_orig_query_hash(const std::string& _query);
+
+	int set_role_for_the_session ();
+
+	int fetch_enabled_role();
 
 };
 

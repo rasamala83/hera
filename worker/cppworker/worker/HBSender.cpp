@@ -34,6 +34,7 @@ HBSender* HBSender::the_hbsender = NULL;
 HBSender::HBSender(OCCChild* _occ_child, int _timeout, pid_t _ppid, int _ctrl_fd) {
 	m_occ_child = _occ_child;
 	m_timeout = _timeout;
+	// if cutover is enabled, we need to 
 	m_is_enabled = false;
 	m_rq_id = 0;
 	m_ppid = _ppid;
@@ -111,7 +112,6 @@ void HBSender::run() {
 	while(1) {
 
 		int snooze_time = get_snooze_time();
-
 		if (snooze_time > 0 ) {
 			if (wait_for_ctrl(snooze_time)) {
 				if (!handle_ctrl())
@@ -168,6 +168,18 @@ bool HBSender::handle_ctrl()
 	// capture the req_id which can be used during recover() so as to not recover different req_id due to race condition
 	m_occ_child->set_id_to_abort(rq_id);
 	uint16_t flags = data[0];
+
+
+	if (flags == ControlMessage::CUTOVER_START_CHECK_ROLE) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "DB cutover start check user role")
+		m_occ_child->start_check_user_role();
+	} else if (flags == ControlMessage::CUTOVER_STOP_CHECK_ROLE) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "DB cutover stop check user role")
+		m_occ_child->stop_check_user_role();
+	} 
+
+
+
 
 	if (flags == ControlMessage::STRANDED_SKIP_BREAK) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "high load, skipping break");

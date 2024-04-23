@@ -5774,3 +5774,261 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 	}
 	return 0;
 }
+
+
+/* Mux will inform the worker to do this when cutover phase is cutover.
+1. SELECT enable_role FROM pypl_occ_cutover WHERE occ_two_task = <this TWO_TASK> and occ_name = <module>, return exact 1 row, as role_X.
+2. SELECT role FROM session_roles WHERE role = 'role_X';
+2.1 if return 1 role, we are good.
+2.2 if return 0 role, we run SET ROLE 'role_X'; if err, maybe recycle the connection?
+3. We will need to enable heartbeat to make sure stop runaway txn
+*/
+
+int OCCChild:get_session_role(std::string my_role) {
+	const char roleSQL[] = fprintf("SELECT role FROM session_roles WHERE role = '%s'", my_role);
+
+	OCIStmt *stmthp = NULL;
+	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+	if (rc != OCI_SUCCESS) {
+		return -1;
+	}
+
+	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(roleSQL), strlen(roleSQL), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	if (rc != OCI_SUCCESS) {
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		log_oracle_error(rc, "fetch_role failed to prepare statement.", LOG_INFO);
+		return -1;
+	}
+
+	char role[128] = {\0};
+	OCIDefine *defnp[2] = {NULL};
+	rc = OCIDefineByPos(
+			stmthp, &defnp[0], errhp,
+			1, (dvoid *) role, sizeof(role), SQLT_STR,
+			NULL, NULL, NULL, OCI_DEFAULT
+		);
+	if (rc != OCI_SUCCESS) {
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		log_oracle_error(rc, "fetch_role failed to define output parameter 1.", LOG_INFO);
+		return -1;
+	}
+
+	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
+	if (rc != OCI_NO_DATA && rc != OCI_SUCCESS) {
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		log_oracle_error(rc, "fetch_role failed to execute maint statement", LOG_INFO);
+		return -1;
+	}
+
+	int row = 0;
+	do {
+		rc = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
+
+		int fetched;
+		OCIAttrGet(stmthp, OCI_HTYPE_STMT, (void*)&fetched, NULL, OCI_ATTR_ROWS_FETCHED, errhp);
+		WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "fetch_role fetched %d rows", fetched);
+			
+		row += fetched;
+		if(row > 1) {
+			WRITE_LOG_ENTRY(logfile, LOG_INFO, "error: fetch_role fetched more than 1 row!");
+			break;
+		}
+	
+		// handling the data role
+		if (rc == OCI_NO_DATA) {
+			if (row == 0) {
+				WRITE_LOG_ENTRY(logfile, LOG_INFO, "error: fetch_role fetched 0 row!");
+				return -1;
+			}
+			break
+		}
+	}
+
+	if(rc < 0) {
+		log_oracle_error(rc, "fetch_role failed", LOG_INFO);
+	}
+	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
+		log_oracle_error(rc, "Failed to free (maint)statement handle.");
+		return -1;
+	}
+	WRITE_LOG_ENTRY(logfile, LOG_INFO, "fetch role from session tbl [", role, "]"
+	cal_trans.Completed(CAL::TRANS_OK);
+
+	if (row == 1) { // already correct
+		return 0;
+	}
+	return 1; // indicate no data
+}
+
+
+int OCCChild::set_role_for_the_session (){
+	std::string my_role;
+	// find out what enabled_role the user should apply from cutover config
+	// required to check user role
+	// TODO: maybe check at intervals
+	rc = fetch_enabled_role(my_role);
+	if (rc < 0) { // error
+		return rc;
+	}
+	StringUtil::trim(my_role);
+	if (StringUtil::compare_ignore_case(my_role, m_cur_user_role) == 0) {
+		// already set correct
+		return 1;
+	}
+	// find out what current role the user has
+	rc = get_session_role(my_role);
+	if (rc < 0) { 
+		return rc;
+	}
+	if (rc == 0) {
+		m_cur_user_role = my_role;
+		return rc;
+	}
+	
+	const char set_role_SQL[] = fprintf("SET ROLE %s", my_role);
+	CalTransaction cal_trans("CUTOVER");
+	cal_trans.SetName("set_role");
+	OCIStmt *stmthp = NULL;
+	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+	if (rc != OCI_SUCCESS) {
+		return -1;
+	}
+
+	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(set_role_sql), strlen(set_role_SQL), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	if (rc != OCI_SUCCESS) {
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		log_oracle_error(rc, "fetch_role failed to prepare statement.", LOG_INFO);
+		return -1;
+	}
+
+	hb_sender->enable();
+	{
+		// execute the statement
+		rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
+	}
+
+	if (hb_sender)
+		hb_sender->disable();
+	
+/*	rc = OCITransCommit(svchp, errhp, OCI_DEFAULT);
+	if(rc!=OCI_SUCCESS) {
+		int errcode = sql_error(rc, NULL);
+		String status_msg;
+		CalEvent cal_e("CUTOVER");
+        cal_e.SetName("commit_error");
+		status_msg.copy_formatted("Failed: ORA-%05d", errcode);
+		cal_e->AddData(CAL_DATA_RC, status_msg);
+		cal_e->SetStatus(CalTransaction::Status(CAL::TRANS_ERROR, CAL::MOD_OCC, CAL::SYS_ERR_ORACLE, errcode));
+		return -1;
+	}
+*/
+	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
+		log_oracle_error(rc, "Failed to free (maint)statement handle.");
+		return -1;
+	}
+
+	WRITE_LOG_ENTRY(logfile, LOG_INFO, "fetch role from cutover tbl [", role, "]"
+	cal_trans.Completed(CAL::TRANS_OK);
+	m_cur_user_role = my_role;
+	return 1;
+}
+
+int OCCChild::fetch_enabled_role (std::string& _role)
+{
+
+	char *tns = getenv("TWO_TASK");
+	// fetch enabled role from pypl_occ_cutover, expect 1 row to return.
+	if (!tns) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "TWO_TASK is NULL");
+		return -1
+	}
+	const char cutoverSQL[] = fprintf("SELECT enable_role FROM pypl_occ_cutover WHERE occ_two_task = '%s' AND occ_name = '%s';", tns, m_module_info.c_str()); 
+
+	CalTransaction cal_trans("CUTOVER");
+	cal_trans.SetName("get_role_from_cutover");
+
+	OCIStmt *stmthp = NULL;
+	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+	if (rc != OCI_SUCCESS) {
+		return -1;
+	}
+
+	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(cutoverSQL), strlen(cutoverSQL), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	if (rc != OCI_SUCCESS) {
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		log_oracle_error(rc, "fetch_role failed to prepare statement.", LOG_INFO);
+		return -1;
+	}
+
+	char role[128] = {\0};
+	OCIDefine *defnp[2] = {NULL};
+	rc = OCIDefineByPos(
+			stmthp, &defnp[0], errhp,
+			1, (dvoid *) role, sizeof(role), SQLT_STR,
+			NULL, NULL, NULL, OCI_DEFAULT
+			);
+		if (rc != OCI_SUCCESS) {
+			DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			log_oracle_error(rc, "fetch_role failed to define output parameter 1.", LOG_INFO);
+			return -1;
+		}
+
+		rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
+		if (rc != OCI_NO_DATA && rc != OCI_SUCCESS) {
+			DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			log_oracle_error(rc, "fetch_role failed to execute maint statement", LOG_INFO);
+			return -1;
+		}
+
+		int row = 0;
+		do {
+			rc = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
+
+			int fetched;
+			OCIAttrGet(stmthp, OCI_HTYPE_STMT, (void*)&fetched, NULL, OCI_ATTR_ROWS_FETCHED, errhp);
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "fetch_role fetched %d rows", fetched);
+			
+			row += fetched;
+			if(row > 1) {
+				WRITE_LOG_ENTRY(logfile, LOG_INFO, "error: fetch_role fetched more than 1 row!");
+				break;
+			}
+	
+			// handling the data role
+			if (rc == OCI_NO_DATA) {
+				if (row == 0) {
+					WRITE_LOG_ENTRY(logfile, LOG_INFO, "error: fetch_role fetched 0 row!");
+					return -1;
+				}
+				break
+			}
+		}
+
+		if(rc < 0) {
+			log_oracle_error(rc, "fetch_role failed", LOG_INFO);
+		}
+
+		if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
+			log_oracle_error(rc, "Failed to free (maint)statement handle.");
+			return -1;
+		}
+
+		WRITE_LOG_ENTRY(logfile, LOG_INFO, "fetch role from cutover tbl [", role, "]"
+		_role = role;
+		cal_trans.Completed(CAL::TRANS_OK);
+		return 1;
+}
+
+int OCCChild::check_set_user_role(bool enable) {
+	m_set_user_role = enable;
+	return 0;
+}
+
+void OCCChild::cutover_support() {
+	if (m_set_user_role) {
+		if ( set_role_for_the_session() < 0 ) {
+			WRITE_LOG_ENTRY(logfile, LOG_ALERT, "error: set_role_for_the_seesion() failed");
+		}
+	}
+	return;
+}

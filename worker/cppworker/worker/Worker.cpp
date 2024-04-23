@@ -297,6 +297,7 @@ void Worker::on_idle(void)
 	if (check_max_requests_and_lifespan()) {
 		//TODO
 	}
+	cutover_support();
 }
 
 //-----------------------------------------------------------------------------
