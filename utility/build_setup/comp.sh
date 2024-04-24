@@ -6,7 +6,7 @@ mkdir $GOROOT/src/utility
 cp -af ../../../utility/* $GOROOT/src/utility/
 go get github.com/youmark/pkcs8
 rm -rf /go1.18.2/pkg/mod/github.com/youmark/pkcs8\@v0.0.0-20201027041543-1326539a0a0a/*
-cp ../../youmark/pkcs8/* /go1.18.2/pkg/mod/github.com/youmark/pkcs8\@v0.0.0-20201027041543-1326539a0a0a/
+cp ../../youmark/pkcs8/* /go1.18.2/pkg/mod/github.com/youmark/pkcs8\@v0.0.0-20240424034433-3c2c7870ae76/
 echo "compiling..."
 
 
