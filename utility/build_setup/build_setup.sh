@@ -14,4 +14,4 @@ if [ ! -f $FILE ]; then
   curl -sSf -O https://artifactory.paypalcorp.com/artifactory/generic-uploads/3rdparty/oracle/oracle-instant-client-19.17.0.0.tar.gz
 fi
 
-docker build --quiet -t occbld -f Dockerfile.build  .
+docker build -t occbld -f Dockerfile.build  .

@@ -19,5 +19,5 @@ cd github.com/paypal/hera/
 #go install github.com/matm/gocov-html/cmd/gocov-html@latest
 #$GOBIN/gocov test -timeout=20m -v github.com/paypal/hera/tests/$1 | $GOBIN/gocov-html > /$CURRENT_GO_VERSION/src/reports/coverage.html
 go install gotest.tools/gotestsum@latest
-$GOBIN/gotestsum  --junitfile /$CURRENT_GO_VERSION/src/reports/report.xml  --format standard-verbose github.com/paypal/hera/tests/$1
+$GOBIN/gotestsum  --junitfile /$CURRENT_GO_VERSION/src/reports/report.xml  --format standard-verbose github.com/paypal/hera/tests/$1 -test.timeout 99999s
 #go test -v github.com/paypal/hera/tests/$1 -count=1 -timeout 99999s
