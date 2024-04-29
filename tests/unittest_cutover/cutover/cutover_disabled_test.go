@@ -33,7 +33,7 @@ func TestCutOverDisabled(t *testing.T) {
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 0, t)
@@ -75,7 +75,7 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 0, t)
@@ -95,7 +95,7 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 12, t)
 
 	stateLog["occ.co"] = 12
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus != true {
@@ -206,7 +206,7 @@ func TestCutOverEnabledShardedDataBase(t *testing.T) {
 	stateLog := make(map[string]int)
 	stateLog["occ.sh0"] = 25
 	stateLog["occ.sh1"] = 25
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
@@ -272,7 +272,7 @@ func TestCutOverEnabledInvalidUniqueID(t *testing.T) {
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 1
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
@@ -435,7 +435,7 @@ func TestCutOverEnabledWriteEnabledButNotRead(t *testing.T) {
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 1
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)

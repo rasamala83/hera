@@ -23,6 +23,7 @@ type ClientTraffic struct {
 	ReadTraffic        bool
 	WriteTraffic       bool
 	TransactionTraffic bool
+	InProgress         bool
 }
 
 type ClientTrafficStats struct {
@@ -315,12 +316,14 @@ func (ct ClientTraffic) SendClientTraffic(wg *sync.WaitGroup) (chan map[int64]Cl
 	CTSChan := make(chan map[int64]ClientTrafficStats)
 	DumpChan := make(chan map[int64]ClientTrafficStats)
 	go ct.traffic(wg, ct.RunMsg, CTSChan, DumpChan)
+	ct.InProgress = true
 	return CTSChan, DumpChan
 }
 
 func (ct ClientTraffic) StopClientTraffic(CTSChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
 	ct.RunMsg <- STOP
 	d := <-CTSChan
+	ct.InProgress = false
 	//ct.DumpStats(d)
 	return d
 }
@@ -333,7 +336,10 @@ func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTraffic
 }
 
 func (ct ClientTraffic) TearDown() {
-	ct.RunMsg <- STOP
+	if ct.InProgress {
+		ct.RunMsg <- KILL
+		ct.InProgress = false
+	}
 }
 
 func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
@@ -348,6 +354,9 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 		select {
 		case inp := <-runMsg:
 			switch inp {
+			case KILL:
+				fmt.Println("Kill - Client Traffic")
+				return
 			case STOP:
 				fmt.Println("Stopping Client Traffic")
 				CTChan <- CTS

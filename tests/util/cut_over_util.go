@@ -32,6 +32,7 @@ var READ = "ReadType"
 var WRITE = "WriteType"
 var TXN = "TXNType"
 var STOP = "stop"
+var KILL = "kill"
 var DumpLogs = "dumpLogs"
 var CreateTable = "CUT_OVER_CREATE"
 var CleanCutOver = "CUT_OVER_CLEAN"
@@ -110,6 +111,7 @@ func InitialSetup(t *testing.T) []DBStatus {
 	println("********************************")
 	println("SETTING THE ENV TO INITIAL SETUP")
 	println("********************************")
+	CT.TearDown()
 
 	OCCBinarySetup(t, os.Getenv("GOPATH")+"/src/bin/mux")
 	ResetOCCDocker(t)
@@ -152,7 +154,7 @@ func InitialSetup(t *testing.T) []DBStatus {
 	return dbStatus
 }
 
-func ValidateStateLog(t *testing.T, expected map[string]int) {
+func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {
 	fmt.Println("Validating State Logs")
 	retryCount := 0
 	for {
@@ -176,8 +178,12 @@ func ValidateStateLog(t *testing.T, expected map[string]int) {
 				accept, _ := strconv.Atoi(words[4])
 				wait, _ := strconv.Atoi(words[5])
 				if expectedWorkerCount != accept+wait && retryCount == maxRetryCount {
-					t.Fatalf("State Log Validation failed for %s at %s %s - Expected Worker Count: %d vs Actual %d",
-						words[2], words[0], words[1], expectedWorkerCount, accept+wait)
+					if fail {
+						t.Fatalf("State Log Validation failed for %s at %s %s - Expected Worker Count: %d vs Actual %d",
+							words[2], words[0], words[1], expectedWorkerCount, accept+wait)
+					} else {
+						return false
+					}
 				} else if expectedWorkerCount == accept+wait {
 					delete(expected, words[2])
 				} else if expectedWorkerCount != accept+wait && retryCount < maxRetryCount {
@@ -199,8 +205,13 @@ func ValidateStateLog(t *testing.T, expected map[string]int) {
 		fmt.Println("Retry - Validating State Logs")
 	}
 	for key := range expected {
-		t.Fatalf("Unable to find state log for %s", key)
+		if fail {
+			t.Fatalf("Unable to find state log for %s", key)
+		} else {
+			return false
+		}
 	}
+	return true
 }
 
 func execute(t *testing.T, query string, primary bool, secondary bool, ignoreORA bool, dbaUser string) {

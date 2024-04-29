@@ -32,7 +32,7 @@ func TestCutOverPositive(t *testing.T) {
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 1
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
@@ -44,7 +44,7 @@ func TestCutOverPositive(t *testing.T) {
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
 
@@ -63,7 +63,7 @@ func TestCutOverPositive(t *testing.T) {
 	fmt.Printf("Moved to Cutover state(stopped write in main db): %d\n", afterServiceStop)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
 	trafficStats = util.CT.DumpTrafficStat(dumpChan)
@@ -84,7 +84,7 @@ func TestCutOverPositive(t *testing.T) {
 	fmt.Printf("Moved Read to Cutover database: %d\n", afterReadCutOver)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
 	fmt.Println("Sleeping for 15 seconds")
@@ -103,7 +103,7 @@ func TestCutOverPositive(t *testing.T) {
 	fmt.Printf("Moved Write to Cutover database: %d\n", afterWriteCutOver)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
 	fmt.Println("Sleeping for 15 seconds")
@@ -125,7 +125,7 @@ func TestCutOverPositive(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, writeCutOverValidation, afterComplete, 2, 1)
 	stateLog["occ"] = 1
 	stateLog["occ.co"] = 25
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 1, t)
 
@@ -140,7 +140,7 @@ func TestCutOverPositive(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterComplete, afterBroom, 2, 1)
 	stateLog["occ"] = 1
 	stateLog["occ.co"] = 25
-	util.ValidateStateLog(t, stateLog)
+	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 1, t)
 
