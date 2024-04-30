@@ -47,6 +47,7 @@ var CutOverEnableDualWrite = "CUT_OVER_ENABLE_DUAL_WRITE"
 var CutOverEnableDualRead = "CUT_OVER_ENABLE_DUAL_READ"
 var CutOverEnableWriteNoRead = "CUT_OVER_ENABLE_WRITE_NO_READ"
 var CutOverPre = "CUT_OVER_PRE"
+var CutOverPreInValidUniqName = "CUT_OVER_PRE_INVALID_UNIQ_NAME"
 var CutOverPhaseI = "CUT_OVER_PHASE_1"
 var CutOverPhaseII = "CUT_OVER_PHASE_2"
 var CutOverPhaseIII = "CUT_OVER_PHASE_3"
@@ -55,7 +56,7 @@ var CutOverBroom = "CUT_OVER_BROOM"
 var DeleteCutOverTable = "CUT_OVER_TABLE_DELETE"
 var CutOverEnableInvalidNumRows = "CUT_OVER_INVALID_NUM_ROWS"
 
-var heraBoxHost = "10.183.162.56"
+var heraBoxHost = os.Getenv("OCC_TEST_ENV")
 
 type DatabaseServices struct {
 	ServiceName string
@@ -111,6 +112,11 @@ func InitialSetup(t *testing.T) []DBStatus {
 	println("********************************")
 	println("SETTING THE ENV TO INITIAL SETUP")
 	println("********************************")
+	if heraBoxHost == "" {
+		fmt.Println("Please set OCC_TEST_ENV env variable to the ip where herabox is deployed")
+		t.Fatalf("Please set OCC_TEST_ENV env variable to the ip where herabox is deployed")
+	}
+	println("USING " + heraBoxHost)
 	CT.TearDown()
 
 	OCCBinarySetup(t, os.Getenv("GOPATH")+"/src/bin/mux")
@@ -333,6 +339,17 @@ func MoveCutOverPhase(t *testing.T, phase string, comment string, primary bool, 
 			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='PRE', remarks='" + comment +
 			"' where dbuname='HERADB_TWO' and occ_name='occ'\\n"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case CutOverPreInValidUniqName:
+		query := "delete from pypl_occ_cutover"
+		execute(t, query, primary, secondary, false, "False")
+
+		query = "insert into pypl_occ_cutover values ('HERADB_ONE_INVALID', 'occ', 'CLOC', 'Y', 'Y', 'PRE', '" +
+			comment + "');\\n" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO_INVALID', 'occ', 'CLOC_CUTOVER', 'N', 'N', 'PRE', '" +
+			comment + "')"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -705,6 +722,20 @@ func ResetOCCDocker(t *testing.T) {
 	_, err = io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
+	}
+
+}
+
+func KillSessionAndValidate(t *testing.T, stateLog map[string]int, serviceName string) {
+	cnt := 0
+	for {
+		if ValidateStateLog(t, stateLog, false) || cnt > 2 {
+			break
+		}
+		KillSessions(t, true, serviceName)
+		fmt.Println("Sleeping for 15 seconds")
+		time.Sleep(15 * time.Second)
+		cnt += 1
 	}
 
 }

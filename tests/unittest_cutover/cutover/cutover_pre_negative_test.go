@@ -20,7 +20,6 @@ VALIDATE
  2. 25 connection to cut-over database
  3. occ is up and running with ORA error for primary database
 
-OCC should exit - but as of now it is not
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverPreSourceDBDown(t *testing.T) {
@@ -114,11 +113,10 @@ TEST:
  4. Shutdown primary service in target database and make sure cut-over database service is up and running
 
 VALIDATE
- 1. No connection for primary database
+ 1. 25 connection for primary database
  2. 0 connection to cut-over database
- 3. occ is up and running with ORA error for primary database
+ 3. occ is up and running with all test passing
 
-OCC should exit - but as of now it is not
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverPreTargetDBDown(t *testing.T) {
@@ -200,16 +198,8 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 0
-	cnt := 0
-	for {
-		if util.ValidateStateLog(t, stateLog, false) || cnt > 5 {
-			break
-		}
-		util.KillSessions(t, true, "herabox_secondary_srv")
-		fmt.Println("Sleeping for 15 seconds")
-		time.Sleep(15 * time.Second)
-		cnt += 1
-	}
+	util.KillSessionAndValidate(t, stateLog, "herabox_secondary_srv")
+
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", -1, t)
 
@@ -228,4 +218,236 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
 
+}
+
+/*
+TEST:
+ 1. Before entering pre cut-over all traffic should go to primary database
+ 2. Primary database should have 25 valid connections and cut-over database should have 0
+ 3. ENABLE CUT-OVER, then move to PRE CUT-OVER PHASE
+ 4. while moving to pre cutover make sure db uniq name is invalid
+
+VALIDATE
+ 1. OCC should continue to run in cut over mode
+
+TODO: Need to add logs and CAL log verification
+*/
+func TestCutOverPreUniqNameInCorrect(t *testing.T) {
+	util.InitialSetup(t)
+
+	var wg sync.WaitGroup
+
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	stateLog := make(map[string]int)
+	stateLog["occ"] = 25
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 0, t)
+
+	// enable cut over env and tns changes
+	util.EnableCutOver(t, false, false)
+	util.MoveCutOverPhase(t, util.CreateTable, "TestCutOverPreSourceDBDown", true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreSourceDBDown", true, true)
+	util.RestartOCC(t)
+
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
+	fmt.Println("Sleeping for 5 seconds")
+	time.Sleep(5 * time.Second)
+	startClientTraffic := time.Now().Unix()
+	fmt.Printf("Moving from Enable to Pre Cutover state: %d\n", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverPreInValidUniqName, "TestCutOverPreUniqNameInCorrect", true, true)
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+	beforeSessionKill := time.Now().Unix()
+	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeSessionKill-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeSessionKill-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeSessionKill-3, 1, 2)
+
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 0
+	util.KillSessionAndValidate(t, stateLog, "herabox_primary_srv")
+	occStatus := util.IsContainerUp(t, "occ")
+	if occStatus == true {
+		t.Fatalf("OCC is up - which is not expected")
+	}
+
+	util.CT.StopClientTraffic(respChan)
+}
+
+/*
+TEST:
+ 1. Before entering pre cut-over all traffic should go to primary database
+ 2. Primary database should have 25 valid connections and cut-over database should have 0
+ 3. ENABLE CUT-OVER, then move to PRE CUT-OVER PHASE
+ 4. while moving to pre cutover make sure db uniq name is invalid in destination db alone
+
+VALIDATE
+ 1. OCC should continue to run in cut over mode
+
+TODO: Need to add logs and CAL log verification
+*/
+func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
+	util.InitialSetup(t)
+
+	var wg sync.WaitGroup
+
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	stateLog := make(map[string]int)
+	stateLog["occ"] = 25
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 0, t)
+
+	// enable cut over env and tns changes
+	util.EnableCutOver(t, false, false)
+	util.MoveCutOverPhase(t, util.CreateTable, "TestCutOverPreUniqNameInCorrectDestDB", true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreUniqNameInCorrectDestDB", true, true)
+	util.RestartOCC(t)
+
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
+	fmt.Println("Sleeping for 5 seconds")
+	time.Sleep(5 * time.Second)
+	startClientTraffic := time.Now().Unix()
+	fmt.Printf("Moving from Enable to Pre Cutover state: %d\n", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverPreInValidUniqName, "TestCutOverPreUniqNameInCorrectDestDB", false, true)
+	util.MoveCutOverPhase(t, util.CutOverPre, "TestCutOverPreUniqNameInCorrectDestDB", true, false)
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 25
+	util.ValidateStateLog(t, stateLog, true)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
+	beforeSessionKill := time.Now().Unix()
+	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeSessionKill-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeSessionKill-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeSessionKill-3, 1, 2)
+
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 25
+	util.KillSessionAndValidate(t, stateLog, "herabox_primary_srv")
+	occStatus := util.IsContainerUp(t, "occ")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
+	}
+
+	util.CT.StopClientTraffic(respChan)
+}
+
+/*
+TEST:
+ 1. Before entering pre cut-over all traffic should go to primary database
+ 2. Primary database should have 25 valid connections and cut-over database should have 0
+ 3. ENABLE CUT-OVER, then move to PRE CUT-OVER PHASE
+ 4. Rollback to enable state and then back to disabled cutover
+
+VALIDATE
+ 1. OCC should continue to run in original mode
+
+TODO: Need to add logs and CAL log verification
+*/
+func TestCutOverPreRollback(t *testing.T) {
+	util.InitialSetup(t)
+
+	var wg sync.WaitGroup
+
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	stateLog := make(map[string]int)
+	stateLog["occ"] = 25
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 0, t)
+
+	// enable cut over env and tns changes
+	util.EnableCutOver(t, false, false)
+	util.MoveCutOverPhase(t, util.CreateTable, "TestCutOverPreRollback", true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreRollback", true, true)
+	util.RestartOCC(t)
+
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
+	fmt.Println("Sleeping for 5 seconds")
+	time.Sleep(5 * time.Second)
+	startClientTraffic := time.Now().Unix()
+	fmt.Printf("Moving from Enable to Pre Cutover state: %d\n", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverPre, "TestCutOverPreRollback", true, true)
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 25
+	util.ValidateStateLog(t, stateLog, true)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
+	beforeRollback := time.Now().Unix()
+	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeRollback-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeRollback-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeRollback-3, 1, 2)
+
+	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreRollback", true, true)
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ResetOCCDocker(t)
+	util.OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
+	util.RestartOCC(t)
+	fmt.Println("Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	stateLog = make(map[string]int)
+	stateLog["occ"] = 25
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 0, t)
+
+	util.CT.StopClientTraffic(respChan)
 }

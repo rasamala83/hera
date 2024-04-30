@@ -94,6 +94,8 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", -1, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 12, t)
 
+	// TODO validate main DB failure ORA error
+	// TODO validate listener is not enabled for traffic
 	stateLog["occ.co"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 
@@ -358,9 +360,17 @@ func TestCutOverEnabledInvalidRead(t *testing.T) {
 	time.Sleep(40 * time.Second)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
+
+	stateLog := make(map[string]int)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
 }
 
 /*
@@ -386,9 +396,16 @@ func TestCutOverEnabledInvalidWrite(t *testing.T) {
 	time.Sleep(40 * time.Second)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
+	stateLog := make(map[string]int)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
 }
 
 /*
@@ -407,7 +424,7 @@ VALIDATION
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCutOverEnabledWriteEnabledButNotRead(t *testing.T) {
+func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
 	util.InitialSetup(t)
 	var wg sync.WaitGroup
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
@@ -420,7 +437,7 @@ func TestCutOverEnabledWriteEnabledButNotRead(t *testing.T) {
 	time.Sleep(20 * time.Second)
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus != true {
-		t.Fatalf("OCC should be up - which is not expected")
+		t.Fatalf("OCC is Down - which is not expected")
 	}
 	start := time.Now().Unix() + 2
 	fmt.Println("Sleeping for 20 seconds")
@@ -430,7 +447,7 @@ func TestCutOverEnabledWriteEnabledButNotRead(t *testing.T) {
 	util.CT.StopClientTraffic(respChan)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, start, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, start, afterComplete, 1, 2)
-	util.ValidateFailureTraffic(t, trafficStats, util.READ, start, afterComplete)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, start, afterComplete, 1, 2)
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
@@ -464,9 +481,16 @@ func TestCutOverEnabledDualWrite(t *testing.T) {
 	time.Sleep(40 * time.Second)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
+	stateLog := make(map[string]int)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
 }
 
 /*
@@ -492,7 +516,14 @@ func TestCutOverEnabledDualRead(t *testing.T) {
 	time.Sleep(40 * time.Second)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
+	stateLog := make(map[string]int)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
 }
