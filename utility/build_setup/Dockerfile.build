@@ -30,7 +30,7 @@ COPY env.sh /pypl/
 COPY comp.sh /pypl/
 COPY dep.sh /pypl/
 COPY test.sh /pypl/
-COPY stylesheet.xsl /pypl/
+COPY unit_test_output.xsl /pypl/
 
 WORKDIR  /usr/local/go$CURRENT_GO_VERSION/go/
 RUN patch -p1 < /go${CURRENT_GO_VERSION}/src/pypl_patch/sessionID.patch && \

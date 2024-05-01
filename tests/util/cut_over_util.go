@@ -115,7 +115,11 @@ func splitBySpace(input string) []string {
 }
 
 func InitialSetup(t *testing.T) []DBStatus {
-	_ = logger.CreateLoggerInternal(t.Name()+".log", "UT", logger.Alert, false)
+	path := os.Getenv("TEST_OUTPUT_PATH")
+	if path == "" {
+		path = "./"
+	}
+	_ = logger.CreateLoggerInternal(path+"/"+t.Name()+".log", "UT", logger.Alert, false)
 	logger.GetLogger().Log(logger.Alert, "********************************")
 	logger.GetLogger().Log(logger.Alert, "SETTING THE ENV TO INITIAL SETUP")
 	logger.GetLogger().Log(logger.Alert, "********************************")

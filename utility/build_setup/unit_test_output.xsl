@@ -68,10 +68,10 @@
               <td>
                <xsl:choose>
                  <xsl:when test="failure/@message='Failed'">
-                   <p>Failed</p>
+                     <a style="color:Tomato;" href="./{@name}.log">Failed</a>
                  </xsl:when>
                  <xsl:otherwise>
-                   <p>Passed</p>
+                     <a style="color:DodgerBlue;" href="./{@name}.log">Passed</a>
                  </xsl:otherwise>
                </xsl:choose>
               </td>
