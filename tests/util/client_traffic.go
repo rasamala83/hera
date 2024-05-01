@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/paypal/hera/utility/logger"
 	"os"
 	"sort"
 	"sync"
@@ -267,7 +268,7 @@ func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	c.GetConnection()
 	if c.Err != nil {
 		if c.Err.Error() == "Failed to read server info" {
-			fmt.Println("Enabling TLS on Client Side as server side it is enabled")
+			logger.GetLogger().Log(logger.Alert, "Enabling TLS on Client Side as server side it is enabled")
 			os.Setenv("TLS", "1")
 			return
 		} else {
@@ -287,10 +288,10 @@ func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 }
 
 func (ct ClientTraffic) DumpStats(CTS map[int64]ClientTrafficStats) {
-	fmt.Println("**************")
-	fmt.Println("QueryStats")
-	fmt.Println("**************")
-	fmt.Println("UTC:\t\tDB1 Read Success/Fail\t\tDB2 Read Success/Fail\tDB1 Write Success/Fail" +
+	logger.GetLogger().Log(logger.Alert, "**************")
+	logger.GetLogger().Log(logger.Alert, "QueryStats")
+	logger.GetLogger().Log(logger.Alert, "**************")
+	logger.GetLogger().Log(logger.Alert, "UTC:\t\tDB1 Read Success/Fail\t\tDB2 Read Success/Fail\tDB1 Write Success/Fail"+
 		"\tDB2 Write Success/Fail\tDB1 Txn Success/Fail\tDB2 Tx Success/Fail\nAll DB Failure")
 	keys := make([]int64, 0)
 	for k, _ := range CTS {
@@ -302,10 +303,14 @@ func (ct ClientTraffic) DumpStats(CTS map[int64]ClientTrafficStats) {
 
 	for _, utc := range keys {
 		cts := CTS[utc]
-		fmt.Printf("%d:\t\t\t%d/%d\t\t\t%d/%d\t\t\t%d/%d\t\t\t%d/%d\t\t\t%d/%d\t\t\t%d/%d\t\t\t%d\n", utc,
-			cts.stats[READ][1].successCount, cts.stats[READ][1].failureCount, cts.stats[READ][2].successCount, cts.stats[READ][2].failureCount,
-			cts.stats[WRITE][1].successCount, cts.stats[WRITE][1].failureCount, cts.stats[WRITE][2].successCount, cts.stats[WRITE][2].failureCount,
-			cts.stats[TXN][1].successCount, cts.stats[TXN][1].failureCount, cts.stats[TXN][2].successCount, cts.stats[TXN][2].failureCount,
+		logger.GetLogger().Log(logger.Alert,
+			utc, "\t\t\t",
+			cts.stats[READ][1].successCount, "/", cts.stats[READ][1].failureCount, "\t\t\t",
+			cts.stats[READ][2].successCount, "/", cts.stats[READ][2].failureCount, "\t\t\t",
+			cts.stats[WRITE][1].successCount, "/", cts.stats[WRITE][1].failureCount, "\t\t\t",
+			cts.stats[WRITE][2].successCount, "/", cts.stats[WRITE][2].failureCount, "\t\t\t",
+			cts.stats[TXN][1].successCount, "/", cts.stats[TXN][1].failureCount, "\t\t\t",
+			cts.stats[TXN][2].successCount, "/", cts.stats[TXN][2].failureCount, "\t\t\t",
 			cts.stats[READ][0].failureCount+cts.stats[WRITE][0].failureCount+cts.stats[TXN][0].failureCount)
 	}
 
@@ -329,7 +334,7 @@ func (ct ClientTraffic) StopClientTraffic(CTSChan chan map[int64]ClientTrafficSt
 }
 
 func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
-	fmt.Println("DumpTrafficStat")
+	logger.GetLogger().Log(logger.Alert, "DumpTrafficStat")
 	ct.RunMsg <- DumpLogs
 	d := <-DumpLogChan
 	return d
@@ -349,26 +354,26 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 	CTS := make(map[int64]ClientTrafficStats)
 
 	started := false
-	fmt.Println("Sending Client Traffic")
+	logger.GetLogger().Log(logger.Alert, "Sending Client Traffic")
 	for {
 		select {
 		case inp := <-runMsg:
 			switch inp {
 			case KILL:
-				fmt.Println("Kill - Client Traffic")
+				logger.GetLogger().Log(logger.Alert, "Kill - Client Traffic")
 				return
 			case STOP:
-				fmt.Println("Stopping Client Traffic")
+				logger.GetLogger().Log(logger.Alert, "Stopping Client Traffic")
 				CTChan <- CTS
 				return
 			case DumpLogs:
-				fmt.Println("dumping logs")
+				logger.GetLogger().Log(logger.Alert, "dumping logs")
 				DumpChan <- CTS
 			}
 		default:
 			n := time.Now().Unix()
 			if !started {
-				fmt.Printf("Traffic StartTime %d\n", n)
+				logger.GetLogger().Log(logger.Alert, "Traffic StartTime ", n)
 			}
 			go ct.readTraffic(CTS, n)
 			go ct.txnTraffic(CTS, n)

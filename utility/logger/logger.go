@@ -99,8 +99,15 @@ func CreateLoggerInternal(fileName string, procName string, severity int32, redi
 	// redirect stdout and stderr to this file
 	if redirectStdLogs {
 		dup(int(file.Fd()))
+		createLogger(file, procName, severity)
+	} else {
+		mw := io.MultiWriter(os.Stdout, file)
+		createLogger(mw, procName, severity)
 	}
-	createLogger(file, procName, severity)
+
+	if !redirectStdLogs {
+
+	}
 	return nil
 }
 

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"github.com/paypal/hera/tests/util"
+	"github.com/paypal/hera/utility/logger"
 	"sync"
 	"testing"
 	"time"
@@ -28,7 +28,7 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	var wg sync.WaitGroup
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
 	beforeStart := time.Now().Unix() + 2
-	fmt.Println("Sleeping for 20 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
 	afterComplete := time.Now().Unix() - 3
 	trafficStats := util.CT.DumpTrafficStat(dumpChan)
@@ -46,11 +46,11 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 
 	// enable cut over env and tns changes
 	util.EnableCutOver(t, false, false)
-	util.MoveCutOverPhase(t, util.CreateTable, "TestCutOverPreSourceDBDown", true, true)
-	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreSourceDBDown", true, true)
+	util.MoveCutOverPhase(t, util.CreateTable, true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
 	util.RestartOCC(t)
 
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
@@ -61,9 +61,9 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	util.ValidateStateLog(t, stateLog, true)
 
 	startClientTraffic := time.Now().Unix()
-	fmt.Printf("Moving from Enable to Pre Cutover state: %d\n", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, "TestCutOverPreSourceDBDown", true, true)
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
@@ -76,9 +76,9 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
 
-	fmt.Println("Shutting down source database")
+	logger.GetLogger().Log(logger.Alert, "Shutting down source database")
 	util.ShutDownDBService("HERADB_ONE", "herabox_primary_srv", t)
-	fmt.Println("Sleeping for 20 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	shutdownPrimary := time.Now().Unix()
 	time.Sleep(20 * time.Second)
 	occStatus := util.IsContainerUp(t, "occ")
@@ -94,7 +94,7 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, shutdownPrimary, afterSourceDBGoesDown-3, 1, 2)
 
 	util.KillSessions(t, false, "herabox_primary_srv")
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	afterKill := time.Now().Unix()
 	time.Sleep(15 * time.Second)
 
@@ -124,7 +124,7 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	stateLog := make(map[string]int)
@@ -136,11 +136,11 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 
 	// enable cut over env and tns changes
 	util.EnableCutOver(t, false, false)
-	util.MoveCutOverPhase(t, util.CreateTable, "TestCutOverPreSourceDBDown", true, true)
-	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreSourceDBDown", true, true)
+	util.MoveCutOverPhase(t, util.CreateTable, true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
 	util.RestartOCC(t)
 
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
@@ -150,12 +150,12 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	fmt.Println("Sleeping for 5 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
 	startClientTraffic := time.Now().Unix()
-	fmt.Printf("Moving from Enable to Pre Cutover state: %d\n", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, "TestCutOverPreSourceDBDown", true, true)
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
@@ -168,9 +168,9 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
 
-	fmt.Println("Shutting down target database")
+	logger.GetLogger().Log(logger.Alert, "Shutting down target database")
 	util.ShutDownDBService("HERADB_TWO", "herabox_secondary_srv", t)
-	fmt.Println("Sleeping for 20 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	shutdownPrimary := time.Now().Unix()
 	time.Sleep(20 * time.Second)
 	occStatus := util.IsContainerUp(t, "occ")
@@ -192,7 +192,7 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	beforeKill := time.Now().Unix()
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	trafficStats = util.CT.StopClientTraffic(respChan)
 
@@ -207,9 +207,9 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterSourceDBGoesDown, beforeKill-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterSourceDBGoesDown, beforeKill-3, 1, 2)
 
-	fmt.Println("Starting down target database")
+	logger.GetLogger().Log(logger.Alert, "Starting down target database")
 	util.StartDBService("HERADB_TWO", "herabox_secondary_srv", t)
-	fmt.Println("Sleeping for 20 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
 
 	stateLog["occ"] = 25
@@ -237,7 +237,7 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	stateLog := make(map[string]int)
@@ -249,11 +249,11 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 
 	// enable cut over env and tns changes
 	util.EnableCutOver(t, false, false)
-	util.MoveCutOverPhase(t, util.CreateTable, "TestCutOverPreSourceDBDown", true, true)
-	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreSourceDBDown", true, true)
+	util.MoveCutOverPhase(t, util.CreateTable, true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
 	util.RestartOCC(t)
 
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
@@ -263,12 +263,12 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	fmt.Println("Sleeping for 5 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
 	startClientTraffic := time.Now().Unix()
-	fmt.Printf("Moving from Enable to Pre Cutover state: %d\n", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPreInValidUniqName, "TestCutOverPreUniqNameInCorrect", true, true)
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverPreInValidUniqName, true, true)
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 1
@@ -309,7 +309,7 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	stateLog := make(map[string]int)
@@ -321,11 +321,11 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 
 	// enable cut over env and tns changes
 	util.EnableCutOver(t, false, false)
-	util.MoveCutOverPhase(t, util.CreateTable, "TestCutOverPreUniqNameInCorrectDestDB", true, true)
-	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreUniqNameInCorrectDestDB", true, true)
+	util.MoveCutOverPhase(t, util.CreateTable, true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
 	util.RestartOCC(t)
 
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
@@ -335,13 +335,13 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	fmt.Println("Sleeping for 5 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
 	startClientTraffic := time.Now().Unix()
-	fmt.Printf("Moving from Enable to Pre Cutover state: %d\n", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPreInValidUniqName, "TestCutOverPreUniqNameInCorrectDestDB", false, true)
-	util.MoveCutOverPhase(t, util.CutOverPre, "TestCutOverPreUniqNameInCorrectDestDB", true, false)
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverPreInValidUniqName, false, true)
+	util.MoveCutOverPhase(t, util.CutOverPre, true, false)
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
@@ -382,7 +382,7 @@ func TestCutOverPreRollback(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	stateLog := make(map[string]int)
@@ -394,11 +394,11 @@ func TestCutOverPreRollback(t *testing.T) {
 
 	// enable cut over env and tns changes
 	util.EnableCutOver(t, false, false)
-	util.MoveCutOverPhase(t, util.CreateTable, "TestCutOverPreRollback", true, true)
-	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreRollback", true, true)
+	util.MoveCutOverPhase(t, util.CreateTable, true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
 	util.RestartOCC(t)
 
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
@@ -408,12 +408,12 @@ func TestCutOverPreRollback(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	fmt.Println("Sleeping for 5 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
 	startClientTraffic := time.Now().Unix()
-	fmt.Printf("Moving from Enable to Pre Cutover state: %d\n", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, "TestCutOverPreRollback", true, true)
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
@@ -426,8 +426,8 @@ func TestCutOverPreRollback(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeRollback-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeRollback-3, 1, 2)
 
-	util.MoveCutOverPhase(t, util.CutOverEnable, "TestCutOverPreRollback", true, true)
-	fmt.Println("Sleeping for 15 seconds")
+	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
@@ -439,7 +439,7 @@ func TestCutOverPreRollback(t *testing.T) {
 	util.ResetOCCDocker(t)
 	util.OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
 	util.RestartOCC(t)
-	fmt.Println("Sleeping for 15 seconds")
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
 	stateLog = make(map[string]int)
