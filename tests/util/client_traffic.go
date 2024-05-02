@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var CT = ClientTraffic{ReadTraffic: true, WriteTraffic: true, TransactionTraffic: true, RunMsg: make(chan string)}
+var CT = ClientTraffic{ReadTraffic: true, WriteTraffic: true, TransactionTraffic: true, InProgress: false, RunMsg: make(chan string)}
 
 type queryStats struct {
 	successCount int
@@ -321,14 +321,12 @@ func (ct ClientTraffic) SendClientTraffic(wg *sync.WaitGroup) (chan map[int64]Cl
 	CTSChan := make(chan map[int64]ClientTrafficStats)
 	DumpChan := make(chan map[int64]ClientTrafficStats)
 	go ct.traffic(wg, ct.RunMsg, CTSChan, DumpChan)
-	ct.InProgress = true
 	return CTSChan, DumpChan
 }
 
 func (ct ClientTraffic) StopClientTraffic(CTSChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
 	ct.RunMsg <- STOP
 	d := <-CTSChan
-	ct.InProgress = false
 	//ct.DumpStats(d)
 	return d
 }
@@ -343,7 +341,6 @@ func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTraffic
 func (ct ClientTraffic) TearDown() {
 	if ct.InProgress {
 		ct.RunMsg <- KILL
-		ct.InProgress = false
 	}
 }
 
@@ -361,9 +358,11 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 			switch inp {
 			case KILL:
 				logger.GetLogger().Log(logger.Alert, "Kill - Client Traffic")
+				ct.InProgress = false
 				return
 			case STOP:
 				logger.GetLogger().Log(logger.Alert, "Stopping Client Traffic")
+				ct.InProgress = false
 				CTChan <- CTS
 				return
 			case DumpLogs:
@@ -374,6 +373,7 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 			n := time.Now().Unix()
 			if !started {
 				logger.GetLogger().Log(logger.Alert, "Traffic StartTime ", n)
+				ct.InProgress = true
 			}
 			go ct.readTraffic(CTS, n)
 			go ct.txnTraffic(CTS, n)
