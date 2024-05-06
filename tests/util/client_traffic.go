@@ -194,6 +194,25 @@ func (ct ClientTraffic) CreateCounter(utc int64, counterType string, CTS map[int
 	m.Unlock()
 }
 
+func (ct ClientTraffic) ReadQuery(query string) (int, error) {
+	c := TestConnection{}
+	c.GetConnection()
+	rows, err := c.conn.QueryContext(c.context, query)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	return 0, errors.New("should not have reached")
+}
+
 func (ct ClientTraffic) txnTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	ct.CreateCounter(n, TXN, CTS)
 	dbId := 0
@@ -339,6 +358,7 @@ func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTraffic
 }
 
 func (ct ClientTraffic) TearDown() {
+	logger.GetLogger().Log(logger.Alert, "Traffic InProgress ", ct.InProgress)
 	if ct.InProgress {
 		ct.RunMsg <- KILL
 	}

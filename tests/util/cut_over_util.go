@@ -50,11 +50,15 @@ var CutOverPre = "CUT_OVER_PRE"
 var CutOverPreInValidUniqName = "CUT_OVER_PRE_INVALID_UNIQ_NAME"
 var CutOverPhaseI = "CUT_OVER_PHASE_1"
 var CutOverPhaseIInvalidRowCount = "CUT_OVER_PHASE_1_INVALID_ROW_CNT"
+var CutOverPhaseIIInvalidRowCount = "CUT_OVER_PHASE_2_INVALID_ROW_CNT"
 var CutOverPhaseIInvalidUniqName = "CUT_OVER_PHASE_1_INVALID_UNIQ_NAME"
 var CutOverPhaseIInvalidOCCName = "CUT_OVER_PHASE_1_INVALID_OCC_NAME"
 var CutOverPhaseIInvalidPhase = "CUT_OVER_PHASE_1_INVALID_PHASE"
 var CutOverPhaseIInvalidWriteStatus = "CUT_OVER_PHASE_1_INVALID_WRITE"
-var CutOverPhaseIInvalidReadStatus = "CUT_OVER_PHASE_1_INVALID_Read"
+var CutOverPhaseIInvalidReadStatus = "CUT_OVER_PHASE_1_INVALID_READ"
+var CutOverPhaseIDualWrite = "CUT_OVER_PHASE_1_DUAL_WRITE"
+var CutOverPhaseIDualRead = "CUT_OVER_PHASE_1_DUAL_READ"
+var CutOverPhaseIReadOff = "CUT_OVER_PHASE_1_READ_OFF"
 var CutOverPhaseIInvalidTwoTask = "CUT_OVER_PHASE_1_INVALID_TWO_TASK"
 var CutOverPhaseII = "CUT_OVER_PHASE_2"
 var CutOverPhaseIII = "CUT_OVER_PHASE_3"
@@ -207,7 +211,7 @@ func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {
 					logger.GetLogger().Log(logger.Alert, "State Log Validation failed for ", words[2],
 						" at ", words[0], " ", words[1],
 						" - Expected Worker Count: ", expectedWorkerCount, " vs Actual ", accept+wait,
-						" - retrying after 5 seconds\n")
+						" - retrying after 5 seconds")
 					break
 				}
 			}
@@ -378,6 +382,12 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 			"delete from pypl_occ_cutover where dbuname='HERADB_TWO' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
+	case CutOverPhaseIIInvalidRowCount:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='N', remarks='" + comment +
+			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
+			"delete from pypl_occ_cutover where dbuname='HERADB_TWO' and occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
 	case CutOverPhaseIInvalidUniqName:
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_ONE_INVALID', write_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
@@ -412,6 +422,27 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='X', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
+	case CutOverPhaseIDualWrite:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', remarks='" + comment +
+			"';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', remarks='" + comment +
+			"'"
+		execute(t, query, primary, secondary, false, "False")
+		break
+	case CutOverPhaseIDualRead:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='Y', remarks='" + comment +
+			"';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='Y', remarks='" + comment +
+			"'"
+		execute(t, query, primary, secondary, false, "False")
+		break
+	case CutOverPhaseIReadOff:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='N', remarks='" + comment +
+			"';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='N', remarks='" + comment +
+			"'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 	case CutOverPhaseIInvalidTwoTask:
@@ -789,13 +820,13 @@ func ResetOCCDocker(t *testing.T) {
 
 }
 
-func KillSessionAndValidate(t *testing.T, stateLog map[string]int, serviceName string) {
+func KillSessionAndValidate(t *testing.T, stateLog map[string]int, serviceName string, cutover bool) {
 	cnt := 0
 	for {
 		if ValidateStateLog(t, stateLog, false) || cnt > 2 {
 			break
 		}
-		KillSessions(t, true, serviceName)
+		KillSessions(t, cutover, serviceName)
 		logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 		time.Sleep(15 * time.Second)
 		cnt += 1
@@ -808,10 +839,10 @@ func KillSessions(t *testing.T, cutOver bool, serviceName string) []DBStatus {
 
 	co := "False"
 	if cutOver {
-		logger.GetLogger().Log(logger.Alert, "Kill Session for cutover db\n")
+		logger.GetLogger().Log(logger.Alert, "Kill Session for cutover db")
 		co = "True"
 	} else {
-		logger.GetLogger().Log(logger.Alert, "Kill Session for main db\n")
+		logger.GetLogger().Log(logger.Alert, "Kill Session for main db")
 	}
 	response, err := http.Get("http://" + heraBoxHost + ":8000/occ/kill_session?cut_over=" + co + "&service_name=" + serviceName)
 	if err != nil {
@@ -1106,10 +1137,10 @@ func ValidateConnectionIntegrity(WriteWorkerCount int, ReadWorkerCount int, Read
 
 }
 
-func ValidateWorkerCountFromDatabase(dbUniqueName string, serviceName string,
+func ValidateWorkerCountFromDatabase(dbUniqueName string, serviceName string, serviceActive bool,
 	expectedWorkerCount int, t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Validating ", dbUniqueName, ":", serviceName,
-		" has ", expectedWorkerCount, " workers connected to db\n")
+		" has ", expectedWorkerCount, " workers connected to db")
 	retryCount := 0
 	retry := false
 	validationSuccess := false
@@ -1128,7 +1159,7 @@ func ValidateWorkerCountFromDatabase(dbUniqueName string, serviceName string,
 			// for each database service
 			for _, service := range db.DatabaseServices {
 				if strings.TrimSpace(db.DBUniqueName) == dbUniqueName &&
-					strings.TrimSpace(service.ServiceName) == serviceName && service.Active {
+					strings.TrimSpace(service.ServiceName) == serviceName && service.Active == serviceActive {
 					workerFound = true
 					if service.WorkerCount != expectedWorkerCount {
 						if retryCount >= maxRetryCount {

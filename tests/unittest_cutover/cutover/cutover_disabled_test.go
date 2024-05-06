@@ -21,6 +21,8 @@ func TestCutOverDisabled(t *testing.T) {
 
 	var wg sync.WaitGroup
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown()
+
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
@@ -35,8 +37,8 @@ func TestCutOverDisabled(t *testing.T) {
 	stateLog["occ"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 0, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 
 	util.CT.StopClientTraffic(respChan)
 }
@@ -63,6 +65,8 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 
 	var wg sync.WaitGroup
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown()
+
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
@@ -77,8 +81,8 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 	stateLog["occ"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 0, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 
 	util.ShutDownDBService("HERADB_ONE", "herabox_primary_srv", t)
 
@@ -91,8 +95,8 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", -1, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 12, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, -1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 12, t)
 
 	// TODO validate main DB failure ORA error
 	// TODO validate listener is not enabled for traffic
@@ -125,6 +129,8 @@ func TestCutOverEnabledTableMissingPrimary(t *testing.T) {
 
 	var wg sync.WaitGroup
 	respChan, _ := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown()
+
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
@@ -158,6 +164,8 @@ func TestCutOverEnabledInvalidNumOfRows(t *testing.T) {
 
 	var wg sync.WaitGroup
 	respChan, _ := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown()
+
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
@@ -210,8 +218,8 @@ func TestCutOverEnabledShardedDataBase(t *testing.T) {
 	stateLog["occ.sh1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 
 }
 
@@ -276,8 +284,8 @@ func TestCutOverEnabledInvalidUniqueID(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 
 }
 
@@ -369,8 +377,8 @@ func TestCutOverEnabledInvalidRead(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 }
 
 /*
@@ -404,8 +412,8 @@ func TestCutOverEnabledInvalidWrite(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 }
 
 /*
@@ -428,6 +436,7 @@ func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
 	util.InitialSetup(t)
 	var wg sync.WaitGroup
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown()
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -454,8 +463,8 @@ func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 }
 
 /*
@@ -489,8 +498,8 @@ func TestCutOverEnabledDualWrite(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 }
 
 /*
@@ -524,6 +533,6 @@ func TestCutOverEnabledDualRead(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 }

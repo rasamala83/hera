@@ -28,14 +28,15 @@ func TestCutOverPositive(t *testing.T) {
 	// send client traffic
 	var wg sync.WaitGroup
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown()
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 
 	startClientTraffic := time.Now().Unix()
 	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
@@ -45,8 +46,8 @@ func TestCutOverPositive(t *testing.T) {
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 
 	beforeCutOverStart := time.Now().Unix()
 
@@ -64,8 +65,8 @@ func TestCutOverPositive(t *testing.T) {
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	trafficStats = util.CT.DumpTrafficStat(dumpChan)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, beforeCutOverStart, afterServiceStop-3, 1, 2)
 
@@ -85,8 +86,8 @@ func TestCutOverPositive(t *testing.T) {
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	trafficStats = util.CT.DumpTrafficStat(dumpChan)
@@ -104,8 +105,8 @@ func TestCutOverPositive(t *testing.T) {
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	trafficStats = util.CT.DumpTrafficStat(dumpChan)
@@ -126,8 +127,8 @@ func TestCutOverPositive(t *testing.T) {
 	stateLog["occ"] = 1
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
 
 	logger.GetLogger().Log(logger.Alert, "Moving to Broom State: ", time.Now().Unix())
 	util.MoveCutOverPhase(t, util.CutOverBroom, true, true)
@@ -141,8 +142,8 @@ func TestCutOverPositive(t *testing.T) {
 	stateLog["occ"] = 1
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
 
 	util.CT.StopClientTraffic(respChan)
 }
