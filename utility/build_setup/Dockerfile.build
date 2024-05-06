@@ -11,13 +11,14 @@ RUN mkdir -p /usr/local/go$CURRENT_GO_VERSION
 RUN mkdir -p /x/home/oracle/product/
 RUN mkdir -p /pypl/
 
-RUN apt-get update && \
-    apt-get install -y alien && \
-    apt-get install -y git && \
-    wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.9/nonprod/extras/ppopenssl-102k-devel-1.0.2k-1.pp.el5.x86_64.rpm && \
-    alien -i ppopenssl-102k-devel-1.0.2k-1.pp.el5.x86_64.rpm && \
-    tar -C /usr/local/go$CURRENT_GO_VERSION -xzf go$CURRENT_GO_VERSION.linux-amd64.tar.gz && \
-    tar -C /x/home/oracle/product/ -xzf oracle-instant-client-19.17.0.0.tar.gz
+RUN apt-get update -y
+RUN apt-get install -y alien 
+RUN apt-get install -y xsltproc 
+RUN apt-get install -y git 
+RUN wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.9/nonprod/extras/ppopenssl-102k-devel-1.0.2k-1.pp.el5.x86_64.rpm
+RUN alien -i ppopenssl-102k-devel-1.0.2k-1.pp.el5.x86_64.rpm 
+RUN tar -C /usr/local/go$CURRENT_GO_VERSION -xzf go$CURRENT_GO_VERSION.linux-amd64.tar.gz 
+RUN tar -C /x/home/oracle/product/ -xzf oracle-instant-client-19.17.0.0.tar.gz
 
 RUN mkdir -p /opt/instantclient_19_17/sdk/include && \
     ln -s /x/home/oracle/product/19.17*/lib64/* /opt/instantclient_19_17 && \
@@ -29,6 +30,7 @@ COPY env.sh /pypl/
 COPY comp.sh /pypl/
 COPY dep.sh /pypl/
 COPY test.sh /pypl/
+COPY unit_test_output.xsl /pypl/
 
 WORKDIR  /usr/local/go$CURRENT_GO_VERSION/go/
 RUN patch -p1 < /go${CURRENT_GO_VERSION}/src/pypl_patch/sessionID.patch && \

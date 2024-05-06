@@ -12,7 +12,7 @@ import (
 	"sync"
 )
 
-var occHost = "10.183.162.56"
+var occHost = os.Getenv("OCC_TEST_ENV")
 var occPort = "10101"
 var connMutex sync.Mutex
 var idCounter int64
