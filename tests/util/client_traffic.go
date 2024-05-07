@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var CT = ClientTraffic{ReadTraffic: true, WriteTraffic: true, TransactionTraffic: true, InProgress: false, RunMsg: make(chan string)}
+var CT = ClientTraffic{ReadTraffic: true, WriteTraffic: true, TransactionTraffic: true, InProgress: false}
 
 type queryStats struct {
 	successCount int
@@ -20,7 +20,6 @@ type queryStats struct {
 }
 
 type ClientTraffic struct {
-	RunMsg             chan string
 	ReadTraffic        bool
 	WriteTraffic       bool
 	TransactionTraffic bool
@@ -190,8 +189,8 @@ func (ct ClientTraffic) CreateCounter(utc int64, counterType string, CTS map[int
 		CTS[utc].stats[counterType][1] = &queryStats{}
 		CTS[utc].stats[counterType][2] = &queryStats{}
 	}
-	statMutex.Unlock()
 	m.Unlock()
+	statMutex.Unlock()
 }
 
 func (ct ClientTraffic) ReadQuery(query string) (int, error) {
@@ -335,33 +334,37 @@ func (ct ClientTraffic) DumpStats(CTS map[int64]ClientTrafficStats) {
 
 }
 
-func (ct ClientTraffic) SendClientTraffic(wg *sync.WaitGroup) (chan map[int64]ClientTrafficStats, chan map[int64]ClientTrafficStats) {
+func (ct ClientTraffic) SendClientTraffic(wg *sync.WaitGroup) (chan map[int64]ClientTrafficStats, chan map[int64]ClientTrafficStats, chan string) {
 	wg.Add(1)
 	CTSChan := make(chan map[int64]ClientTrafficStats)
 	DumpChan := make(chan map[int64]ClientTrafficStats)
-	go ct.traffic(wg, ct.RunMsg, CTSChan, DumpChan)
-	return CTSChan, DumpChan
+	RunMsg := make(chan string)
+	go ct.traffic(wg, RunMsg, CTSChan, DumpChan)
+	return CTSChan, DumpChan, RunMsg
 }
 
-func (ct ClientTraffic) StopClientTraffic(CTSChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
-	ct.RunMsg <- STOP
+func (ct ClientTraffic) StopClientTraffic(CTSChan chan map[int64]ClientTrafficStats, RunMsg chan string) map[int64]ClientTrafficStats {
+	RunMsg <- STOP
 	d := <-CTSChan
 	//ct.DumpStats(d)
 	return d
 }
 
-func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
+func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTrafficStats, RunMsg chan string) map[int64]ClientTrafficStats {
 	logger.GetLogger().Log(logger.Alert, "DumpTrafficStat")
-	ct.RunMsg <- DumpLogs
+	RunMsg <- DumpLogs
 	d := <-DumpLogChan
 	return d
 }
 
-func (ct ClientTraffic) TearDown() {
+func (ct ClientTraffic) TearDown(respChan chan map[int64]ClientTrafficStats, dumpChan chan map[int64]ClientTrafficStats, msgChan chan string) {
 	logger.GetLogger().Log(logger.Alert, "Traffic InProgress ", ct.InProgress)
 	if ct.InProgress {
-		ct.RunMsg <- KILL
+		msgChan <- KILL
 	}
+	close(respChan)
+	close(dumpChan)
+	close(msgChan)
 }
 
 func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,

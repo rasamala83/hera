@@ -26,14 +26,14 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	util.InitialSetup(t)
 
 	var wg sync.WaitGroup
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
 	afterComplete := time.Now().Unix() - 3
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, beforeStart, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, beforeStart, afterComplete, 1, 2)
@@ -73,7 +73,7 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	beforeSourceDBGoesDown := time.Now().Unix()
-	trafficStats = util.CT.DumpTrafficStat(dumpChan)
+	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
@@ -89,7 +89,7 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	}
 	afterSourceDBGoesDown := time.Now().Unix()
 
-	trafficStats = util.CT.DumpTrafficStat(dumpChan)
+	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, shutdownPrimary, afterSourceDBGoesDown-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, shutdownPrimary, afterSourceDBGoesDown-3, 1, 2)
@@ -100,7 +100,7 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	afterKill := time.Now().Unix()
 	time.Sleep(15 * time.Second)
 
-	trafficStats = util.CT.StopClientTraffic(respChan)
+	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterKill+3, afterSourceDBGoesDown-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterKill+3, afterSourceDBGoesDown-3)
@@ -151,8 +151,8 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
 
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
@@ -167,7 +167,7 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	beforeSourceDBGoesDown := time.Now().Unix()
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeSourceDBGoesDown-3, 1, 2)
@@ -183,7 +183,7 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	}
 	afterSourceDBGoesDown := time.Now().Unix()
 
-	trafficStats = util.CT.DumpTrafficStat(dumpChan)
+	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, shutdownPrimary, afterSourceDBGoesDown-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, shutdownPrimary, afterSourceDBGoesDown-3, 1, 2)
@@ -198,7 +198,7 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
-	trafficStats = util.CT.StopClientTraffic(respChan)
+	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 0
@@ -266,8 +266,8 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
 
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
@@ -282,7 +282,7 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 	beforeSessionKill := time.Now().Unix()
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeSessionKill-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeSessionKill-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeSessionKill-3, 1, 2)
@@ -295,7 +295,7 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 		t.Fatalf("OCC is up - which is not expected")
 	}
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RespMsg)
 }
 
 /*
@@ -340,8 +340,8 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
 
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
@@ -357,7 +357,7 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	beforeSessionKill := time.Now().Unix()
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeSessionKill-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeSessionKill-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeSessionKill-3, 1, 2)
@@ -370,7 +370,7 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 		t.Fatalf("OCC is down - which is not expected")
 	}
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RespMsg)
 }
 
 /*
@@ -416,8 +416,8 @@ func TestCutOverPreRollback(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
 
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
@@ -432,7 +432,7 @@ func TestCutOverPreRollback(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	beforeRollback := time.Now().Unix()
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeRollback-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeRollback-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeRollback-3, 1, 2)
@@ -460,5 +460,5 @@ func TestCutOverPreRollback(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RespMsg)
 }

@@ -133,7 +133,6 @@ func InitialSetup(t *testing.T) []DBStatus {
 		t.Fatalf("Please set OCC_TEST_ENV env variable to the ip where herabox is deployed")
 	}
 	logger.GetLogger().Log(logger.Alert, "USING "+heraBoxHost)
-	CT.TearDown()
 
 	OCCBinarySetup(t, os.Getenv("GOPATH")+"/src/bin/mux")
 	ResetOCCDocker(t)

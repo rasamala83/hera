@@ -20,14 +20,14 @@ func TestCutOverDisabled(t *testing.T) {
 	util.InitialSetup(t)
 
 	var wg sync.WaitGroup
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RunMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RunMsg)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
 	afterComplete := time.Now().Unix() - 3
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RunMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, beforeStart, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, beforeStart, afterComplete, 1, 2)
@@ -40,7 +40,7 @@ func TestCutOverDisabled(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RunMsg)
 }
 
 /*
@@ -64,14 +64,14 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 	util.InitialSetup(t)
 
 	var wg sync.WaitGroup
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RunMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RunMsg)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
 	afterComplete := time.Now().Unix() - 3
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RunMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, beforeStart, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, beforeStart, afterComplete, 1, 2)
@@ -108,7 +108,7 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 		t.Fatalf("OCC is down - which is not expected")
 	}
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RunMsg)
 }
 
 /*
@@ -128,8 +128,8 @@ func TestCutOverEnabledTableMissingPrimary(t *testing.T) {
 	util.InitialSetup(t)
 
 	var wg sync.WaitGroup
-	respChan, _ := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
 
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -144,7 +144,7 @@ func TestCutOverEnabledTableMissingPrimary(t *testing.T) {
 		t.Fatalf("OCC is up - which is not expected")
 	}
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RespMsg)
 }
 
 /*
@@ -163,8 +163,8 @@ func TestCutOverEnabledInvalidNumOfRows(t *testing.T) {
 	util.InitialSetup(t)
 
 	var wg sync.WaitGroup
-	respChan, _ := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
 
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -179,7 +179,7 @@ func TestCutOverEnabledInvalidNumOfRows(t *testing.T) {
 		t.Fatalf("OCC is up - which is not expected")
 	}
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RespMsg)
 }
 
 /*
@@ -435,8 +435,8 @@ TODO: Need to add logs and CAL log verification
 func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
 	util.InitialSetup(t)
 	var wg sync.WaitGroup
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -451,9 +451,9 @@ func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
 	start := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	afterComplete := time.Now().Unix() - 3
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RespMsg)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, start, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, start, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, start, afterComplete, 1, 2)

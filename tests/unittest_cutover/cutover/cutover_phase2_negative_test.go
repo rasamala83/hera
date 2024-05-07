@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats) {
+func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string) {
 	util.InitialSetup(t)
 
 	stateLog := make(map[string]int)
@@ -35,13 +35,13 @@ func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, 
 	util.ValidateStateLog(t, stateLog, true)
 
 	var wg sync.WaitGroup
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
 
 	beforeStart := time.Now().Unix() + 2
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
 	afterComplete := time.Now().Unix() - 3
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, beforeStart, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, beforeStart, afterComplete, 1, 2)
@@ -58,7 +58,7 @@ func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	cutOverPreState := time.Now().Unix()
-	trafficStats = util.CT.DumpTrafficStat(dumpChan)
+	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, cutOverPreState-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, cutOverPreState-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, cutOverPreState-3, 1, 2)
@@ -73,13 +73,13 @@ func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, 
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	trafficStats = util.CT.DumpTrafficStat(dumpChan)
+	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	cutOverPhase1End := time.Now().Unix()
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, cutOverPhase1State+3, cutOverPhase1End-3, 1, 2)
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, cutOverPhase1State, cutOverPhase1End-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, cutOverPhase1State, cutOverPhase1End-3)
 
-	return dumpChan, respChan
+	return dumpChan, respChan, RespMsg
 }
 
 /*
@@ -94,8 +94,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver2InvalidNoOfRow(t *testing.T) {
-	dumpChan, respChan := moveToCutOverPhaseI(t)
-	defer util.CT.TearDown()
+	dumpChan, respChan, RespChan := moveToCutOverPhaseI(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespChan)
 
 	stateLog := make(map[string]int)
 
@@ -110,7 +110,7 @@ func TestCutOver2InvalidNoOfRow(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	invalidPhaseII := time.Now().Unix()
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespChan)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseII, invalidPhaseII-3, 1, 2)
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseII, invalidPhaseII-3)
@@ -131,7 +131,7 @@ func TestCutOver2InvalidNoOfRow(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	trafficStopped := time.Now().Unix()
-	trafficStats = util.CT.StopClientTraffic(respChan)
+	trafficStats = util.CT.StopClientTraffic(respChan, RespChan)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
@@ -155,8 +155,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver2InvalidDBUniqueName(t *testing.T) {
-	dumpChan, respChan := moveToCutOverPhaseI(t)
-	defer util.CT.TearDown()
+	dumpChan, respChan, RespMsg := moveToCutOverPhaseI(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
 
 	stateLog := make(map[string]int)
 
@@ -171,7 +171,7 @@ func TestCutOver2InvalidDBUniqueName(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	invalidPhaseII := time.Now().Unix()
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseII, invalidPhaseII-3, 1, 2)
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseII, invalidPhaseII-3)
@@ -192,7 +192,7 @@ func TestCutOver2InvalidDBUniqueName(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	trafficStopped := time.Now().Unix()
-	trafficStats = util.CT.StopClientTraffic(respChan)
+	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
