@@ -382,6 +382,7 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 				return
 			case STOP:
 				logger.GetLogger().Log(logger.Alert, "Stopping Client Traffic")
+				logger.GetLogger().Log(logger.Alert, "Traffic InProgress ", ct.InProgress)
 				ct.InProgress = false
 				CTChan <- CTS
 				return
@@ -394,6 +395,7 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 			if !started {
 				logger.GetLogger().Log(logger.Alert, "Traffic StartTime ", n)
 				ct.InProgress = true
+				logger.GetLogger().Log(logger.Alert, "Traffic InProgress ", ct.InProgress)
 			}
 			go ct.readTraffic(CTS, n)
 			go ct.txnTraffic(CTS, n)
