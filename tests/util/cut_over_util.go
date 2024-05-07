@@ -51,6 +51,7 @@ var CutOverPreInValidUniqName = "CUT_OVER_PRE_INVALID_UNIQ_NAME"
 var CutOverPhaseI = "CUT_OVER_PHASE_1"
 var CutOverPhaseIInvalidRowCount = "CUT_OVER_PHASE_1_INVALID_ROW_CNT"
 var CutOverPhaseIIInvalidRowCount = "CUT_OVER_PHASE_2_INVALID_ROW_CNT"
+var CutOverPhaseIIInvalidDBUniqName = "CUT_OVER_PHASE_2_INVALID_UNIQ_NAME"
 var CutOverPhaseIInvalidUniqName = "CUT_OVER_PHASE_1_INVALID_UNIQ_NAME"
 var CutOverPhaseIInvalidOCCName = "CUT_OVER_PHASE_1_INVALID_OCC_NAME"
 var CutOverPhaseIInvalidPhase = "CUT_OVER_PHASE_1_INVALID_PHASE"
@@ -392,6 +393,13 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_ONE_INVALID', write_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_TWO_INVALID', write_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
+	case CutOverPhaseIIInvalidDBUniqName:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_ONE_INVALID', read_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_TWO_INVALID', read_status='Y', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break

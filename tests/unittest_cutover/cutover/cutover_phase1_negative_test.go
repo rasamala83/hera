@@ -36,7 +36,6 @@ func moveToCutOverPhase(t *testing.T) (chan map[int64]util.ClientTrafficStats, c
 
 	var wg sync.WaitGroup
 	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
 
 	beforeStart := time.Now().Unix() + 2
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 20 seconds")
@@ -80,6 +79,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidNoOfRow(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -139,6 +140,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidUniqName(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -199,6 +202,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidTwoTask(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -259,6 +264,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidOCCName(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -319,6 +326,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidPhase(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -379,6 +388,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidWriteStatus(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -439,6 +450,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidReadStatus(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -499,6 +512,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualWrite(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -559,6 +574,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualRead(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -619,6 +636,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1ReadOff(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	startPhaseI := time.Now().Unix()
@@ -679,6 +698,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1TargetDBDown(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	start := time.Now().Unix()
@@ -756,6 +777,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1SourceDBDown(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	start := time.Now().Unix()
@@ -834,6 +857,8 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1Rollback(t *testing.T) {
 	dumpChan, respChan := moveToCutOverPhase(t)
+	defer util.CT.TearDown()
+
 	stateLog := make(map[string]int)
 
 	start := time.Now().Unix()
