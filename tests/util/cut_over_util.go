@@ -119,6 +119,22 @@ func splitBySpace(input string) []string {
 	return fields
 }
 
+func TearDown(t *testing.T, respChan chan map[int64]ClientTrafficStats, dumpChan chan map[int64]ClientTrafficStats,
+	msgChan chan string, file *os.File) {
+	logger.GetLogger().Log(logger.Alert, "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+	logger.GetLogger().Log(logger.Alert, "ENDING TEST "+t.Name())
+	logger.GetLogger().Log(logger.Alert, "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+	CT.TearDown(respChan, dumpChan, msgChan, file)
+}
+
+func Setup(t *testing.T) ([]DBStatus, *os.File) {
+	logger.GetLogger().Log(logger.Alert, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+	logger.GetLogger().Log(logger.Alert, "STARTING TEST "+t.Name())
+	logger.GetLogger().Log(logger.Alert, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+
+	return InitialSetup(t)
+}
+
 func InitialSetup(t *testing.T) ([]DBStatus, *os.File) {
 	path := os.Getenv("TEST_OUTPUT_PATH")
 	if path == "" {

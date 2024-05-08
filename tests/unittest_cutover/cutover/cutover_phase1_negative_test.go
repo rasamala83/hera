@@ -80,7 +80,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidNoOfRow(t *testing.T) {
 	dumpChan, respChan, RunMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(respChan, dumpChan, RunMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RunMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -141,7 +141,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidUniqName(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -203,7 +203,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidTwoTask(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -265,7 +265,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidOCCName(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -327,7 +327,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidPhase(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -389,7 +389,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidWriteStatus(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -451,7 +451,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidReadStatus(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -513,7 +513,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualWrite(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -575,7 +575,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualRead(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -637,7 +637,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1ReadOff(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -699,7 +699,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1TargetDBDown(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -778,7 +778,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1SourceDBDown(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -858,7 +858,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1Rollback(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 

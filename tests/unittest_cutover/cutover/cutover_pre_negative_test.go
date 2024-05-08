@@ -23,11 +23,11 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverPreSourceDBDown(t *testing.T) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
@@ -122,7 +122,7 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverPreTargetDBDown(t *testing.T) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
 
@@ -152,7 +152,7 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
@@ -237,7 +237,7 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverPreUniqNameInCorrect(t *testing.T) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
 
@@ -267,7 +267,7 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
@@ -311,7 +311,7 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
 
@@ -341,7 +341,7 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 	stateLog["occ.co"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
@@ -386,7 +386,7 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverPreRollback(t *testing.T) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
 
@@ -417,7 +417,7 @@ func TestCutOverPreRollback(t *testing.T) {
 	util.ValidateStateLog(t, stateLog, true)
 
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)

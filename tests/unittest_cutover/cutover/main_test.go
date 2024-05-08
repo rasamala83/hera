@@ -14,7 +14,7 @@ func TestCutOverPositive(t *testing.T) {
 
 	// bring the setup to initial state
 	//OCC running with only one db in TNS, no env set for cut over, cut over table is empty
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	// enable cut over env and tns changes
 	util.EnableCutOver(t, false, false)
@@ -28,7 +28,7 @@ func TestCutOverPositive(t *testing.T) {
 	// send client traffic
 	var wg sync.WaitGroup
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25

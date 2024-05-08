@@ -10,7 +10,7 @@ import (
 )
 
 func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string, *os.File) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
@@ -96,7 +96,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver2InvalidNoOfRow(t *testing.T) {
 	dumpChan, respChan, RespChan, logFile := moveToCutOverPhaseI(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespChan, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespChan, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -157,7 +157,7 @@ TODO: Need to add logs and CAL log verification
 */
 func TestCutOver2InvalidDBUniqueName(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseI(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 

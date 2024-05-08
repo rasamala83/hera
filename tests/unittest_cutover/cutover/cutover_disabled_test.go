@@ -17,11 +17,11 @@ ENABLE CUT-OVER
 */
 
 func TestCutOverDisabled(t *testing.T) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
 	respChan, dumpChan, RunMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RunMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RunMsg, logFile)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
@@ -61,11 +61,11 @@ OCC should exit - but as of now it is not
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
-	_, log_File := util.InitialSetup(t)
+	_, log_File := util.Setup(t)
 
 	var wg sync.WaitGroup
 	respChan, dumpChan, RunMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RunMsg, log_File)
+	defer util.TearDown(t, respChan, dumpChan, RunMsg, log_File)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
@@ -125,11 +125,11 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledTableMissingPrimary(t *testing.T) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -160,11 +160,11 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidNumOfRows(t *testing.T) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -198,7 +198,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledShardedDataBase(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -236,7 +236,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledWrongOCCName(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -266,7 +266,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidUniqueID(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -302,7 +302,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidTNS(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -330,7 +330,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidPhase(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -358,7 +358,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidRead(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -394,7 +394,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidWrite(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -433,10 +433,10 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 	var wg sync.WaitGroup
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -480,7 +480,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledDualWrite(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -515,7 +515,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledDualRead(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
