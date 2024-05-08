@@ -357,7 +357,8 @@ func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTraffic
 	return d
 }
 
-func (ct ClientTraffic) TearDown(respChan chan map[int64]ClientTrafficStats, dumpChan chan map[int64]ClientTrafficStats, msgChan chan string) {
+func (ct ClientTraffic) TearDown(respChan chan map[int64]ClientTrafficStats, dumpChan chan map[int64]ClientTrafficStats,
+	msgChan chan string, file *os.File) {
 	logger.GetLogger().Log(logger.Alert, "Traffic InProgress ", ct.InProgress)
 	if ct.InProgress {
 		msgChan <- KILL
@@ -365,6 +366,7 @@ func (ct ClientTraffic) TearDown(respChan chan map[int64]ClientTrafficStats, dum
 	close(respChan)
 	close(dumpChan)
 	close(msgChan)
+	_ = file.Close()
 }
 
 func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,

@@ -3,13 +3,14 @@ package main
 import (
 	"github.com/paypal/hera/tests/util"
 	logger2 "github.com/paypal/hera/utility/logger"
+	"os"
 	"sync"
 	"testing"
 	"time"
 )
 
-func moveToCutOverPhase(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string) {
-	util.InitialSetup(t)
+func moveToCutOverPhase(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string, *os.File) {
+	_, logFile := util.InitialSetup(t)
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
@@ -63,7 +64,7 @@ func moveToCutOverPhase(t *testing.T) (chan map[int64]util.ClientTrafficStats, c
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, cutOverPreState-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, cutOverPreState-3, 1, 2)
 
-	return dumpChan, respChan, RunMsg
+	return dumpChan, respChan, RunMsg, logFile
 }
 
 /*
@@ -78,8 +79,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidNoOfRow(t *testing.T) {
-	dumpChan, respChan, RunMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(respChan, dumpChan, RunMsg)
+	dumpChan, respChan, RunMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(respChan, dumpChan, RunMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -139,8 +140,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidUniqName(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -201,8 +202,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidTwoTask(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -263,8 +264,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidOCCName(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -325,8 +326,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidPhase(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -387,8 +388,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidWriteStatus(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -449,8 +450,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidReadStatus(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -511,8 +512,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualWrite(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -573,8 +574,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualRead(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -635,8 +636,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1ReadOff(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -697,8 +698,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1TargetDBDown(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -776,8 +777,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1SourceDBDown(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -856,8 +857,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1Rollback(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhase(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 

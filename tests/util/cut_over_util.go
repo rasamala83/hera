@@ -119,12 +119,12 @@ func splitBySpace(input string) []string {
 	return fields
 }
 
-func InitialSetup(t *testing.T) []DBStatus {
+func InitialSetup(t *testing.T) ([]DBStatus, *os.File) {
 	path := os.Getenv("TEST_OUTPUT_PATH")
 	if path == "" {
 		path = "./"
 	}
-	_ = logger.CreateLoggerInternal(path+"/"+t.Name()+".log", "UT", logger.Alert, false)
+	_, file := logger.CreateLoggerInternal(path+"/"+t.Name()+".log", "UT", logger.Alert, false)
 	logger.GetLogger().Log(logger.Alert, "********************************")
 	logger.GetLogger().Log(logger.Alert, "SETTING THE ENV TO INITIAL SETUP")
 	logger.GetLogger().Log(logger.Alert, "********************************")
@@ -172,7 +172,7 @@ func InitialSetup(t *testing.T) []DBStatus {
 	logger.GetLogger().Log(logger.Alert, "********************************")
 	logger.GetLogger().Log(logger.Alert, "END OF INITIAL SETUP")
 	logger.GetLogger().Log(logger.Alert, "********************************")
-	return dbStatus
+	return dbStatus, file
 }
 
 func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {

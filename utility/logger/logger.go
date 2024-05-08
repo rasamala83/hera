@@ -88,13 +88,13 @@ func openFileTimeout(name string, flag int, perm os.FileMode) (*os.File, error) 
 
 // CreateLoggerInternal creates a logger which writes to the given fileName. procName is used to prefix the
 // messages, usefull when multiple processes share the same log file.
-func CreateLoggerInternal(fileName string, procName string, severity int32, redirectStdLogs bool) error {
+func CreateLoggerInternal(fileName string, procName string, severity int32, redirectStdLogs bool) (error, *os.File) {
 	var file *os.File
 	var err error
 	file, err = openFileTimeout(fileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Println("Failed to open log file", err.Error())
-		return fmt.Errorf("Failed! open log file")
+		return fmt.Errorf("Failed! open log file"), nil
 	}
 	// redirect stdout and stderr to this file
 	if redirectStdLogs {
@@ -105,16 +105,14 @@ func CreateLoggerInternal(fileName string, procName string, severity int32, redi
 		createLogger(mw, procName, severity)
 	}
 
-	if !redirectStdLogs {
-
-	}
-	return nil
+	return nil, file
 }
 
 // CreateLogger creates a logger which writes to the given fileName. procName is used to prefix the
 // messages, usefull when mutiple proceses share the same log file.
 func CreateLogger(fileName string, procName string, severity int32) error {
-	return CreateLoggerInternal(fileName, procName, severity, true)
+	err, _ := CreateLoggerInternal(fileName, procName, severity, true)
+	return err
 }
 
 func createLogger(file io.Writer, procName string, severity int32) {

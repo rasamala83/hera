@@ -17,11 +17,11 @@ ENABLE CUT-OVER
 */
 
 func TestCutOverDisabled(t *testing.T) {
-	util.InitialSetup(t)
+	_, logFile := util.InitialSetup(t)
 
 	var wg sync.WaitGroup
 	respChan, dumpChan, RunMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RunMsg)
+	defer util.CT.TearDown(respChan, dumpChan, RunMsg, logFile)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
@@ -61,11 +61,11 @@ OCC should exit - but as of now it is not
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
-	util.InitialSetup(t)
+	_, log_File := util.InitialSetup(t)
 
 	var wg sync.WaitGroup
 	respChan, dumpChan, RunMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RunMsg)
+	defer util.CT.TearDown(respChan, dumpChan, RunMsg, log_File)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
@@ -125,11 +125,11 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledTableMissingPrimary(t *testing.T) {
-	util.InitialSetup(t)
+	_, logFile := util.InitialSetup(t)
 
 	var wg sync.WaitGroup
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
 
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -160,11 +160,11 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidNumOfRows(t *testing.T) {
-	util.InitialSetup(t)
+	_, logFile := util.InitialSetup(t)
 
 	var wg sync.WaitGroup
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
 
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -433,10 +433,10 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
-	util.InitialSetup(t)
+	_, logFile := util.InitialSetup(t)
 	var wg sync.WaitGroup
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown(respChan, dumpChan, RespMsg)
+	defer util.CT.TearDown(respChan, dumpChan, RespMsg, logFile)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)

@@ -3,13 +3,14 @@ package main
 import (
 	"github.com/paypal/hera/tests/util"
 	logger2 "github.com/paypal/hera/utility/logger"
+	"os"
 	"sync"
 	"testing"
 	"time"
 )
 
-func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string) {
-	util.InitialSetup(t)
+func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string, *os.File) {
+	_, logFile := util.InitialSetup(t)
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
@@ -79,7 +80,7 @@ func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, 
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, cutOverPhase1State, cutOverPhase1End-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, cutOverPhase1State, cutOverPhase1End-3)
 
-	return dumpChan, respChan, RespMsg
+	return dumpChan, respChan, RespMsg, logFile
 }
 
 /*
@@ -94,8 +95,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver2InvalidNoOfRow(t *testing.T) {
-	dumpChan, respChan, RespChan := moveToCutOverPhaseI(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespChan)
+	dumpChan, respChan, RespChan, logFile := moveToCutOverPhaseI(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespChan, logFile)
 
 	stateLog := make(map[string]int)
 
@@ -155,8 +156,8 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver2InvalidDBUniqueName(t *testing.T) {
-	dumpChan, respChan, RespMsg := moveToCutOverPhaseI(t)
-	defer util.CT.TearDown(dumpChan, respChan, RespMsg)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseI(t)
+	defer util.CT.TearDown(dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
 
