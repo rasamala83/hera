@@ -145,12 +145,25 @@ bool HBSender::handle_ctrl()
 	synchronize(this);
 	std::string payload;
 	int code = m_reader->read(&payload);
-	if (code != CMD_INTERRUPT_MSG) {
-			WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Invalid control command: %d. Exiting", code);
+	if (code != CMD_INTERRUPT_MSG &&  code != CMD_UPDATE_MSG) {
+			WRITE_LOG_ENTRY(logfile, LOG_ALERT, "CP 50 New Invalid control command: %d. Exiting", code);
 
 			// we're in really bad state
 			_exit(0);
 	}
+	
+	if (code == CMD_UPDATE_MSG) {
+		if (payload.length() != 1) {
+			WRITE_LOG_ENTRY(logfile, LOG_ALERT, "CP 50 New Invalid ctrl update msg length %d. Exiting", payload.length());
+			_exit(0);
+		}
+		const char* flag = payload.c_str();
+		uint8_t user_role = uint8_t(flag[0]);
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "CP 50 New ctrl update msg %s", payload.c_str());
+		m_occ_child->enable_set_user_role(user_role);	
+		return true;
+	}
+
 	if (payload.length() != 5) {
 			WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Invalid control command payload length: %d. Exiting", payload.length());
 
@@ -168,19 +181,6 @@ bool HBSender::handle_ctrl()
 	// capture the req_id which can be used during recover() so as to not recover different req_id due to race condition
 	m_occ_child->set_id_to_abort(rq_id);
 	uint16_t flags = data[0];
-
-
-	if (flags == ControlMessage::CUTOVER_START_CHECK_ROLE) {
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "DB cutover start check user role")
-		m_occ_child->start_check_user_role();
-	} else if (flags == ControlMessage::CUTOVER_STOP_CHECK_ROLE) {
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "DB cutover stop check user role")
-		m_occ_child->stop_check_user_role();
-	} 
-
-
-
-
 	if (flags == ControlMessage::STRANDED_SKIP_BREAK) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "high load, skipping break");
 		m_occ_child->trigger_recovery(flags);

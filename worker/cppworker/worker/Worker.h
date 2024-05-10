@@ -206,7 +206,7 @@ protected:
 	void set_txn_time_offset(bool _reset=false);
 
 	// support action during cutover
-	virtual void cutover_support();
+	virtual void cutover_support() { return; };
 
 protected:
 	bool check_max_requests_and_lifespan();
@@ -219,6 +219,7 @@ protected:
 	std::string m_query_hash;
 	int m_connected_id;
 	std::string m_db_uname;
+	bool m_set_user_role;
 
 	void eor(int _status);
 	void eor(int _status, const std::string& _buffer);

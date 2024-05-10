@@ -279,6 +279,10 @@ private:
 	int bits_to_match; // Sampled Bind Hash logging. Sampling ratio (1:pow(2,bits_to_match)). Default 1 (Sampling ratio 1:2)
 	unsigned long long int bit_mask; // Compute based on bits_to_match
 
+	// variables used for DB cutover
+	bool m_cutover_enabled;
+	bool cutover_role_alarm_set;
+	int m_last_user_role_check;
 public:
 	// need to pass in a server socket which is already bound to the correct port
 	// the child will accept on the socket
@@ -343,7 +347,7 @@ public:
 	int break_oci_call();
 
 	// start/stop check and set user_role
-	int check_set_user_role();
+	int enable_set_user_role(bool enable=false);
 
 
 protected:
@@ -394,6 +398,7 @@ protected:
 	
 	std::string m_shardcfg_postfix;
 
+	virtual void cutover_support();
 private:
 
 	int internal_update_maint_shm(RACNodeStatus);
@@ -531,8 +536,7 @@ private:
 
 	int set_role_for_the_session ();
 
-	int fetch_enabled_role();
-
+	int verify_session_role();
 };
 
 #endif

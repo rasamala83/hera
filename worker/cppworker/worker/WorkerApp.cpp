@@ -178,7 +178,8 @@ void WorkerApp::init_logs()
 
 	// get the log level
 	if (config->get_value("log_level", cval))
-		log_level = StringUtil::to_uint(cval);
+		//log_level = StringUtil::to_uint(cval);
+		log_level = LOG_DEBUG; 
 	else
 		log_level = LOG_DEBUG;
 
