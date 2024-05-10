@@ -10,7 +10,7 @@ import (
 )
 
 func moveToCutOverPhase(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string, *os.File) {
-	_, logFile := util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25

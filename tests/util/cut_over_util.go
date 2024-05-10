@@ -52,6 +52,10 @@ var CutOverPhaseI = "CUT_OVER_PHASE_1"
 var CutOverPhaseIInvalidRowCount = "CUT_OVER_PHASE_1_INVALID_ROW_CNT"
 var CutOverPhaseIIInvalidRowCount = "CUT_OVER_PHASE_2_INVALID_ROW_CNT"
 var CutOverPhaseIIInvalidDBUniqName = "CUT_OVER_PHASE_2_INVALID_UNIQ_NAME"
+var CutOverPhaseIIInvalidOCCName = "CUT_OVER_PHASE_2_INVALID_OCC_NAME"
+var CutOverPhaseIIInvalidTwoTask = "CUT_OVER_PHASE_2_INVALID_TWO_TASK"
+var CutOverPhaseIIInvalidPhase = "CUT_OVER_PHASE_2_INVALID_PHASE"
+
 var CutOverPhaseIInvalidUniqName = "CUT_OVER_PHASE_1_INVALID_UNIQ_NAME"
 var CutOverPhaseIInvalidOCCName = "CUT_OVER_PHASE_1_INVALID_OCC_NAME"
 var CutOverPhaseIInvalidPhase = "CUT_OVER_PHASE_1_INVALID_PHASE"
@@ -128,19 +132,21 @@ func TearDown(t *testing.T, respChan chan map[int64]ClientTrafficStats, dumpChan
 }
 
 func Setup(t *testing.T) ([]DBStatus, *os.File) {
-	logger.GetLogger().Log(logger.Alert, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-	logger.GetLogger().Log(logger.Alert, "STARTING TEST "+t.Name())
-	logger.GetLogger().Log(logger.Alert, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-
-	return InitialSetup(t)
-}
-
-func InitialSetup(t *testing.T) ([]DBStatus, *os.File) {
 	path := os.Getenv("TEST_OUTPUT_PATH")
 	if path == "" {
 		path = "./"
 	}
 	_, file := logger.CreateLoggerInternal(path+"/"+t.Name()+".log", "UT", logger.Alert, false)
+	logger.GetLogger().Log(logger.Alert, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+	logger.GetLogger().Log(logger.Alert, "STARTING TEST "+t.Name())
+	logger.GetLogger().Log(logger.Alert, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+
+	status := InitialSetup(t)
+	return status, file
+}
+
+func InitialSetup(t *testing.T) []DBStatus {
+
 	logger.GetLogger().Log(logger.Alert, "********************************")
 	logger.GetLogger().Log(logger.Alert, "SETTING THE ENV TO INITIAL SETUP")
 	logger.GetLogger().Log(logger.Alert, "********************************")
@@ -188,7 +194,7 @@ func InitialSetup(t *testing.T) ([]DBStatus, *os.File) {
 	logger.GetLogger().Log(logger.Alert, "********************************")
 	logger.GetLogger().Log(logger.Alert, "END OF INITIAL SETUP")
 	logger.GetLogger().Log(logger.Alert, "********************************")
-	return dbStatus, file
+	return dbStatus
 }
 
 func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {
@@ -386,9 +392,9 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		break
 
 	case CutOverPhaseI:
-		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='Y', write_status='N', remarks='" + comment +
 			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='Y', write_status='N', remarks='" + comment +
 			"' where dbuname='HERADB_TWO' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -418,11 +424,25 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
+	case CutOverPhaseIIInvalidOCCName:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', read_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', read_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
 
 	case CutOverPhaseIInvalidOCCName:
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', write_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', write_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
+	case CutOverPhaseIIInvalidPhase:
+		query := "update pypl_occ_cutover set cutover_phase='invalid', read_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='invalid', read_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -468,6 +488,14 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 			"'"
 		execute(t, query, primary, secondary, false, "False")
 		break
+	case CutOverPhaseIIInvalidTwoTask:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', occ_two_task='TWO_TASK_INVALID', read_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', occ_two_task='TWO_TASK_INVALID', read_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
 	case CutOverPhaseIInvalidTwoTask:
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', occ_two_task='TWO_TASK_INVALID', write_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
@@ -1121,10 +1149,10 @@ func ValidateSuccessTraffic(t *testing.T, trafficStats map[int64]ClientTrafficSt
 			t.Fatalf("UTC: %d, Not expecting %s Query in DB: %d - but found as failures", utc, queryType, dbIdWithTraffic)
 		}
 
-		if cts.stats[queryType][0].failureCount > 0 || cts.stats[queryType][1].failureCount > 0 {
+		if cts.stats[queryType][1].failureCount > 0 || cts.stats[queryType][2].failureCount > 0 {
 			CT.DumpStats(trafficStats)
 			t.Fatalf("UTC: %d, Expected No %s failure. DB1: %d failed, DB2: %d failed", utc, queryType,
-				cts.stats[queryType][0].failureCount, cts.stats[queryType][1].failureCount)
+				cts.stats[queryType][1].failureCount, cts.stats[queryType][2].failureCount)
 		}
 	}
 }

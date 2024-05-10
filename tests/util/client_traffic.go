@@ -366,6 +366,7 @@ func (ct ClientTraffic) TearDown(respChan chan map[int64]ClientTrafficStats, dum
 	close(respChan)
 	close(dumpChan)
 	close(msgChan)
+	_ = (*os.File).Sync(file)
 	_ = file.Close()
 }
 
