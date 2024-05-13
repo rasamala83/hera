@@ -70,7 +70,8 @@ type CutoverCfg struct {
 	ActiveTwoTask string            // FOO or FOO_CUTOVER is the active. If no active, set to UnsetStr ("NONE")
 	ActiveShardId ShardByTwoTask    // active shard id mapped to FOO or FOO_CUTOVER. Set to -1 if no active.
 	DbBy2task     map[string]string // DB_UNAME by two_task and two_task_cutover
-	RWstatusByDb  map[string]int    // uniqute db name --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
+	RWstatusByDb  map[string]int    // unique db name --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
+	UserRoleByDb  map[string]int    // unique db name --> user enabled role.
 	//RWstatusByComb map[string]int    // two_task + dbuname --> rw status. e.g. CLOC_HERADB_PRIMARY, CLOC_CUTOVER_HERADB_PRIMARY as key
 	UpdateTime int
 }
@@ -392,7 +393,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 			for t := 0; t <= maxtype; t++ {
 				wpool, initerr := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 				if initerr != nil {
-					logger.GetLogger().Log(logger.Alert, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]", err.Error())
+					logger.GetLogger().Log(logger.Alert, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]", initerr.Error())
 				} else {
 					if wpool != nil {
 						if shid == int(ShId2Task) {
@@ -408,6 +409,9 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 				}
 			}
 		}
+
+		setUserRole(nil, &newcfg);
+
 	} else {
 		changed, changedAttr := CheckCfgChange(*precfg, newcfg)
 		if !changed {
@@ -415,7 +419,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 		} else {
 			logger.GetLogger().Log(logger.Alert, "CP 14 detected cutovercfg change", changed, changedAttr)
 			doAbortWorker(*precfg, newcfg)
-
+			setUserRole(precfg, &newcfg);
 			// 1. Coordinator could retrieve (pull per sql) the new cfg after gCutoverCfg.Store(&newcfg)
 			// 2. we notify workerpool to update (push once) when the two_task to dbname mapping is changed.
 			// Comments: Every sql invokes the check and load latest global copy of cutovercfg but workerpool takes time to process and recycle workers on (dbuname) mismatch.
@@ -837,4 +841,44 @@ func setPermTwoTaskName() error {
 		}
 	}
 	return nil
+}
+
+/* At cutover phase, we will also honor the user_role.
+1. non-cutover to cutover phase, we will notify workerpools to tell the workers to start check and set user role
+2. cutover to non-cutover phase, we will notify workerpools to tell the workers to stop check and set user role
+3. should we pass the role_enabled value to the workers? no, but let's send versioning counter. Everytime the value of role_enable changes, increment the counter
+*/
+func setUserRole(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
+	var execSetUserRole uint = 0
+	if (curcfg == nil) {
+		execSetUserRole = 1 
+	} else if (nextcfg.Phase == CutoverPhStr) && (curcfg == nil) {
+		execSetUserRole = 1
+	} else if (nextcfg.Phase == CutoverPhStr) && (curcfg.Phase != CutoverPhStr) {
+		execSetUserRole = 1
+	}
+
+	if (execSetUserRole > 0) {
+		// during cutover phase, it is unrealistic scenario that db unique name be changed.
+		maxtype := int(wtypeRW)
+		if GetConfig().ReadonlyPct > 0 {
+			maxtype += 1
+		}
+
+		for shid := 0; shid < int(MaxDbInCutover); shid++ {
+			for t := 0; t <= maxtype; t++ {
+				wpool, err := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
+				if err != nil {
+					logger.GetLogger().Log(logger.Alert, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]", err.Error())
+				} else {
+					if wpool != nil {
+						logger.GetLogger().Log(logger.Alert, "cutover setUserRole", shid, ",", t, "]")
+						// we will pass the user_role flag to workerpool, subsequently 
+						// workerpool notifies all existing workers, and pass it to all future workers.
+						wpool.CheckSetUserRole(execSetUserRole)
+					}
+				}
+			}
+		}
+	}
 }
