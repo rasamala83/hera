@@ -159,7 +159,7 @@ bool HBSender::handle_ctrl()
 		}
 		const char* flag = payload.c_str();
 		uint8_t user_role = uint8_t(flag[0]);
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "CP 50 New ctrl update msg %s", payload.c_str());
+		// WRITE_LOG_ENTRY(logfile, LOG_ALERT, "CP 50 New ctrl update msg %s", payload.c_str());
 		m_occ_child->enable_set_user_role(user_role);	
 		return true;
 	}

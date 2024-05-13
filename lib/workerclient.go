@@ -585,12 +585,12 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 				if len(info) > 1 {
 					flag, err := strconv.Atoi(info[1])
 					if err != nil {
-						logger.GetLogger().Log(logger.Alert, "CP 11 Can't get valid roleCheck flag")
+						logger.GetLogger().Log(logger.Alert, "Can't get valid roleCheck flag")
 					} else {
-						logger.GetLogger().Log(logger.Verbose, "CP 11 worker returned m_set_user_reload", flag)
+						logger.GetLogger().Log(logger.Verbose, "worker returned m_set_user_reload", flag)
 						pool, err := GetWorkerBrokerInstance().GetWorkerPool(worker.Type, worker.instID, worker.shardID)
 						if err != nil {
-							logger.GetLogger().Log(logger.Alert, "CP 11 attachToWorker Can't get workerpool")
+							logger.GetLogger().Log(logger.Alert, "attachToWorker can't get workerpool")
 							// we need recylce
 						}
 						if pool.checkSetUserRole != uint(flag) {
@@ -626,11 +626,6 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			logger.GetLogger().Log(logger.Alert, "two_task env is not defined at workerclient start")
 		}
 
-		//logger.GetLogger().Log(logger.Alert, "CP 11 attachWorker() Cutover enabled. worker.ID", worker.ID,
-		//	"worker.dbUname", worker.dbUname,
-		//	"worker.shardID", worker.shardID,
-		//	"worker.Type", worker.Type,
-		//	"worker.ConnTwoTask", worker.ConnTwoTask)
 		if coCfg != nil {
 			var wkr2task string
 			if int(worker.ConnTwoTask) == int(ShId2Task) {
@@ -1140,11 +1135,6 @@ func (worker *WorkerClient) isProcessRunning() bool {
 }
 
 func (worker *WorkerClient) sendUserRoleMsg(_enable uint) {
-        /*buff := []byte{byte(param), byte((worker.rqId & 0xFF000000) >> 24), byte((worker.rqId & 0x00FF0000) >> 16),
-               byte((worker.rqId & 0x0000FF00) >> 8), byte((worker.rqId & 0x000000FF))}
-        ns := netstring.NewNetstringFrom(common.CmdInterruptMsg, buff)
-	*/
-
 	buff := []byte{byte(_enable)}
         ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
 	logger.GetLogger().Log(logger.Alert, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg",ns.Cmd, ns.Payload)
