@@ -186,7 +186,7 @@ func TestCutOverEnabledInvalidNumOfRows(t *testing.T) {
 TEST
 1. ENABLE CUT-OVER
 2. Create cut-over management table and insert records for cut-over enabled phase
-3. Enable sharing by making sure management table has right entries and the cdb values are set for sharding
+3. Enable sharding by making sure management table has right entries and the cdb values are set for sharding
 4. Restart OCC (SIGHUP)
 5. Wait for 30 seconds before starting validation
 

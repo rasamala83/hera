@@ -86,12 +86,14 @@ func (tc *TestConnection) GetConnection() {
 	pwd, _ := os.Getwd()
 	host, driverName, err := tc.SetUpHeraConnection(pwd + "/../../certs/client_test.cert")
 	if err != nil {
+		logger.GetLogger().Log(logger.Warning, err)
 		tc.errorConnection(err)
 		return
 	}
 
 	db, err := sql.Open(driverName, host)
 	if err != nil {
+		logger.GetLogger().Log(logger.Warning, err)
 		tc.errorConnection(err)
 		return
 	}
@@ -100,6 +102,7 @@ func (tc *TestConnection) GetConnection() {
 
 	conn, err := db.Conn(ctx)
 	if err != nil {
+		logger.GetLogger().Log(logger.Warning, err)
 		tc.errorConnection(err)
 		return
 	}
