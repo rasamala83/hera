@@ -189,9 +189,7 @@ func Run() {
 		time.Sleep(time.Millisecond * 100)
 	}
 
-	logger.GetLogger().Log(logger.Alert, "shtien wait for seconds")
 	time.Sleep(time.Second * 3)
-	logger.GetLogger().Log(logger.Alert, "end of seconds wait")
 	if GetConfig().EnableCutover {
 		err = InitCutoverCfg(*namePtr)
 		if err != nil {

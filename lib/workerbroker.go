@@ -447,8 +447,7 @@ func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, sha
 // Enable   |100%     | 1
 // Pre      |100%     | 100%
 // Cutover  |100%     | 100%
-// Complete |100%     | 100%
-// Broom    |1  | 100%
+// Complete |1        | 100%
 /* when given a cutover phase, the function resizes the workerpool size accordingly. */
 func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	wW := GetNumWWorkers(0)
@@ -478,7 +477,7 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 		return
 	}
 
-	if phase == BroomPhId || phase == CompletePhId {
+	if phase == CompletePhId {
 		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Complete/Broom phase")
 		broker.resizePool(wtypeRW, minSize, 0)
 		broker.resizePool(wtypeRW, wW, 1)

@@ -36,7 +36,7 @@ const (
 	PrePhId      = 2
 	CutoverPhId  = 3
 	CompletePhId = 4
-	BroomPhId    = 5
+//	BroomPhId    = 5
 )
 
 const (
@@ -46,12 +46,16 @@ const (
 
 // each record represents a table's row of record
 type CutoverRecord struct {
-	poolName string
-	dbUname  string
-	occ2task string
+	//poolName string
+	//dbUname  string
+	//occ2task string
+	poolName sql.NullString
+	dbUname  sql.NullString
+	occ2task sql.NullString
 	wstatus  sql.NullString
 	rstatus  sql.NullString
-	phase    string
+	phase    sql.NullString
+	wisbRoles sql.NullString
 	//expiration  int
 }
 
@@ -72,7 +76,6 @@ type CutoverCfg struct {
 	DbBy2task     map[string]string // DB_UNAME by two_task and two_task_cutover
 	RWstatusByDb  map[string]int    // unique db name --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
 	UserRoleByDb  map[string]int    // unique db name --> user enabled role.
-	//RWstatusByComb map[string]int    // two_task + dbuname --> rw status. e.g. CLOC_HERADB_PRIMARY, CLOC_CUTOVER_HERADB_PRIMARY as key
 	UpdateTime int
 }
 
@@ -122,9 +125,9 @@ func InitCutoverCfg(modulename string) error {
 
 	gModuleName = modulename
 
-	// always query the two_task shard
 	i := 0
-	ctx := context.Background()
+	//ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+        //defer cancel()
 	var db *sql.DB
 	var err error
 	maxRetry := 10
@@ -134,33 +137,31 @@ func InitCutoverCfg(modulename string) error {
 			db.Close()
 		}
 		// always send cfg query to two_task connections
-		db, err = cutoverOpenDb(ShId2Task)
+		db, err = cutoverOpenDb()
 		evtname := "init_cfg_"
-		if err == nil {
-			err = loadCutoverCfg(ctx, db)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "error: cutoverOpenDb", err.Error())
+			evt := cal.NewCalEvent(EvtTypeCutover, evtname+"opendb_error_"+strconv.Itoa(i), cal.TransOK, err.Error())
+			evt.Completed()
+		} else {
+			err = loadCutoverCfg(db)
 			if err != nil {
+				logger.GetLogger().Log(logger.Alert, "error: init loadCutoverCfg()", err.Error())
 				evt := cal.NewCalEvent(EvtTypeCutover, evtname+strconv.Itoa(i), cal.TransOK, err.Error())
 				evt.Completed()
 			} else {
+				logger.GetLogger().Log(logger.Info, "init loadCutoverCfg successful")
 				evt := cal.NewCalEvent(EvtTypeCutover, evtname+"successful_"+strconv.Itoa(i), cal.TransOK, strconv.Itoa(i))
 				evt.Completed()
 				break
 			}
-		} else {
-			evt := cal.NewCalEvent(EvtTypeCutover, evtname+"opendb_error_"+strconv.Itoa(i), cal.TransOK, err.Error())
-			evt.Completed()
 		}
+
 		time.Sleep(time.Second)
 	}
 
 	if i == maxRetry {
 		return errors.New("failed to load cutovercfg from two_task pool, no more retry")
-	}
-
-	err = writeCutoverLog(ctx)
-	if err != nil {
-		logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed", err.Error())
-		// best effort. continue.
 	}
 
 	// spawn the routine to load config
@@ -172,25 +173,20 @@ func InitCutoverCfg(modulename string) error {
 			}
 
 			// always two_task connections
-			db, err = cutoverOpenDb(ShId2Task)
-			if err == nil {
-				err = loadCutoverCfg(ctx, db)
+			db, err = cutoverOpenDb()
+			if err != nil {
+				evt := cal.NewCalEvent(EvtTypeCutover, "load opendb error", cal.TransOK, err.Error())
+				evt.Completed()
+			} else {
+				err = loadCutoverCfg(db)
 				if err != nil {
-					logger.GetLogger().Log(logger.Warning, "Error <", err, "> loading the cutovercfg from workerpool", GetCutoverCfg().DbBy2task[os.Getenv("TWO_TASK")])
+					logger.GetLogger().Log(logger.Warning, "error: loadCutoverCfg DB id", err.Error())
 					evt := cal.NewCalEvent(EvtTypeCutover, "load cfgerror", cal.TransOK, err.Error())
 					evt.Completed()
 				} else {
 					evt := cal.NewCalEvent(EvtTypeCutover, "loadcfg", cal.TransOK, "success")
 					evt.Completed()
 				}
-				//err = writeCutoverLog(ctx)
-				//if err != nil {
-				//	logger.GetLogger().Log(logger.Warning, "CP 0 InitCutoverCfg write to log failed but continue", err.Error())
-				//}
-
-			} else {
-				evt := cal.NewCalEvent(EvtTypeCutover, "load opendb error", cal.TransOK, err.Error())
-				evt.Completed()
 			}
 		}
 	}()
@@ -206,7 +202,7 @@ func InitCutoverCfg(modulename string) error {
 // cutover_phase: enable, pre, cutover, complete, broom
 // expiration: time stamp or status
 func getCutoverSQL() string {
-	sqltxt := fmt.Sprintf("select occ_name, dbuname, occ_two_task, cutover_phase, write_status, read_status from %s_cutover where occ_name = '%s' and occ_two_task IN ('%s', '%s')",
+	sqltxt := fmt.Sprintf("select occ_name, dbuname, occ_two_task, cutover_phase, write_status, read_status, wisb_roles from %s_cutover where occ_name = '%s' and occ_two_task IN ('%s', '%s')",
 		GetConfig().ManagementTablePrefix,
 		//GetConfig().CutoverPostfix, // why do we need postfix for table name ?
 		gModuleName,
@@ -215,12 +211,15 @@ func getCutoverSQL() string {
 	return sqltxt
 }
 
-func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
+func loadCutoverCfg(db *sql.DB) error {
 
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "CP 7 Begin loading cutover cfg")
 		defer func() {
+			cancel()
 			logger.GetLogger().Log(logger.Verbose, "Done loading cutover cfg")
+
 		}()
 
 	}
@@ -248,7 +247,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 		}
 		//sqltxt := fmt.Sprintf("select occ_name, dbuname, occ_two_task, write_status, read_status, cutover_phase from %s_cutover where occ_name = '%s' and occ_two_task IN ('%s', '%s')",
 		rec := &records[nrow]
-		err = rows.Scan(&(rec.poolName), &(rec.dbUname), &(rec.occ2task), &(rec.phase), &(rec.wstatus), &(rec.rstatus))
+		err = rows.Scan(&(rec.poolName), &(rec.dbUname), &(rec.occ2task), &(rec.phase), &(rec.wstatus), &(rec.rstatus), &(rec.wisbRoles))
 		if err != nil {
 			return err
 		}
@@ -259,66 +258,94 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("CP 7 error expected 2 rows but get %d from cfg table", nrow)
 	}
 
-	// standardize a few things
+/*
+Fundamental requirement for occ to process cutover config data
+1. config sql above returns exact two rows of data
+2. both the returned rows have identical value of cutover_phase
+3. the value of cutover_phase in the two rows is not among ‘Enable’, ‘Pre’, ‘Cutover’, ‘Complete’ (case insensitive)
+4. read_status, write_status is not ‘Y' or 'N’. (case insensitive)
+(Excluding cutover phase “Enable”), both the returned rows have 'Y' in read_status and/or write_status
+*/
+	// standardize string case and error out with empty string 
 	for i := 0; i < 2; i++ {
-		records[i].phase = strings.ToUpper(strings.TrimSpace(records[i].phase))
-		records[i].dbUname = strings.ToUpper(strings.TrimSpace(records[i].dbUname))
-		records[i].occ2task = strings.ToUpper(strings.TrimSpace(records[i].occ2task))
+		if (!records[i].phase.Valid) {
+			return fmt.Errorf("error cutover cfg has NULL string in Phase")
+		}
+		if (!records[i].dbUname.Valid) {
+			return fmt.Errorf("error cutover cfg has NULL string in Db_name")
+		}
+		if (!records[i].rstatus.Valid) {
+			return fmt.Errorf("error cutover cfg has NULL string in read_status")
+		}
+		if (!records[i].wstatus.Valid) {
+			return fmt.Errorf("error cutover cfg has NULL string in write_status")
+		}
+		if (!records[i].wisbRoles.Valid) {
+			return fmt.Errorf("error cutover cfg has NULL string in wisb_roles")
+		}
+		records[i].phase.String = strings.ToUpper(strings.TrimSpace(records[i].phase.String))
+		records[i].dbUname.String = strings.ToUpper(strings.TrimSpace(records[i].dbUname.String))
+		records[i].occ2task.String = strings.ToUpper(strings.TrimSpace(records[i].occ2task.String))
+		records[i].rstatus.String = strings.ToUpper(strings.TrimSpace(records[i].rstatus.String))
+		records[i].wstatus.String = strings.ToUpper(strings.TrimSpace(records[i].wstatus.String))
 	}
-	// Having the query result, validate a few basic things
-	same := isCfgSame(records[0].phase, records[1].phase) // phase is consistent
-	if !same {
+	// The two rows'occ_two_task must not be the same
+	if (isCfgSame(records[0].occ2task.String, records[1].occ2task.String)) {
+		return fmt.Errorf("CP 7 error cutover cfg can't have same two_task [%s, %s] [%s, %s]",
+			records[0].occ2task.String, records[0].dbUname.String,
+			records[1].occ2task.String , records[1].dbUname.String)
+	}
+
+	// The two rows' phase must be identical
+	if (!isCfgSame(records[0].phase.String, records[1].phase.String)) {
 		logger.GetLogger().Log(logger.Alert, "CP 7 error load inconsistent phase", records[0].phase, records[1].phase)
 		return fmt.Errorf("error cutovercfg query result has inconsistent phase %s, %s", records[0].phase, records[1].phase)
 	}
-
-	ph := validatePhase(records[0].phase) // phase is valid
+	ph := validatePhase(records[0].phase.String) // phase is valid
 	if ph == 0 {
 		return fmt.Errorf("CP 7 error cutover cfg query result has invalid phase")
+	} else if (isCfgSame(records[0].dbUname.String, records[1].dbUname.String)){ 
+		// The two rows'dbUname can't be the same in Pre and Cutover phases.
+		// maybe we just prohibit identical dbUname since we will no longer enforce integrity in Complete as well
+		if (ph == CutoverPhId) { 
+			return fmt.Errorf("CP 7 error cutovercfg can't have same dbuname [%s, %s] [%s, %s] during cutover",
+				records[0].occ2task.String, records[0].dbUname.String,
+				records[1].occ2task.String, records[1].dbUname.String)
+		}
+		// log only
+		logger.GetLogger().Log(logger.Info, "CP 7 OK, just logging. cutover two_task and two_task_cutover dbuname identical") 
 	}
 
-	same = isCfgSame(records[0].occ2task, records[1].occ2task) // occ_two_task cannot be the same
-	if same {
-		return fmt.Errorf("CP 7 error cutover cfg can't have same two_task [%s, %s] [%s, %s]",
-			records[0].occ2task, records[0].dbUname,
-			records[1].occ2task, records[1].dbUname)
-	}
 
-	same = isCfgSame(records[0].dbUname, records[1].dbUname)
-	if same {
-		return fmt.Errorf("CP 7 error cutovercfg can't have same dbuname [%s, %s] [%s, %s]",
-			records[0].occ2task, records[0].dbUname,
-			records[1].occ2task, records[1].dbUname)
-	}
-
-	// check how many active db when populating the information into the newcfg struct
+	// count how many active db 
 	var newcfg CutoverCfg
 	newcfg.DbBy2task = make(map[string]string, 10)
 	newcfg.RWstatusByDb = make(map[string]int, 10)
-	newcfg.Phase = records[0].phase
+	newcfg.Phase = records[0].phase.String
 	active := 0
 	for i := 0; i < 2; i++ {
-		newcfg.DbBy2task[records[i].occ2task] = records[i].dbUname
-		newcfg.RWstatusByDb[records[i].dbUname] = 0
-		if records[i].rstatus.Valid && (records[i].rstatus.String[0] == 'Y' || records[i].rstatus.String[0] == 'y') {
-			newcfg.RWstatusByDb[records[i].dbUname] |= 0x0001
+		newcfg.DbBy2task[records[i].occ2task.String] = records[i].dbUname.String
+		newcfg.RWstatusByDb[records[i].dbUname.String] = 0
+		if records[i].rstatus.String[0] == 'Y' {
+			newcfg.RWstatusByDb[records[i].dbUname.String] |= 0x0001
 		}
-		if records[i].wstatus.Valid && (records[i].wstatus.String[0] == 'Y' || records[i].wstatus.String[0] == 'y') {
-			newcfg.RWstatusByDb[records[i].dbUname] |= 0x0002
+		if records[i].wstatus.String[0] == 'Y' {
+			newcfg.RWstatusByDb[records[i].dbUname.String] |= 0x0002
 		}
 
-		logger.GetLogger().Log(logger.Debug, "CP 7", "rec id", i, ", newcfg.RWStatusByDb[", newcfg.DbBy2task[records[i].occ2task], "], value =", newcfg.RWstatusByDb[newcfg.DbBy2task[records[i].occ2task]])
-		if newcfg.RWstatusByDb[newcfg.DbBy2task[records[i].occ2task]] > 0 {
+		logger.GetLogger().Log(logger.Debug, "CP 7", "rec id", i, ", newcfg.RWStatusByDb[", newcfg.DbBy2task[records[i].occ2task.String], 
+					"], value =", newcfg.RWstatusByDb[newcfg.DbBy2task[records[i].occ2task.String]])
+		if newcfg.RWstatusByDb[newcfg.DbBy2task[records[i].occ2task.String]] > 0 {
 			active++
-			newcfg.ActiveTwoTask = records[i].occ2task // set it to active
+			newcfg.ActiveTwoTask = records[i].occ2task.String // set it to active
 			logger.GetLogger().Log(logger.Debug, "CP 7 Active db checking, rec id", i, "newcfg two_task",
 				newcfg.ActiveTwoTask, ", RWStatusByDb[", newcfg.DbBy2task[newcfg.ActiveTwoTask],
 				"], value =", newcfg.RWstatusByDb[newcfg.DbBy2task[newcfg.ActiveTwoTask]])
 
-			if records[i].occ2task == g2TaskName { // set shardid based on ActiveTwoTask.
+			if records[i].occ2task.String == g2TaskName { // set shardid based on ActiveTwoTask.
 				newcfg.ActiveTwoTask = g2TaskName
 				newcfg.ActiveShardId = ShId2Task
-			} else if records[i].occ2task == g2TaskCutoverName {
+			} else if records[i].occ2task.String == g2TaskCutoverName {
 				newcfg.ActiveTwoTask = g2TaskCutoverName
 				newcfg.ActiveShardId = ShId2TaskCutover
 			} else {
@@ -440,7 +467,7 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 					if err != nil {
 						logger.GetLogger().Log(logger.Alert, "CP 14 error cutovercfg failed to udpate workerpool ", shid, t)
 					} else {
-						// workerpool tracks phase, dbuname and enforce integrity at Pre, Cutover, Complete
+						// workerpool tracks phase, dbuname and enforce integrity at Pre, Cutover
 						if wpool != nil {
 							logger.GetLogger().Log(logger.Alert, "CP 14 got the workerpool [shid, type] [", shid, ",", t, "]")
 							// integrity is mainly for the workerpool phase + dbuname
@@ -467,13 +494,6 @@ func loadCutoverCfg(ctx context.Context, db *sql.DB) error {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Verbose, "CP 14 cutovercfg change is processed and updated.")
 			}
-
-			logger.GetLogger().Log(logger.Warning, "CP 14 write to log")
-			//err = writeCutoverLog(ctx)
-			//if err != nil {
-			//	logger.GetLogger().Log(logger.Warning, "CP 14 write to log failed", err.Error())
-			// best effort. continue.
-			//}
 		}
 	}
 
@@ -656,131 +676,13 @@ func doAbortWorker(curcfg CutoverCfg, nextcfg CutoverCfg) {
 
 }
 
-// initialize the golang's database/sql object used to read the database configuration. The connection is created using the loopdriver,
-// a sql driver used internally for ease of programming: the config load routines use standard database/sql interface.
-
-func cutoverOpenDb(shid ShardByTwoTask) (*sql.DB, error) {
-	if shid > 1 {
-		return nil, errors.New("rapid cutover not support more than 2 database")
-	}
-
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shid))
+func cutoverOpenDb() (*sql.DB, error) {
+	db, err := sql.Open("heraloop", fmt.Sprintf("0:0:0"))
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxIdleConns(0)
 	return db, nil
-}
-
-// Generate the insert log sql
-
-func getLogSQL() string {
-	//poolname, hostname, two_task, db_uname, phase, write_status, read_status, last_update_time
-	return fmt.Sprintf("insert into %s_cutover_log (occ_name, host_name, occ_two_task, dbuname, phase,  write_status, read_status, time_last_update) values (:occ_name, :host_name, :occ_two_task, :dbuname, :phase, :write_status, :read_status, :time_last_update)",
-		GetConfig().ManagementTablePrefix)
-}
-
-// Best efforts log writing. Insert to both database connection pools two_task and two_task_cutover
-
-func writeCutoverLog(ctx context.Context) error {
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "CP 8 Begin loading cutover cfg")
-		defer func() {
-			logger.GetLogger().Log(logger.Verbose, "CP 8 Done loading cutover cfg")
-		}()
-
-	}
-
-	cfg := GetCutoverCfg()
-	if cfg == nil {
-		logger.GetLogger().Log(logger.Verbose, "CP 8 cfg is nil")
-		return nil
-	}
-
-	ctx2 := context.Background()
-	for sh := 1; sh < 2; sh++ {
-		var db *sql.DB
-		var err error
-		// best efforts, write to both shard
-		evtname := "write_log_"
-		if db != nil {
-			db.Close()
-		}
-		db, err = cutoverOpenDb(ShardByTwoTask(sh))
-		if err != nil {
-			evtname = evtname + "opendb_error_" + strconv.Itoa(sh)
-			evt := cal.NewCalEvent(EvtTypeCutover, evtname, cal.TransOK, err.Error())
-			evt.Completed()
-		}
-		conn, err := db.Conn(ctx2)
-		if err != nil {
-			conn.Close()
-			return fmt.Errorf("CP 8 error (conn) write cutover cfg to Db: %s", err.Error())
-		}
-		defer conn.Close()
-
-		//tomux := gosqldriver.InnerConn(conn)
-		//logger.GetLogger().Log(logger.Verbose, "CP 8 get connection to SetShardID")
-		// Internal READ query has contract controlled by mux
-		// Internal WRITE query, mux will follow to sessional shard setting
-		//tomux.SetShardID(int(ShId2Task))
-		txn, err := conn.BeginTx(ctx2, nil)
-		if err != nil {
-			logger.GetLogger().Log(logger.Debug, "CP 8 BeginTx error", err.Error())
-			return fmt.Errorf("CP 8 error BeginTx error %s", err.Error())
-		}
-		defer txn.Rollback()
-
-		stmt, err := txn.PrepareContext(ctx2, getLogSQL())
-		if err != nil {
-			conn.Close()
-			return fmt.Errorf("error (stmt) loading cutover cfg: %s", err.Error())
-		}
-		defer stmt.Close()
-
-		hostname, _ := os.Hostname()
-		//temp_hostname := "dummyhost"
-		var bindIns []interface{}
-
-		//("insert into %s_cutover_log (occ_name, host_name, occ_two_task, dbuname, phase,  write_status, read_status, time_last_update) values (:occ_name, :host_name, :occ_two_task, :dbuname, :phase, :write_status, :read_status, :time_last_update)",
-		var BindInNames = []string{"occ_name", "host_name", "occ_two_task", "dbuname", "phase", "write_status", "read_status", "time_last_update"}
-		ws, rs := "N", "N"
-		if cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&WriteOk == WriteOk {
-			ws = "Y"
-		}
-
-		if cfg.RWstatusByDb[cfg.DbBy2task[g2TaskName]]&ReadOk == ReadOk {
-			rs = "Y"
-		}
-		curTime := strconv.FormatInt(time.Now().Unix(), 10)
-		var BindInValues = []string{gModuleName, hostname, g2TaskName,
-			cfg.DbBy2task[g2TaskName], cfg.Phase, ws, rs, curTime} // change to populate as int
-		for i := 0; i < 8; i++ {
-			bindIns = append(bindIns, sql.Named(BindInNames[i], BindInValues[i]))
-		}
-
-		//poolname, hostname, two_task, db_uname, phase, write_status, read_status, last_update_time
-		result, err := stmt.ExecContext(ctx2, bindIns...)
-		if err != nil {
-			conn.Close()
-			return fmt.Errorf("CP 8 error (log query) insert error: %s", err.Error())
-		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			logger.GetLogger().Log(logger.Debug, "CP 8 RowsAffected error", err.Error())
-			conn.Close()
-			return fmt.Errorf("CP 8 error (log query) insert error: %s", err.Error())
-		}
-		err = txn.Commit()
-		if err != nil {
-			logger.GetLogger().Log(logger.Debug, "CP 8 inserted commit failure", rows)
-			return fmt.Errorf("CP 8 insert commit failure %s", err.Error())
-		}
-
-		logger.GetLogger().Log(logger.Debug, "CP 8 inserted log", rows)
-		conn.Close()
-	}
-	return nil
 }
 
 /*  validatePhase(phase string) int - func takes string input and return cooresponding non-zero phase ID. return 0 if input phase is defined
@@ -795,8 +697,8 @@ func validatePhase(phase string) int {
 		return CutoverPhId
 	case CompletePhStr:
 		return CompletePhId
-	case BroomPhStr:
-		return BroomPhId
+//	case BroomPhStr:
+//		return BroomPhId
 	default:
 		logger.GetLogger().Log(logger.Warning, "config phase is invalid", phase)
 		return 0
@@ -806,9 +708,7 @@ func validatePhase(phase string) int {
 
 // return true if two phases are the same otherwise false.
 func isCfgSame(s1 string, s2 string) bool {
-	n1 := strings.ToUpper(strings.TrimSpace(s1))
-	n2 := strings.ToUpper(strings.TrimSpace(s2))
-	same := (n1 == n2)
+	same := (s1 == s2)
 	return same
 }
 
@@ -851,7 +751,8 @@ func setPermTwoTaskName() error {
 func setUserRole(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 	var execSetUserRole uint = 0
 	if (curcfg == nil) {
-		execSetUserRole = 1 
+		// nil cutcfg indicates server startup before listener is enabled.
+		execSetUserRole = 0
 	} else if (nextcfg.Phase == CutoverPhStr) && (curcfg == nil) {
 		execSetUserRole = 1
 	} else if (nextcfg.Phase == CutoverPhStr) && (curcfg.Phase != CutoverPhStr) {

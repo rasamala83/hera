@@ -902,13 +902,24 @@ func (pool *WorkerPool) decBacklogCnt() {
 	}
 }
 
+// CUTOVER phase: apply to both two_task and two_task_cutover shards
+// PRE phase: apply to only two_task_cutover shard
+// COMPLETE phase: apply to only two_task shard
 // What kind of error should we return ?
 func (pool *WorkerPool) enforceIntegrity() {
+	logger.GetLogger().Log(logger.Verbose, "CP 21 invoked")
 	if pool == nil {
 		return
 	}
-
-	logger.GetLogger().Log(logger.Verbose, "CP 21 invoked")
+	if pool.phase == EnablePhStr {
+		return
+	}
+	if (pool.phase == PrePhStr) && (pool.CoShardID == ShId2Task) {
+		return
+	}
+	if (pool.phase == CompletePhStr) && (pool.CoShardID == ShId2TaskCutover) {
+		return
+	}
 
 	cnt := 0
 	var workers []*WorkerClient
@@ -927,27 +938,9 @@ func (pool *WorkerPool) enforceIntegrity() {
 	}
 	pool.poolCond.L.Unlock()
 	for _, w := range workers {
-		// Immdiate Termination conditions:
-		// CUTOVER phase: apply to both two_task and two_task_cutover shards
-		// PRE phase: apply to only two_task_cutover shard
-		// COMPLETE phase: apply to only two_task shard
-		// BROOM phase: apply to only two_task shard
-		if pool.phase == CutoverPhStr {
-			logger.GetLogger().Log(logger.Alert, "CP 21 CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
-			w.Terminate()
-		} else if pool.phase == PrePhStr && pool.CoShardID == ShId2TaskCutover {
-			logger.GetLogger().Log(logger.Alert, "CP 21 At PRE phase, enforce TWO_TASK_CUTOVER dbuname integrity, terminate worker: pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
-			w.Terminate()
-		} else if pool.phase == CompletePhStr && pool.CoShardID == ShId2Task {
-			logger.GetLogger().Log(logger.Alert, "CP 21 At COMPLETE phase, enforce TWO_TASK dbuname integrity, terminate worker: pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
-			w.Terminate()
-		} else {
-			logger.GetLogger().Log(logger.Info, "CP 21 dbuname mismatched, but not enforced at", pool.phase, " terminate worker: pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
-		}
+		logger.GetLogger().Log(logger.Alert, "CP 21 CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
+			w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
+		w.Terminate()
 	}
 	logger.GetLogger().Log(logger.Verbose, "CP 21 enforceIntegrity done.", pool.phase, pool.dbUname)
 }
@@ -969,22 +962,9 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 	logger.GetLogger().Log(logger.Alert, "CP 20 workerpool", pool.Type, pool.ShardID, "dbUname and dbuname before: [",
 		pool.phase, ",", pool.dbUname, "], new: [", newPhase, ",", newDbUname, "]")
 
-	//
-	// We could optimize to skip calling enforceIntegrity to avoid lock
-	if pool.dbUname != newDbUname && pool.phase != newPhase {
-		logger.GetLogger().Log(logger.Alert, "CP 20 both Phase and DBUname changed call enforce workerpool integrity")
-	}
-
-	if pool.dbUname != newDbUname && pool.phase == newPhase {
-		logger.GetLogger().Log(logger.Alert, "CP 20 DBUname changed only,  call enforce workerpool integrity")
-	}
-	if pool.phase != newPhase && pool.dbUname == newDbUname {
-		logger.GetLogger().Log(logger.Alert, "CP 20 Phase changed only,  call enforce workerpool integrity")
-	}
 	pool.phase = newPhase
 	pool.dbUname = newDbUname
 	pool.enforceIntegrity()
-
 }
 
 /*
