@@ -114,11 +114,8 @@ type DBTxn struct {
 func dbService(dbUniqueName string, serviceName string, action string) []DBStatus {
 	var status []DBStatus
 
-	response, err := http.Get("http://" + heraBoxHost + ":8000/occ/db_service?action=" + action +
-		"&service_name=" + serviceName + "&db_unique_name=" + dbUniqueName)
-	if err != nil {
-		panic(err)
-	}
+	response := httpGet(nil, "http://"+heraBoxHost+":8000/occ/db_service?action="+action+
+		"&service_name="+serviceName+"&db_unique_name="+dbUniqueName)
 	responseData, err := io.ReadAll(response.Body)
 	if err != nil {
 		log.Fatal(err)
@@ -221,10 +218,7 @@ func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {
 	retryCount := 0
 	for {
 		url := "http://" + heraBoxHost + ":8000/occ/logs?path=/x/web/LIVE/occ/state-logs/current"
-		response, err := http.Get(url)
-		if err != nil {
-			t.Fatalf(err.Error())
-		}
+		response := httpGet(t, url)
 		byteArray, err := io.ReadAll(response.Body)
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -662,16 +656,18 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		break
 
 	case CutOverPhaseII:
-		query := "update pypl_occ_cutover set read_status='N', remarks='" + comment +
+		query := "update pypl_occ_cutover set write_status='N', read_status='N', remarks='" + comment +
 			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set read_status='Y', remarks='" + comment +
+			"update pypl_occ_cutover set write_status='N', read_status='Y', remarks='" + comment +
 			"' where dbuname='HERADB_TWO' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPhaseIII:
-		query := "update pypl_occ_cutover set write_status='Y', remarks='" + comment +
-			"' where dbuname='HERADB_TWO' and occ_name='occ'"
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', remarks='" + comment +
+			"' where dbuname='HERADB_TWO' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
+			"' where dbuname='HERADB_ONE' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -761,11 +757,9 @@ func OCCConfig(t *testing.T, key string, value string, filename string) {
 	logger.GetLogger().Log(logger.Alert, "Changing occ config in file ", filename,
 		" : key: ", key, ", value: ", value)
 	url := "http://" + heraBoxHost + ":8000/occ/occ_config?key=" + key + "&value=" + value + "&filename=" + filename
-	response, err := http.Get(url)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	_, err = io.ReadAll(response.Body)
+	response := httpGet(t, url)
+
+	_, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -824,11 +818,9 @@ func OCCBinarySetup(t *testing.T, filename string) {
 func StopOCCDocker(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Stopping occ docker")
 	url := "http://" + heraBoxHost + ":8000/docker_support?container=occ&action=stop"
-	response, err := http.Get(url)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	_, err = io.ReadAll(response.Body)
+	response := httpGet(t, url)
+
+	_, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -837,11 +829,9 @@ func StopOCCDocker(t *testing.T) {
 func StartOCCDocker(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Starting occ docker")
 	url := "http://" + heraBoxHost + ":8000/docker_support?container=occ&action=start"
-	response, err := http.Get(url)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	_, err = io.ReadAll(response.Body)
+	response := httpGet(t, url)
+
+	_, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -850,10 +840,8 @@ func StartOCCDocker(t *testing.T) {
 func IsContainerUp(t *testing.T, name string) bool {
 	logger.GetLogger().Log(logger.Alert, "Checking Docker Status of ", name)
 	url := "http://" + heraBoxHost + ":8000/docker_support?container=" + name + "&action=status"
-	response, err := http.Get(url)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
+	response := httpGet(t, url)
+
 	resp, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -868,11 +856,9 @@ func IsContainerUp(t *testing.T, name string) bool {
 func RestartOCC(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "restarting occ")
 	url := "http://" + heraBoxHost + ":8000/occ/restart_occ"
-	response, err := http.Get(url)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	_, err = io.ReadAll(response.Body)
+	response := httpGet(t, url)
+
+	_, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -885,22 +871,35 @@ func QueryOracle(t *testing.T, query string, cutOver string, dbaUser string) str
 
 	logger.GetLogger().Log(logger.Alert, "Running SQL: ", strings.Replace(query, strconv.Itoa(int('"')), "'", -1),
 		"cutOver=", cutOver)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(jsonStr)))
-	req.Header.Set("Content-Type", "application/json")
+	counter := 1
+	for {
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(jsonStr)))
+		req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Failed while calling %s", err)
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			if counter > maxRetryCount {
+				t.Fatalf("Failed while calling %s", err)
+			}
+			logger.GetLogger().Log(logger.Alert, "Retry as failed ", counter, err)
+			counter += 1
+			continue
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			if counter > maxRetryCount {
+				t.Fatalf("Failed while reading response %s", err)
+			}
+			logger.GetLogger().Log(logger.Alert, "Retry as failed ", counter, err)
+			counter += 1
+			continue
+		}
+
+		return string(body)
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed while reading response %s", err)
-	}
-
-	return string(body)
 }
 
 func validateServiceStatus(dbStatus []DBStatus, dbUniqueName string, serviceName string, status string) bool {
@@ -936,10 +935,8 @@ func LockUnlockUser(t *testing.T, action string, cutOver bool) []DBStatus {
 	if action == "unlock" {
 		url = "http://" + heraBoxHost + ":8000/occ/unlock_user?cut_over=" + co
 	}
-	response, err := http.Get(url)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
+	response := httpGet(t, url)
+
 	responseData, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -953,11 +950,9 @@ func LockUnlockUser(t *testing.T, action string, cutOver bool) []DBStatus {
 
 func DefaultTns(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Move TNS to Default Value")
-	response, err := http.Get("http://" + heraBoxHost + ":8000/\"default_tns\"")
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	_, err = io.ReadAll(response.Body)
+	response := httpGet(t, "http://"+heraBoxHost+":8000/\"default_tns\"")
+
+	_, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -978,11 +973,9 @@ func EnableCutOver(t *testing.T, enableRWSplit bool, enableShard bool) {
 	if enableShard {
 		url += "?shard=True"
 	}
-	response, err := http.Get(url)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	_, err = io.ReadAll(response.Body)
+	response := httpGet(t, url)
+
+	_, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -1018,11 +1011,9 @@ func EnableSharding(t *testing.T) {
 */
 func ResetOCCDocker(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "ResetOCCDocker")
-	response, err := http.Get("http://" + heraBoxHost + ":8000/reset")
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	_, err = io.ReadAll(response.Body)
+	response := httpGet(t, "http://"+heraBoxHost+":8000/reset")
+
+	_, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -1043,6 +1034,27 @@ func KillSessionAndValidate(t *testing.T, stateLog map[string]int, serviceName s
 
 }
 
+func httpGet(t *testing.T, url string) *http.Response {
+	retryCount := 0
+	for {
+		response, err := http.Get(url)
+		if err != nil {
+			retryCount += 1
+			if retryCount > maxRetryCount {
+				if t == nil {
+					panic(err)
+				} else {
+					t.Fatalf(err.Error())
+				}
+			}
+			logger.GetLogger().Log(logger.Alert, "sleeping 5 sec and retrying - failed on http get ", err)
+			time.Sleep(5 * time.Second)
+		} else {
+			return response
+		}
+	}
+}
+
 func KillSessions(t *testing.T, cutOver bool, serviceName string) []DBStatus {
 	var status []DBStatus
 
@@ -1053,10 +1065,7 @@ func KillSessions(t *testing.T, cutOver bool, serviceName string) []DBStatus {
 	} else {
 		logger.GetLogger().Log(logger.Alert, "Kill Session for main db")
 	}
-	response, err := http.Get("http://" + heraBoxHost + ":8000/occ/kill_session?cut_over=" + co + "&service_name=" + serviceName)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
+	response := httpGet(t, "http://"+heraBoxHost+":8000/occ/kill_session?cut_over="+co+"&service_name="+serviceName)
 	responseData, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -1102,11 +1111,8 @@ func GetDBStatus() ([]DBStatus, map[string]map[string]bool) {
 	var status []DBStatus
 
 	activeResponse := make(map[string]map[string]bool)
-	response, err := http.Get("http://" + heraBoxHost + ":8000/occ/status_from_db")
-	if err != nil {
-		logger.GetLogger().Log(logger.Alert, err.Error())
-		return status, activeResponse
-	}
+	response := httpGet(nil, "http://"+heraBoxHost+":8000/occ/status_from_db")
+
 	responseData, err := io.ReadAll(response.Body)
 	if err != nil {
 		log.Fatal(err)

@@ -126,7 +126,7 @@ VALIDATE
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCompleteInvalidNoOfRow(t *testing.T) {
+func TestCutOverCompleteInvalidNoOfRow(t *testing.T) {
 	dumpChan, respChan, RespChan, logFile := moveToCutOverPhaseIII(t)
 	defer util.TearDown(t, dumpChan, respChan, RespChan, logFile)
 
@@ -198,10 +198,8 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CutOverCompletePhaseInvalidDBUniqName, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	invalidPhaseIII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
@@ -210,12 +208,12 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase, invalidPhaseIII-3, 2, 1)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase, invalidPhaseIII-3, 2, 1)
 
+	logger2.GetLogger().Log(logger2.Alert, "Killing Sessions ", invalidPhaseIII)
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	time.Sleep(25 * time.Second)
 
-	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
@@ -228,8 +226,8 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
@@ -310,7 +308,7 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverCompleteInvalidTwoTask(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseII(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseIII(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -323,8 +321,8 @@ func TestCutOverCompleteInvalidTwoTask(t *testing.T) {
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	invalidPhase := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
@@ -332,12 +330,12 @@ func TestCutOverCompleteInvalidTwoTask(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase, invalidPhase-3, 2, 1)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase, invalidPhase-3, 2, 1)
 
+	logger2.GetLogger().Log(logger2.Alert, "Killing Sessions ", invalidPhase)
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	time.Sleep(25 * time.Second)
 
-	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
@@ -371,7 +369,7 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverCompleteInvalidCutOverPhase(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseII(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseIII(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -450,9 +448,9 @@ func TestCutOverCutOverInvalidReadStatus(t *testing.T) {
 	invalidPhase := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateFailureTraffic(t, trafficStats, util.READ, completePhase, invalidPhase-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, completePhase, invalidPhase-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, completePhase, invalidPhase-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, completePhase+3, invalidPhase-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3)
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
@@ -472,8 +470,8 @@ func TestCutOverCutOverInvalidReadStatus(t *testing.T) {
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
@@ -493,7 +491,7 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverCompleteInvalidWriteStatus(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseII(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseIII(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -511,9 +509,9 @@ func TestCutOverCompleteInvalidWriteStatus(t *testing.T) {
 	invalidPhaseIII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, completePhase, invalidPhaseIII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase, invalidPhaseIII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase, invalidPhaseIII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, completePhase+3, invalidPhaseIII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhaseIII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhaseIII-3, 2, 1)
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
@@ -676,7 +674,7 @@ VALIDATE
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverCompleteReadOffStatus(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseII(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseIII(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -694,9 +692,9 @@ func TestCutOverCompleteReadOffStatus(t *testing.T) {
 	invalidPhase := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateFailureTraffic(t, trafficStats, util.READ, completePhase, invalidPhase-3)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase, invalidPhase-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase, invalidPhase-3, 2, 1)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, completePhase+3, invalidPhase-3)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3, 2, 1)
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
@@ -748,10 +746,10 @@ func TestCutOverCompleteSourceDBDown(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CutOverComplete, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 25
+	stateLog["occ"] = 1
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", false, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", false, 1, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	invalidPhase := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
@@ -760,13 +758,9 @@ func TestCutOverCompleteSourceDBDown(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3, 2, 1)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3, 2, 1)
 
-	util.KillSessions(t, true, "herabox_primary_srv")
-
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	time.Sleep(25 * time.Second)
-	stateLog["occ"] = 25
+	stateLog["occ"] = 0
 	stateLog["occ.co"] = 25
-	util.ValidateStateLog(t, stateLog, true)
+	util.KillSessionAndValidate(t, stateLog, "herabox_primary_srv", true)
 
 	util.RestartOCC(t)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
@@ -809,10 +803,10 @@ func TestCutOverCompleteTargetDBDown(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CutOverComplete, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 25
+	stateLog["occ"] = 1
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", false, 25, t)
 	invalidPhase := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
@@ -821,7 +815,7 @@ func TestCutOverCompleteTargetDBDown(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3, 2, 1)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3, 2, 1)
 
-	stateLog["occ"] = 25
+	stateLog["occ"] = 1
 	stateLog["occ.co"] = 0
 
 	util.KillSessionAndValidate(t, stateLog, "herabox_secondary_srv", true)
@@ -861,13 +855,13 @@ func TestCutOverCompleteRollback(t *testing.T) {
 
 	completePhase := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Cutover to Cutover Complete Phase: ", completePhase)
-	util.MoveCutOverPhase(t, util.CutOverPhaseIII, true, true)
+	util.MoveCutOverPhase(t, util.CutOverComplete, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 25
+	stateLog["occ"] = 1
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	startPhaseIII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
@@ -875,7 +869,7 @@ func TestCutOverCompleteRollback(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, startPhaseIII-3, 2, 1)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, startPhaseIII-3, 2, 1)
 
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Cutover to Cutover phase II: ", startPhaseIII)
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Cutover to Cutover phase III: ", startPhaseIII)
 	util.MoveCutOverPhase(t, util.CutOverPhaseIII, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
@@ -909,7 +903,7 @@ func TestCutOverCompleteRollback(t *testing.T) {
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, phaseII+3, phaseI-3)
 
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase I: ", phaseI)
-	util.MoveCutOverPhase(t, util.CutOverPhaseII, true, true)
+	util.MoveCutOverPhase(t, util.CutOverPhaseI, true, true)
 	phaseI = time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
