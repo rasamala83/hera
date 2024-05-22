@@ -9,16 +9,58 @@ import (
 )
 
 /*
-TEST:
- 1. Before entering pre cut-over all traffic should go to primary database
- 2. Primary database should have 25 valid connections and cut-over database should have 0
- 3. ENABLE CUT-OVER, then move to PRE CUT-OVER PHASE
- 4. Shutdown primary service in primary database and make sure cut-over database service is up and running
+PRE-SETUP
+------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
+------------------------------------------------------------------------------
 
-VALIDATE
- 1. No connection for primary database
- 2. 25 connection to cut-over database
- 3. occ is up and running with ORA error for primary database
+**************************************
+TestCutOverPreSourceDBDown
+**************************************
+-----------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+-----------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+-----------------------------------------------------------------------------
+
+* shutdown source DB
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | down   |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    -------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB | state  |
+    -------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO    | down   |
+    | WRITE        |  HERADB_ONE | HERADB_TWO    | down   |
+    | TXN          |  HERADB_ONE | HERADB_TWO    | down   |
+    -------------------------------------------------------
+ 4. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
+    5.1 OCC Container should be up and failing to connect
+    ----------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB          | state  |
+    ----------------------------------------------------------------
+    | READ         |   			 | HERADB_ONE, HERADB_TWO | active |
+    | WRITE        |             | HERADB_ONE, HERADB_TWO | active |
+    | TXN          |             | HERADB_ONE, HERADB_TWO | active |
+    ----------------------------------------------------------------
 
 TODO: Need to add logs and CAL log verification
 */
@@ -105,19 +147,88 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterKill+3, afterSourceDBGoesDown-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterKill+3, afterSourceDBGoesDown-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterKill+3, afterSourceDBGoesDown-3)
+
+	util.RestartOCC(t)
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 25 seconds")
+	time.Sleep(25 * time.Second)
+
+	occStatus = util.IsContainerUp(t, "occ")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
+	}
+
 }
 
 /*
-TEST:
- 1. Before entering pre cut-over all traffic should go to primary database
- 2. Primary database should have 25 valid connections and cut-over database should have 0
- 3. ENABLE CUT-OVER, then move to PRE CUT-OVER PHASE
- 4. Shutdown primary service in target database and make sure cut-over database service is up and running
+PRE-SETUP
+------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
+------------------------------------------------------------------------------
 
-VALIDATE
- 1. 25 connection for primary database
- 2. 0 connection to cut-over database
- 3. occ is up and running with all test passing
+**************************************
+TestCutOverPreTargetDBDown
+**************************************
+-----------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+-----------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+-----------------------------------------------------------------------------
+
+* shutdown target DB
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | down   |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    -------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB | state  |
+    -------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO    | active |
+    | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
+    | TXN          |  HERADB_ONE | HERADB_TWO    | active |
+    -------------------------------------------------------
+ 4. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
+    5.1 OCC Container should be up
+    -------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB | state  |
+    -------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO    | active |
+    | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
+    | TXN          |  HERADB_ONE | HERADB_TWO    | active |
+    -------------------------------------------------------
+
+* start target DB
+
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | down   |
+    ---------------------------------------------------------------------
 
 TODO: Need to add logs and CAL log verification
 */
@@ -225,14 +336,63 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 }
 
 /*
-TEST:
- 1. Before entering pre cut-over all traffic should go to primary database
- 2. Primary database should have 25 valid connections and cut-over database should have 0
- 3. ENABLE CUT-OVER, then move to PRE CUT-OVER PHASE
- 4. while moving to pre cutover make sure db uniq name is invalid
+PRE-SETUP
+------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
+------------------------------------------------------------------------------
 
-VALIDATE
- 1. OCC should continue to run in cut over mode
+**************************************
+TestCutOverPreUniqNameInCorrect
+**************************************
+-------------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname           | r_status | w_status | phase |
+-------------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE_INVALID | Y        | Y        | PRE   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | N        | N        | PRE   |
+-------------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | init+schd        |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  0              | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    -------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB | state  |
+    -------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO    | active |
+    | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
+    | TXN          |  HERADB_ONE | HERADB_TWO    | active |
+    -------------------------------------------------------
+ 4. Validate after forcing workers restart (by killing sessions from db's end)
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | init+schd        |
+    ----------------------------------------------------
+ 5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
+    5.1 OCC Container should be up and failing to connect
+    ----------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB          | state  |
+    ----------------------------------------------------------------
+    | READ         |   			 | HERADB_ONE, HERADB_TWO | active | TODO Failing
+    | WRITE        |             | HERADB_ONE, HERADB_TWO | active | TODO Failing
+    | TXN          |             | HERADB_ONE, HERADB_TWO | active | TODO Failing
+    ----------------------------------------------------------------
 
 TODO: Need to add logs and CAL log verification
 */
@@ -277,10 +437,10 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 1
+	stateLog["occ.co.not_connected"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 	beforeSessionKill := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeSessionKill-3, 1, 2)
@@ -288,25 +448,81 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeSessionKill-3, 1, 2)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 0
-	util.KillSessionAndValidate(t, stateLog, "herabox_primary_srv", false)
+	stateLog["occ.co.not_connected"] = 25
+	util.RestartOCC(t)
+	afterRestart := time.Now().Unix()
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 25 seconds")
+	time.Sleep(25 * time.Second)
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
-
-	util.CT.StopClientTraffic(respChan, RespMsg)
+	trafficStopped := time.Now().Unix()
+	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-3)
 }
 
 /*
-TEST:
- 1. Before entering pre cut-over all traffic should go to primary database
- 2. Primary database should have 25 valid connections and cut-over database should have 0
- 3. ENABLE CUT-OVER, then move to PRE CUT-OVER PHASE
- 4. while moving to pre cutover make sure db uniq name is invalid in destination db alone
+PRE-SETUP
+------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
+------------------------------------------------------------------------------
 
-VALIDATE
- 1. OCC should continue to run in cut over mode
+**************************************
+TestCutOverPreUniqNameInCorrectDestDB
+**************************************
+only in secondary table
+--------------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname           | r_status | w_status | phase  |
+--------------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE_INVALID | Y        | Y        | ENABLE |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | N        | N        | ENABLE |
+--------------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    -------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB | state  |
+    -------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO    | active |
+    | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
+    | TXN          |  HERADB_ONE | HERADB_TWO    | active |
+    -------------------------------------------------------
+ 4. Validate after forcing workers restart (by killing sessions from db's end)
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
+    5.1 OCC Container should be up and failing to connect
+    -------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB | state  |
+    -------------------------------------------------------
+    | READ         | HERADB_ONE	 | HERADB_TWO    | active |
+    | WRITE        | HERADB_ONE  | HERADB_TWO    | active |
+    | TXN          | HERADB_ONE  | HERADB_TWO    | active |
+    -------------------------------------------------------
 
 TODO: Need to add logs and CAL log verification
 */
@@ -374,14 +590,79 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 }
 
 /*
-TEST:
- 1. Before entering pre cut-over all traffic should go to primary database
- 2. Primary database should have 25 valid connections and cut-over database should have 0
- 3. ENABLE CUT-OVER, then move to PRE CUT-OVER PHASE
- 4. Rollback to enable state and then back to disabled cutover
+PRE-SETUP
+------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
+------------------------------------------------------------------------------
 
-VALIDATE
- 1. OCC should continue to run in original mode
+**************************************
+TestCutOverPreUniqNameInCorrectDestDB
+**************************************
+-----------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+-----------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+-----------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    -------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB | state  |
+    -------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO    | active |
+    | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
+    | TXN          |  HERADB_ONE | HERADB_TWO    | active |
+    -------------------------------------------------------
+
+Rollback to Enable mode
+------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
+-----------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  1             | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  1              | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    -------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB | state  |
+    -------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO    | active |
+    | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
+    | TXN          |  HERADB_ONE | HERADB_TWO    | active |
+    -------------------------------------------------------
 
 TODO: Need to add logs and CAL log verification
 */

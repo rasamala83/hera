@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"testing"
 	"time"
 )
 
@@ -132,6 +133,24 @@ func (ct ClientTraffic) identifyDBTxn(txn *sql.Tx, ctx context.Context) (int, er
 		return 0, err
 	}
 	return id, nil
+}
+
+func (ct ClientTraffic) slowIdentifyDB(conn *sql.Conn, ctx context.Context, sec int) (int, error) {
+	query := fmt.Sprintf("select SLOW_QUERY(%d) from dual", sec)
+	rows, err := conn.QueryContext(ctx, query)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	return 0, errors.New("should not have reached")
 }
 
 func (ct ClientTraffic) identifyDB(conn *sql.Conn, ctx context.Context) (int, error) {
@@ -278,6 +297,33 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 
 }
 
+func (ct ClientTraffic) slowReadTraffic(CTS map[int64]ClientTrafficStats, n int64, sec int) {
+	ct.CreateCounter(n, READ, CTS)
+	id := 0
+	var err error
+	c := TestConnection{}
+	c.GetConnection()
+	if c.Err != nil {
+		if c.Err.Error() == "Failed to read server info" {
+			logger.GetLogger().Log(logger.Alert, "Enabling TLS on Client Side as server side it is enabled")
+			os.Setenv("TLS", "1")
+			return
+		} else {
+			ct.incrementFailure(READ, id, CTS[n].stats)
+			return
+		}
+	}
+
+	defer c.Close()
+	id, err = ct.slowIdentifyDB(c.conn, c.context, sec)
+
+	if err != nil {
+		ct.incrementFailure(READ, id, CTS[n].stats)
+	} else {
+		ct.incrementSuccess(READ, id, CTS[n].stats)
+	}
+}
+
 func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	ct.CreateCounter(n, READ, CTS)
 	id := 0
@@ -370,6 +416,58 @@ func (ct ClientTraffic) TearDown(respChan chan map[int64]ClientTrafficStats, dum
 	_ = file.Close()
 }
 
+func (ct ClientTraffic) LongTxnTraffic(wg *sync.WaitGroup,
+	CTChan chan map[int64]ClientTrafficStats, RunMsg chan string, numOfTxn int, delay int, t *testing.T) {
+	defer wg.Done()
+
+	CTS := make(map[int64]ClientTrafficStats)
+	var dbWriteTrans []*DBTxn
+
+	logger.GetLogger().Log(logger.Alert, "Sending Txn Traffic")
+	n := time.Now().Unix()
+	counter := 0
+	for {
+		counter += 1
+		if counter >= numOfTxn {
+			break
+		}
+		ct.slowReadTraffic(CTS, n, delay)
+		txn, err := writeBeginTxn()
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "writeBeginTxn failure ", err)
+			t.Fatalf("txn suppose not to fail here")
+		}
+
+		_, err = ct.identifyDBTxn(txn.DBTransaction, txn.DBConnection.context)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "identifyDBTxn failure ", err)
+			t.Fatalf("txn suppose not to fail here")
+		}
+		dbWriteTrans = append(dbWriteTrans, txn)
+	}
+
+	logger.GetLogger().Log(logger.Alert, "locked ", delay)
+	RunMsg <- "Locked"
+	time.Sleep(time.Duration(delay) * time.Second)
+	for _, txn := range dbWriteTrans {
+
+		dbId, err := ct.identifyDBTxn(txn.DBTransaction, txn.DBConnection.context)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "Txn failure ", err)
+			ct.incrementFailure(TXN, dbId, CTS[n].stats)
+		} else {
+			ct.incrementSuccess(TXN, dbId, CTS[n].stats)
+		}
+		rollbackTxn(txn)
+	}
+
+	for _, dbTxn := range dbWriteTrans {
+		rollbackTxn(dbTxn)
+	}
+
+	CTChan <- CTS
+}
+
 func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 	CTChan chan map[int64]ClientTrafficStats, DumpChan chan map[int64]ClientTrafficStats) {
 	defer wg.Done()
@@ -410,7 +508,6 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 			time.Sleep(200 * time.Millisecond)
 		}
 	}
-
 }
 
 func (ct ClientTraffic) getMutexForType(qsType string) *sync.Mutex {

@@ -229,23 +229,50 @@ func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {
 		for scanner.Scan() {
 			line := scanner.Text()
 			words := splitBySpace(line)
-			expectedWorkerCount, exists := expected[words[2]]
+			workerName := words[2]
+			suffix := ".not_connected"
+			notConnected := false
+			expectedWorkerCount, exists := expected[workerName]
+			if !exists {
+				expectedWorkerCount, exists = expected[workerName+suffix]
+				if exists {
+					notConnected = true
+				}
+			}
 			if exists {
 				accept, _ := strconv.Atoi(words[4])
 				wait, _ := strconv.Atoi(words[5])
-				if expectedWorkerCount != accept+wait && retryCount == maxRetryCount {
+				busy, _ := strconv.Atoi(words[6])
+				init, _ := strconv.Atoi(words[3])
+				scheduled, _ := strconv.Atoi(words[7])
+				connected := accept + wait + busy
+				connectFailed := init + scheduled
+
+				actualWorkerCount := connected
+				msg := "(accept+wait+busy)"
+				if notConnected {
+					actualWorkerCount = connectFailed
+					msg = "(init+schd)"
+				}
+
+				if expectedWorkerCount != actualWorkerCount && retryCount == maxRetryCount {
 					if fail {
-						t.Fatalf("State Log Validation failed for %s at %s %s - Expected Worker Count: %d vs Actual %d",
-							words[2], words[0], words[1], expectedWorkerCount, accept+wait)
+						t.Fatalf("State Log Validation failed for %s at %s %s - "+
+							"Expected Worker Count: %d vs Actual %d (%s)",
+							workerName, words[0], words[1], expectedWorkerCount, actualWorkerCount, msg)
 					} else {
 						return false
 					}
-				} else if expectedWorkerCount == accept+wait {
-					delete(expected, words[2])
-				} else if expectedWorkerCount != accept+wait && retryCount < maxRetryCount {
-					logger.GetLogger().Log(logger.Alert, "State Log Validation failed for ", words[2],
+				} else if expectedWorkerCount == actualWorkerCount {
+					if notConnected {
+						delete(expected, workerName+suffix)
+					} else {
+						delete(expected, workerName)
+					}
+				} else if expectedWorkerCount != actualWorkerCount && retryCount < maxRetryCount {
+					logger.GetLogger().Log(logger.Alert, "State Log Validation failed for ", workerName,
 						" at ", words[0], " ", words[1],
-						" - Expected Worker Count: ", expectedWorkerCount, " vs Actual ", accept+wait,
+						" - Expected Worker Count: ", expectedWorkerCount, " vs Actual ", actualWorkerCount, msg,
 						" - retrying after 5 seconds")
 					break
 				}
@@ -1141,7 +1168,7 @@ func rollbackTxn(txn *DBTxn) {
 	defer txn.DBConnection.Close()
 	err := txn.DBTransaction.Rollback()
 	if err != nil {
-		panic(err)
+		return
 	}
 }
 
@@ -1199,25 +1226,27 @@ func ValidateReadWorkerID(ReadWaitTime int, expectedId int, wg *sync.WaitGroup) 
 	go slowQuery(txn, expectedId, ReadWaitTime, wg)
 }
 
-func writeBeginTxn() *DBTxn {
+func writeBeginTxn() (*DBTxn, error) {
 	c := TestConnection{}
 	c.GetConnection()
 	if c.Err != nil {
-		panic(c.Err)
+		c.Close()
+		return nil, c.Err
 	}
-	defer c.Close()
 	txn, err := c.conn.BeginTx(c.context, nil)
 	if err != nil {
-		panic(err)
+		txn.Rollback()
+		return nil, err
 	}
 	insertQuery := "insert into occ_test values(id_seq.NEXTVAL, 'hold-record', 1)"
 	_, err = txn.ExecContext(c.context, insertQuery)
 	if err != nil {
 		txn.Rollback()
-		panic(err)
+		c.Close()
+		return nil, err
 	}
 
-	return &DBTxn{DBConnection: c, DBTransaction: txn}
+	return &DBTxn{DBConnection: c, DBTransaction: txn}, nil
 }
 
 func validateDBID(dbTxn *DBTxn, dbId int, dbName string) {
@@ -1331,7 +1360,7 @@ func ValidateConnectionIntegrity(WriteWorkerCount int, ReadWorkerCount int, Read
 	logger.GetLogger().Log(logger.Alert, "Validating occ connection integrity: Validating WriteWorker:", WriteWorkerCount, ", Validating ReadWorker:", ReadWorkerCount)
 
 	for i := 0; i < WriteWorkerCount; i++ {
-		txn := writeBeginTxn()
+		txn, _ := writeBeginTxn()
 		dbWriteTrans = append(dbWriteTrans, txn)
 	}
 
