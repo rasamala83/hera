@@ -16,6 +16,6 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 )
