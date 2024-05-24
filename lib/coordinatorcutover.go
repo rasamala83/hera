@@ -72,7 +72,7 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 		newActInfo.DbUname = cocfg.DbBy2task[g2TaskName]
 		newActInfo.Phase = cocfg.Phase
 		newActInfo.RwStatus = (ReadOk | WriteOk)
-	} else if cocfg.Phase == CompletePhStr || cocfg.Phase == BroomPhStr {
+	} else if cocfg.Phase == CompletePhStr {
 		newActInfo.ShId = ShId2TaskCutover
 		newActInfo.DbUname = cocfg.DbBy2task[g2TaskCutoverName]
 		newActInfo.Phase = cocfg.Phase
@@ -154,7 +154,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				if newActInfo.ShId != ShId2Task {
 					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. prior to cutover phase config using ShId2TaskCutover!")
 				}
-			} else if newActInfo.Phase == CompletePhStr || newActInfo.Phase == BroomPhStr {
+			} else if newActInfo.Phase == CompletePhStr {
 				if newActInfo.ShId != ShId2TaskCutover {
 					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. post cutover phase config using ShId2Task!")
 				}

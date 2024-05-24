@@ -95,20 +95,19 @@ func Run() {
 	//
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
-	logger.GetLogger().Log(logger.Alert, "checkpoint 2")
 	tnsnames, err := FindTns()
 	// Rapid cutover is enabled when meeting the following both conditions at start-up
 	// Also, cutover feature is mutually exclusive to sharding and taf.
 	//
 	// 1. TWO_TASK_CUTOVER is defined. e.g. TWO_TASK_CUTOVER=CLOC_CUTOVER
-	// 2. The CLOC_CUTOVER is defined in tnsnames.ora
+	// 2. The tns key CLOC_CUTOVER is defined in tnsnames.ora
 	// maybe we should have another condition as master control.
 	// (?) 3. occ.cdb has cutover_enabled = true.
 	GetConfig().EnableCutover = false
 	if err != nil {
-		logger.GetLogger().Log(logger.Alert, "FindTns() failed. Skip checking for cutover enablement", err.Error())
+		logger.GetLogger().Log(logger.Alert, "CP 0 FindTns() failed. Skip checking for cutover enablement", err.Error())
 	} else if tnsnames == nil {
-		logger.GetLogger().Log(logger.Alert, "FindTns() return nil")
+		logger.GetLogger().Log(logger.Alert, "CP 0 FindTns() return nil")
 	} else {
 		if !GetConfig().EnableSharding && !GetConfig().EnableTAF {
 			logicdbId := os.Getenv("TWO_TASK_CUTOVER")
@@ -116,17 +115,21 @@ func Run() {
 
 				_, ok := tnsnames[logicdbId]
 				if ok {
-					logger.GetLogger().Log(logger.Alert, "Found TWO_TASK_CUTOVER", logicdbId)
+					logger.GetLogger().Log(logger.Alert, "CP 0 Found TWO_TASK_CUTOVER", logicdbId)
 					if GetConfig().ReadonlyPct > 0 { // r/w split enabled
-						rlogicdbId := os.Getenv("TWO_TASK_OCC_CUTOVER")
+						rlogicdbId := os.Getenv("TWO_TASK_READ_CUTOVER")
 						_, ok = tnsnames[rlogicdbId]
 						if ok {
-							logger.GetLogger().Log(logger.Alert, "found [ TWO_TASK_CUTOVER, TWO_TASK_OCC_CUTOVER ] = [", logicdbId, ",", rlogicdbId)
+							logger.GetLogger().Log(logger.Alert, "CP 0 found [ TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER ] = [", logicdbId, ",", rlogicdbId, "]")
+						} else {
+							logger.GetLogger().Log(logger.Alert, "CP 0 [ TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER ] = [", logicdbId, ",", rlogicdbId, "] not found")
 						}
 					}
 					if ok {
 						GetConfig().EnableCutover = true
-						logger.GetLogger().Log(logger.Alert, "enable cutover feature")
+						logger.GetLogger().Log(logger.Alert, "CP 0 enable cutover feature")
+					} else {
+						logger.GetLogger().Log(logger.Alert, "CP 0 disable cutover feature")
 					}
 				}
 			}

@@ -68,6 +68,7 @@ type workerMsg struct {
 	// tell coordinator to abort dosession with an ErrWorkerFail. call will recover worker.
 	abort     bool
 	bindEvict bool
+	cutoverStop bool
 	// the request counter / Id
 	rqId uint32
 	// the actual message to be sent to the client

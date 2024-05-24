@@ -951,7 +951,6 @@ func (pool *WorkerPool) enforceIntegrity() {
 // At Enable ignore all mismatch (still logs)
 // At Pre ignore the TWO_TASK pool DBUNAME mismatch
 // At Complete ignore TWO_TASK_CUTOVER pool DBUNAME mismatch
-// At Broom ignore all mismatch (still logs)
 
 func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 	if pool.phase == newPhase && pool.dbUname == newDbUname {
@@ -1006,7 +1005,7 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 		}
 
 		select {
-		case w.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false}:
+		case w.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false, cutoverStop: true}:
 		default:
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", w.pid)
@@ -1028,7 +1027,6 @@ func (pool *WorkerPool) CheckSetUserRole(_enable uint) {
 		logger.GetLogger().Log(logger.Verbose, "CP 50 CheckSetUserRole", _enable, "pool shid", pool.CoShardID, "current size", pool.currentSize)
 		cnt := 0
 		var workers []*WorkerClient
-		//var workers []*WorkerClient
 		caltxn := cal.NewCalTransaction("CUTOVER", "workerpoolSetRole", cal.TransOK, "", cal.DefaultTGName)
 		pool.poolCond.L.Lock() // do we need lock? what if a new client pick up a worker
 		for i := 0; i < pool.currentSize; i++ {

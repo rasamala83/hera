@@ -867,7 +867,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						tgtshard = ShId2Task
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 ENABLE or PRE phase, dispatch to two_task workers", int(tgtshard))
 
-					} else if crd.curActDb.Phase == CompletePhStr || crd.curActDb.Phase == BroomPhStr {
+					} else if crd.curActDb.Phase == CompletePhStr {
 						tgtshard = ShId2TaskCutover
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 COMPLETE phase, dispatch to two_task_cutover", int(tgtshard))
 					} else {
@@ -954,7 +954,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					}
 				}
 
-				if crd.curActDb.Phase == CompletePhStr || crd.curActDb.Phase == BroomPhStr {
+				if crd.curActDb.Phase == CompletePhStr {
 					if worker.shardID != int(ShId2TaskCutover) {
 						tgtshard = ShId2TaskCutover
 						workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wType, 0, int(tgtshard))
@@ -1017,8 +1017,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		}
 	}
-	logger.GetLogger().Log(logger.Verbose, crd.id, "checkpoint 19")
+	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 19")
 	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
+	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 19 done doRequest")
 
 	if !xShardRead {
 		if wait {
@@ -1155,6 +1156,8 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 
 	now := time.Now().UnixNano()
 	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
+	// would this worker be possibly nil ?
+	logger.GetLogger().Log(logger.Verbose, crd.id, "shtien debug")
 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
 
 	if request != nil {
@@ -1449,6 +1452,8 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 						logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan bind evict")
 					}
 					return false, ErrBindEviction
+				} else if msg.cutoverStop {
+					return false, ErrCutoverKill
 				} else {
 					return false, ErrSaturationKill
 				}

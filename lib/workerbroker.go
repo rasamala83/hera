@@ -161,12 +161,17 @@ func (broker *WorkerBroker) init() error {
 		broker.poolCfgs[s][wtypeRO] = new(WorkerPoolCfg)
 		broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s)
 		if broker.poolCfgs[s][wtypeRO].maxWorkerCnt > 0 {
+			logger.GetLogger().Log(logger.Info, "shtien RO MaxWorkerCnt", broker.poolCfgs[s][wtypeRO].maxWorkerCnt, "sh=", s)
 			broker.poolCfgs[s][wtypeRO].instCnt = 1
 		}
 
 		if GetConfig().EnableCutover {
 			// as the worker pool is setting up configs, we don't know the state of cutover
-			broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s) / 2
+			workercnt := GetNumRWorkers(s)
+			if workercnt <= 2 {
+				workercnt = 2
+			}
+			broker.poolCfgs[s][wtypeRO].maxWorkerCnt = workercnt / 2
 			switch s {
 			case int(ShId2Task):
 				broker.poolCfgs[s][wtypeRO].p2t = ShId2Task
@@ -178,13 +183,19 @@ func (broker *WorkerBroker) init() error {
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
 		}
-		logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRO].maxWorkerCnt", broker.poolCfgs[s][wtypeRO].maxWorkerCnt)
+		logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRO].maxWorkerCnt=",broker.poolCfgs[s][wtypeRO].maxWorkerCnt, " s=", s)
 
 		broker.poolCfgs[s][wtypeRW] = new(WorkerPoolCfg)
 		broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s)
 		broker.poolCfgs[s][wtypeRW].instCnt = 1
+		logger.GetLogger().Log(logger.Info, "shtien RW MaxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt, "sh=", s)
+
 		if GetConfig().EnableCutover {
-			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s) / 2
+			workercnt := GetNumWWorkers(s)
+			if workercnt <= 2 {
+				workercnt = 2
+			}
+			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = workercnt
 			switch s {
 			case int(ShId2Task):
 				broker.poolCfgs[s][wtypeRW].p2t = ShId2Task
@@ -195,7 +206,7 @@ func (broker *WorkerBroker) init() error {
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
 		}
-		logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRW].maxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt)
+		logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRW].maxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt, " s=", s)
 
 		broker.poolCfgs[s][wtypeStdBy] = new(WorkerPoolCfg)
 		if GetConfig().EnableTAF {
