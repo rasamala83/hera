@@ -56,15 +56,21 @@ func GetTLSConfig() *tls.Config {
 	cert, err := tls.LoadX509KeyPair(path.Join(GetConfig().CacheCertFilePath, "server.crt"), path.Join(GetConfig().CacheCertFilePath, "server.pem"))
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error in junoclient::GetTLSConfig", err)
+		return nil
 	}
 
 	caCert, err := os.ReadFile(path.Join(GetConfig().CacheCertFilePath, "ca.crt"))
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error in junoclient::GetTLSConfig", err)
+		return nil
 	}
 	// rootCAs := x509.NewCertPool()
 	// rootCAs.AppendCertsFromPEM(caCert)
-	rootCAs, _ := x509.SystemCertPool()
+	rootCAs, err := x509.SystemCertPool()
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, "Error in junoclient::GetTLSConfig", err)
+		return nil
+	}
 	if rootCAs == nil {
 		rootCAs = x509.NewCertPool()
 	}
@@ -129,8 +135,12 @@ func (cli *JunoClient) init() error {
 	cfg.Server.Addr = GetConfig().CacheEndPoint
 	cfg.Server.SSLEnabled = GetConfig().CacheSSLEnabled // SSL
 	var err error
-	cli.junoClient, err = client.NewWithTLS(cfg, GetTLSConfig)
-	cli.junoClientReady = true
+	if GetConfig().CacheSSLEnabled {
+		cli.junoClient, err = client.NewWithTLS(cfg, GetTLSConfig)
+	} else {
+		cli.junoClient, err = client.New(cfg)
+	}
+	cli.junoClientReady = err == nil
 	// Internal patch
 	// cli.junoClient, err = client.NewWithTLS(cfg, GetTLSConfigInternal)
 	return err

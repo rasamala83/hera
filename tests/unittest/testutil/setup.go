@@ -16,6 +16,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	speedbump "github.com/kffl/speedbump/lib"
 	_ "github.com/lib/pq"
 	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
@@ -454,4 +455,26 @@ func (m *mux) StopServer() {
 	m.cleanupConfig()
 	os.Chdir(m.origDir)
 	logger.GetLogger().Log(logger.Info, "Exit StopServer time=", time.Now().Unix())
+}
+
+func StartSpeedBumpProxy(port int, destAddr string, initialDelayInS int64, sineAmplitudeInS int64, sinePeriodInM int64) (*speedbump.Speedbump, error) {
+	cfg := speedbump.SpeedbumpCfg{
+		Port:       port,
+		DestAddr:   destAddr,
+		BufferSize: 16384,
+		QueueSize:  2048,
+		Latency: &speedbump.LatencyCfg{
+			Base:          time.Duration(initialDelayInS) * time.Millisecond,
+			SineAmplitude: time.Millisecond * time.Duration(sineAmplitudeInS),
+			SinePeriod:    time.Minute * time.Duration(sinePeriodInM),
+		},
+		LogLevel: "TRACE",
+	}
+
+	sb, err := speedbump.NewSpeedbump(&cfg)
+
+	if err != nil {
+		return nil, err
+	}
+	return sb, nil
 }

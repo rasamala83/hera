@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/paypal/hera/tests/unittest/testutil"
 	"github.com/paypal/hera/utility/logger"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -14,6 +15,8 @@ import (
 
 var mx testutil.Mux
 var tableName string
+
+const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY0Z123456789 "
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
@@ -37,12 +40,12 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["db_heartbeat_interval"] = "10"
 	appcfg["enable_caching"] = "true"
-	appcfg["caching_cfg_reload_interval"] = "60"
+	appcfg["caching_cfg_reload_interval"] = "5"
 	appcfg["cache_by_corrid"] = "false"
 	appcfg["cache_response_timeout_ms"] = "3000"
 	appcfg["cache_enable_compression"] = "true"
 	opscfg := make(map[string]string)
-	opscfg["opscfg.default.server.max_connections"] = "3"
+	opscfg["opscfg.default.server.max_connections"] = "5"
 	opscfg["opscfg.default.server.log_level"] = "5"
 	opscfg["opscfg.default.server.max_lifespan_per_child"] = "5"
 
@@ -59,15 +62,25 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
+func randSeq(n int) string {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
 func before() error {
 	tableName = os.Getenv("TABLE_NAME")
 	if tableName == "" {
-		tableName = "hera_sql_caching"
+		tableName = "jdbc_hera_cache_compress_test"
 	}
 	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
 		testutil.DBDirect("create table hera_sql_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
 			"bind_variables varchar(1000),TTL_sec BIGINT,enable_shadow_test varchar(1),tableName varchar(30),"+
 			"invalidation_clause varchar(1000),caching_enabled varchar(1),remarks varchar(4000),hera_module varchar(100))", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
+		testutil.DBDirect("create table jdbc_hera_cache_compress_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL MEDIUMTEXT)", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
 	}
 	return nil
 }
@@ -76,10 +89,9 @@ func before() error {
 func TestTTLCacheHappyPath(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestTTLCacheHappyPath begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	testutil.RunDML("DELETE from hera_sql_caching")
-	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, hera_module) VALUES  ('1', '1883341761', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', '', 'hera-test')")
-
-	time.Sleep(5 * time.Second)
+	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, hera_module) VALUES  ('1', '102358690', '/*cmd*/select id, int_val, str_val from jdbc_hera_cache_compress_test where id=?', 'id=1', 30, 'N', 'MyTestTable', '', 'Y', '', 'hera-test')")
+	testutil.RunDML("/*cmd*/insert into " + tableName + "(id, int_val, str_val) VALUES(1," + fmt.Sprint(time.Now().Unix()) + ",\"" + randSeq(20*1024) + "\")")
+	time.Sleep(10 * time.Second)
 
 	if testutil.RegexCountFile("Loaded 1 sqlhashes, 1 cacheCfg entries", "hera.log") < 1 {
 		t.Fatalf("Error: should have loaded the cacheCfg entry...")
@@ -100,18 +112,23 @@ func TestTTLCacheHappyPath(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	conn, err := db.Conn(ctx)
+	defer conn.Close()
 	if err != nil {
-		t.Fatalf("Error getting connection %s\n", err.Error())
+		t.Fatalf("error in preparing test %v", err)
 	}
+	stmt, _ := conn.PrepareContext(ctx, "/*cmd*/select id, int_val, str_val from "+tableName+" where id=?")
+	rows, err := stmt.QueryContext(ctx, 1)
 
-	rows, _ := conn.QueryContext(ctx, "SELECT 'def' from dual")
-
+	if err != nil {
+		t.Errorf("extected one row but received error %v", err)
+	}
 	if !rows.Next() {
-		t.Fatalf("Expected 1 row")
+		t.Errorf("Expected 1 row")
 	}
 	rows.Close()
-	time.Sleep(3 * time.Second)
-	if testutil.RegexCountFile("1883341761 CachingEnabled for  GET : true", "hera.log") < 1 {
+	stmt.Close()
+	time.Sleep(15 * time.Second)
+	if testutil.RegexCountFile("102358690 CachingEnabled for  GET : true", "hera.log") < 1 {
 		t.Fatalf("Error: should have entered this block")
 	}
 
@@ -135,6 +152,10 @@ func TestTTLCacheHappyPath(t *testing.T) {
 		t.Fatalf("Error: should have dispatched the request to database")
 	}
 
+	if testutil.RegexCountFile("102358690 CachingEnabled for  SET : true", "hera.log") < 1 {
+		t.Fatalf("Error: should have entered this block")
+	}
+
 	if testutil.RegexCountFile("Trying SET with key", "hera.log") < 1 {
 		t.Fatalf("Error: should have entered setRecordToCache when caching is enabled")
 	}
@@ -148,7 +169,7 @@ func TestTTLCacheHappyPath(t *testing.T) {
 		t.Fatalf("Error: should see GET when cacheCfgRecord is enabled for caching")
 	}
 
-	if testutil.RegexCountFile(".*SET.*1883341761", "cal.log") < 1 {
+	if testutil.RegexCountFile(".*SET.*102358690", "cal.log") < 1 {
 		t.Fatalf("Error: should see SET when cacheCfgRecord is enabled for caching")
 	}
 
@@ -181,18 +202,23 @@ func TestTTLCacheHit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	conn, err := db.Conn(ctx)
+	defer conn.Close()
 	if err != nil {
-		t.Fatalf("Error getting connection %s\n", err.Error())
+		t.Fatalf("error in preparing test %v", err)
 	}
+	stmt, _ := conn.PrepareContext(ctx, "/*cmd*/select id, int_val, str_val from "+tableName+" where id=?")
+	rows, err := stmt.QueryContext(ctx, 1)
 
-	rows, _ := conn.QueryContext(ctx, "SELECT 'def' from dual")
-
+	if err != nil {
+		t.Errorf("extected one row but received error %v", err)
+	}
 	if !rows.Next() {
-		t.Fatalf("Expected 1 row")
+		t.Errorf("Expected 1 row")
 	}
 	rows.Close()
-	time.Sleep(3 * time.Second)
-	if testutil.RegexCountFile("1883341761 CachingEnabled for  GET : true", "hera.log") < 2 {
+	stmt.Close()
+	time.Sleep(10 * time.Second)
+	if testutil.RegexCountFile("102358690 CachingEnabled for  GET : true", "hera.log") < 2 {
 		t.Fatalf("Error: should have entered this block")
 	}
 
@@ -216,7 +242,7 @@ func TestTTLCacheHit(t *testing.T) {
 		t.Fatalf("Error: should be a cache HIT for the second read")
 	}
 
-	if testutil.RegexCountFile(".*GET\t1883341761\t0.*", "cal.log") < 1 {
+	if testutil.RegexCountFile(".*GET\t102358690\t0.*", "cal.log") < 1 {
 		t.Fatalf("Error: should be a cache HIT")
 	}
 
