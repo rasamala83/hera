@@ -207,12 +207,14 @@ func copyCutoverCfg(dst *CutoverCfg, src *CutoverCfg) {
 
 /* this function sends the sql to fetch the config records and validate the requirement before proceed further. 
 	1. config sql above returns exact two rows of data
-	2. can't have identical value of occ_two_task
-	2. both the returned rows have identical value of cutover_phase
-	3. the value of cutover_phase in the two rows is not among ‘Enable’, ‘Pre’, ‘Cutover’, ‘Complete’ (case insensitive)
-	4. read_status, write_status is not ‘Y' or 'N’. (case insensitive)
+	7. Not allow Null from phase, dbUname, rstatus, wstatus, wisbroles.
+	2. can't have identical value for occ_two_task
+	3. two rows must have consistent cutover_phase
+	4. cutover_phase must be among ‘Enable’, ‘Pre’, ‘Cutover’, ‘Complete’ (case insensitive)
+	5. two rows' dbuname must be different
+	6. cutover_phase must be among ‘Enable’, ‘Pre’, ‘Cutover’, ‘Complete’ (case insensitive)
+	7. read_status, write_status must be among ‘Y' or 'N’. (case insensitive)
 	(Excluding cutover phase “Enable”), both the returned rows have 'Y' in read_status and/or write_status
-	5. Not allow Null from phase, dbUname, rstatus, wstatus, wisbroles.
 */
 func loadCutoverCfg(db *sql.DB) error {
 
@@ -298,16 +300,15 @@ func loadCutoverCfg(db *sql.DB) error {
 		logger.GetLogger().Log(logger.Alert, "error: load cutovercfg has invalid cutover_phase", records[0].phase)
 		return fmt.Errorf("error: query result has invalid cutover_phase")
 
-	} else if (isCfgSame(records[0].dbUname.String, records[1].dbUname.String)){ 
-		// The two rows'dbUname can't be the same in Pre and Cutover phases.
-		if (ph == CutoverPhId) {
-			return fmt.Errorf("error:  query result can't have identical dbuname [%s:%s], [%s:%s] at cutover",
-				records[0].occ2task.String, records[0].dbUname.String,
-				records[1].occ2task.String, records[1].dbUname.String)
-		}
-		evt := cal.NewCalEvent(EvtTypeCutover, "same_dbuname_ok", cal.TransOK, "")
+	}
+	// can't have identical dbuname
+	if (isCfgSame(records[0].dbUname.String, records[1].dbUname.String)){ 
+		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_dbuname", cal.TransOK, "")
 		evt.Completed()
-		logger.GetLogger().Log(logger.Info, "ATTN: cutovercfg two_task and two_task_cutover dbuname identical") 
+		logger.GetLogger().Log(logger.Alert, "error: cutovercfg two_task and two_task_cutover map to same dbuname") 
+		return fmt.Errorf("error:  can't have identical dbuname [%s:%s], [%s:%s] at cutover",
+			records[0].occ2task.String, records[0].dbUname.String,
+			records[1].occ2task.String, records[1].dbUname.String)
 	}
 
 
@@ -330,7 +331,7 @@ func loadCutoverCfg(db *sql.DB) error {
 		logger.GetLogger().Log(logger.Debug, "rec", i, " newcfg RWStatusByDb[", newcfg.DbBy2task[records[i].occ2task.String], 
 					"] = ", newcfg.RWstatusByDb[newcfg.DbBy2task[records[i].occ2task.String]])
 
-		// when both map to same db/dbuname with different rw status, the behavior becomes undeterministic
+		// we don't allow the two_task both use the same db/dbuname 
 		if newcfg.RWstatusByDb[newcfg.DbBy2task[records[i].occ2task.String]] > 0 {
 			active++
 			newcfg.ActiveTwoTask = records[i].occ2task.String
