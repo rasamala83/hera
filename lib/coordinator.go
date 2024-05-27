@@ -63,10 +63,7 @@ type Coordinator struct {
 	prevShard *shardInfo
 
 	//for cutover support so the coordinator knows where to dispatch.
-	//prevCoInfo     *ActiveCOInfo
 	curActDb *ActiveDbInfo // maybe we don't need this, just use the CutoverInfo (atomic) directly
-	//	curCOCfg       *CutoverCfg    // using additional curActInfo which is not atomic could lead to corrupted data when processing
-	coInternalShId ShardByTwoTask // Set by internal queries
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
 	worker        *WorkerClient // if it is in transaction/in cursor, the worker attached
@@ -511,23 +508,17 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 		return false, nil
 	// sharding commands
 	case common.CmdSetShardID:
-		var err error
-		if GetConfig().EnableCutover {
-			// internal query log goes to both pool
-			err = crd.processSetCoShardID(request.Payload)
-		} else {
-			err = crd.processSetShardID(request.Payload)
-		}
-		if err == nil {
-			// send OK
-			crd.respond([]byte("1:5,"))
-		} else {
-			ns := netstring.NewNetstringFrom(common.RcError, []byte(err.Error()))
-			crd.respond(ns.Serialized)
-			// critical error, close
-			crd.conn.Close()
-			return true, err
-		}
+                err := crd.processSetShardID(request.Payload)
+                if err == nil {
+                        // send OK
+                        crd.respond([]byte("1:5,"))
+                } else {
+                        ns := netstring.NewNetstringFrom(common.RcError, []byte(err.Error()))
+                        crd.respond(ns.Serialized)
+                        // critical error, close
+                        crd.conn.Close()
+                        return true, err
+                }
 	case common.CmdGetNumShards:
 		numShards := fmt.Sprintf("%d", GetConfig().NumOfShards)
 		ns := netstring.NewNetstringFrom(common.RcOK, []byte(numShards))
@@ -696,25 +687,25 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	worker := crd.worker
 	ticket := crd.ticket
 	xShardRead := false
-	//xDbRead := false // used by cutover enabled condition only
 
-	// check bind throttle
-	GetBindEvict().lock.Lock()
-	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
-	GetBindEvict().lock.Unlock()
-
+	ok := false
 	if GetConfig().EnableCutover {
 		if crd.curActDb == nil {
-			// when coordinator starts when server is at init no cutoverinfo ever available
 			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15 cutover may be at init, continue but disable bind eviction")
-			ok = false
+		} else if crd.curActDb.Phase == CutoverPhStr { // diable throttle during cutover
+			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15 in cutover phase, skip bind eviction")
+			// TODO: we should also empty the bindevict map
 		} else {
-			if crd.curActDb.Phase == CutoverPhStr { // diable throttle during cutover
-				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15 in cutover phase, skip bind eviction")
-				ok = false
-				// TODO: we should also empty the bindevict map
-			}
+			// check bind throttle
+			GetBindEvict().lock.Lock()
+			_, ok = GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
+			GetBindEvict().lock.Unlock()
 		}
+	} else {
+		// check bind throttle
+		GetBindEvict().lock.Lock()
+		_, ok = GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
+		GetBindEvict().lock.Unlock()
 	}
 
 	if ok {
@@ -876,7 +867,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						tgtshard = ShId2Task
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 ENABLE or PRE phase, dispatch to two_task workers", int(tgtshard))
 
-					} else if crd.curActDb.Phase == CompletePhStr || crd.curActDb.Phase == BroomPhStr {
+					} else if crd.curActDb.Phase == CompletePhStr {
 						tgtshard = ShId2TaskCutover
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 COMPLETE phase, dispatch to two_task_cutover", int(tgtshard))
 					} else {
@@ -949,7 +940,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 
 				if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == PrePhStr {
 					if worker.shardID != int(ShId2Task) {
-						//xDbRead = true
 						tgtshard = ShId2Task
 						workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wType, 0, int(tgtshard))
 						if err != nil {
@@ -964,9 +954,8 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					}
 				}
 
-				if crd.curActDb.Phase == CompletePhStr || crd.curActDb.Phase == BroomPhStr {
+				if crd.curActDb.Phase == CompletePhStr {
 					if worker.shardID != int(ShId2TaskCutover) {
-						//xDbRead = true
 						tgtshard = ShId2TaskCutover
 						workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wType, 0, int(tgtshard))
 						if err != nil {
@@ -1028,8 +1017,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		}
 	}
-	logger.GetLogger().Log(logger.Verbose, crd.id, "checkpoint 19")
+	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 19")
 	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
+	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 19 done doRequest")
 
 	if !xShardRead {
 		if wait {
@@ -1166,6 +1156,8 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 
 	now := time.Now().UnixNano()
 	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
+	// would this worker be possibly nil ?
+	logger.GetLogger().Log(logger.Verbose, crd.id, "shtien debug")
 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
 
 	if request != nil {
@@ -1460,6 +1452,8 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 						logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan bind evict")
 					}
 					return false, ErrBindEviction
+				} else if msg.cutoverStop {
+					return false, ErrCutoverKill
 				} else {
 					return false, ErrSaturationKill
 				}

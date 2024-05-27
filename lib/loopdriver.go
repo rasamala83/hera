@@ -81,25 +81,6 @@ func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {
 				logger.GetLogger().Log(logger.Debug, "HERA loop driver driver, opened to DB by role %s shard %s", fields[0], fields[1])
 			}
 		}
-
-		if (len(fields) == 4) && (GetConfig().EnableCutover) {
-			// cutover does not support sharded database.
-			// reuse the setShardId
-			// shardId: 0 (two_task), 1(two_task_cutover)
-			ns := netstring.NewNetstringFrom(common.CmdSetShardID, []byte(fields[1]))
-			cli.Write(ns.Serialized)
-			ns, err := netstring.NewNetstring(cli)
-			if err != nil {
-				return nil, fmt.Errorf("Failed to set shardID: %s", err.Error())
-			}
-			if ns.Cmd != common.RcOK {
-				return nil, fmt.Errorf("HERA_SET_CUTOVER_ID response: %s", string(ns.Serialized))
-			}
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "HERA loop driver driver, opened to DB by role %s shard %s", fields[0], fields[1])
-			}
-		}
-
 	}
 	return gosqldriver.NewHeraConnection(cli), nil
 }
