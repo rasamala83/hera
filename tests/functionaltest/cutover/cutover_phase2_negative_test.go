@@ -1067,3 +1067,78 @@ func TestCutOver2Rollback(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, enableMode+3, trafficStopped-3, 1, 2)
 
 }
+
+/*
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
+
+**************************************
+TestCutOver1ClosingPendingTxn
+**************************************
+1. Sending Long read (long is 15 seconds here)
+2. then move to CUTOVER STATE 2
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
+3.
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ----------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB          | state  |
+    ----------------------------------------------------------------
+    | READ         | HERADB_TWO  | HERADB_ONE            | active |
+    ----------------------------------------------------------------
+
+TODO: Need to add logs and CAL log verification
+*/
+func TestCutOver1ClosingPendingRead(t *testing.T) {
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseI(t)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
+	util.CT.StopClientTraffic(respChan, RespMsg)
+
+	txnStart := time.Now().Unix()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go util.CT.LongReadTraffic(&wg, respChan, 10, 15, t)
+	time.Sleep(time.Second * 5)
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase I: ", txnStart)
+	util.MoveCutOverPhase(t, util.CutOverPhaseII, true, true)
+
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	logger2.GetLogger().Log(logger2.Alert, "Waiting for Stats")
+	trafficStats := <-respChan
+	wg.Wait()
+	txnEnd := time.Now().Unix()
+
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, txnStart, txnEnd, 1, 2)
+
+	occStatus := util.IsContainerUp(t, "occ")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
+	}
+}

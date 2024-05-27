@@ -137,6 +137,7 @@ func (ct ClientTraffic) identifyDBTxn(txn *sql.Tx, ctx context.Context) (int, er
 
 func (ct ClientTraffic) slowIdentifyDB(conn *sql.Conn, ctx context.Context, sec int) (int, error) {
 	query := fmt.Sprintf("select SLOW_QUERY(%d) from dual", sec)
+
 	rows, err := conn.QueryContext(ctx, query)
 	if err != nil {
 		return 0, err
@@ -318,6 +319,7 @@ func (ct ClientTraffic) slowReadTraffic(CTS map[int64]ClientTrafficStats, n int6
 	id, err = ct.slowIdentifyDB(c.conn, c.context, sec)
 
 	if err != nil {
+		logger.GetLogger().Log(logger.Alert, err)
 		ct.incrementFailure(READ, id, CTS[n].stats)
 	} else {
 		ct.incrementSuccess(READ, id, CTS[n].stats)
@@ -414,6 +416,33 @@ func (ct ClientTraffic) TearDown(respChan chan map[int64]ClientTrafficStats, dum
 	close(msgChan)
 	_ = (*os.File).Sync(file)
 	_ = file.Close()
+}
+func (ct ClientTraffic) LongReadTraffic(wg *sync.WaitGroup,
+	CTChan chan map[int64]ClientTrafficStats, numOfTxn int, delay int, t *testing.T) {
+	defer wg.Done()
+
+	CTS := make(map[int64]ClientTrafficStats)
+
+	logger.GetLogger().Log(logger.Alert, "Sending LongReadTraffic")
+	n := time.Now().Unix()
+	counter := 0
+	var wg1 sync.WaitGroup
+	for {
+		counter += 1
+		logger.GetLogger().Log(logger.Alert, "Request ", counter)
+		if counter >= numOfTxn {
+			break
+		}
+		wg1.Add(1)
+		go func() {
+			defer wg1.Done()
+			ct.slowReadTraffic(CTS, n, delay)
+		}()
+	}
+	logger.GetLogger().Log(logger.Alert, "waiting to finish the job")
+	wg1.Wait()
+	logger.GetLogger().Log(logger.Alert, "Sending Stats back")
+	CTChan <- CTS
 }
 
 func (ct ClientTraffic) LongTxnTraffic(wg *sync.WaitGroup,

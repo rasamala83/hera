@@ -3,10 +3,36 @@ package main
 import (
 	"github.com/paypal/hera/tests/util"
 	"github.com/paypal/hera/utility/logger"
+	"os"
 	"sync"
 	"testing"
 	"time"
 )
+
+func moveToEnableState(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string, *os.File) {
+	_, logFile := util.Setup(t)
+	stateLog := make(map[string]int)
+
+	// enable cut over env and tns changes
+	util.EnableCutOver(t, false, false)
+	util.MoveCutOverPhase(t, util.CreateTable, true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
+	util.RestartOCC(t)
+
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+	var wg sync.WaitGroup
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+
+	return dumpChan, respChan, RespMsg, logFile
+}
 
 /*
 PRE-SETUP
@@ -742,4 +768,72 @@ func TestCutOverPreRollback(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 
 	util.CT.StopClientTraffic(respChan, RespMsg)
+}
+
+/*
+PRE-SETUP
+-------------------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    | wisb_role|
+-------------------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE      | CLOC_RW  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE      | CLOC_RO  |
+-------------------------------------------------------------------------------------------
+
+**************************************
+TestCutOver1ClosingPendingTxn
+**************************************
+1. Change the Role in table and remove RW give RO role
+2. Check of the write traffic stated failing
+-------------------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    | wisb_role|
+-------------------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE      | CLOC_RO  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE      | CLOC_RO  |
+-------------------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ----------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB          | state  |
+    ----------------------------------------------------------------
+    | READ         | HERADB_TWO  | HERADB_ONE            | active |
+    ----------------------------------------------------------------
+
+TODO: Need to add logs and CAL log verification
+*/
+func TestCutOver1ValidatingRORoleCheck(t *testing.T) {
+	dumpChan, respChan, RespMsg, logFile := moveToEnableState(t)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
+	util.MoveCutOverPhase(t, util.CutOverPreInCorrectRole, true, true)
+	afterRoleChange := time.Now().Unix()
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+	stateLog := make(map[string]int)
+
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 25
+	util.ValidateStateLog(t, stateLog, true)
+	stopTime := time.Now().Unix()
+	trafficStats := util.CT.StopClientTraffic(respChan, RespMsg)
+
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRoleChange+3, stopTime-3, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRoleChange+3, stopTime-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRoleChange+3, stopTime-3)
+
 }
