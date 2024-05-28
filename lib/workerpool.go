@@ -91,6 +91,7 @@ type WorkerPool struct {
 	CoShardID ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
 	phase     string         // the phase is updated by the cutovercfg
 	dbUname   string         // the dbuname is updated by the cutovercfg
+	checkSetUserRole uint    // 0 disable, >0 enable, whether pool requires workers to do userrole check/set or not
 }
 
 // Init creates the pool by creating the workers and making all the initializations
@@ -901,13 +902,24 @@ func (pool *WorkerPool) decBacklogCnt() {
 	}
 }
 
+// CUTOVER phase: apply to both two_task and two_task_cutover shards
+// PRE phase: apply to only two_task_cutover shard
+// COMPLETE phase: apply to only two_task shard
 // What kind of error should we return ?
 func (pool *WorkerPool) enforceIntegrity() {
+	logger.GetLogger().Log(logger.Verbose, "CP 21 invoked")
 	if pool == nil {
 		return
 	}
-
-	logger.GetLogger().Log(logger.Verbose, "CP 21 invoked")
+	if pool.phase == EnablePhStr {
+		return
+	}
+	if (pool.phase == PrePhStr) && (pool.CoShardID == ShId2Task) {
+		return
+	}
+	if (pool.phase == CompletePhStr) && (pool.CoShardID == ShId2TaskCutover) {
+		return
+	}
 
 	cnt := 0
 	var workers []*WorkerClient
@@ -926,27 +938,9 @@ func (pool *WorkerPool) enforceIntegrity() {
 	}
 	pool.poolCond.L.Unlock()
 	for _, w := range workers {
-		// Immdiate Termination conditions:
-		// CUTOVER phase: apply to both two_task and two_task_cutover shards
-		// PRE phase: apply to only two_task_cutover shard
-		// COMPLETE phase: apply to only two_task shard
-		// BROOM phase: apply to only two_task shard
-		if pool.phase == CutoverPhStr {
-			logger.GetLogger().Log(logger.Alert, "CP 21 CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
-			w.Terminate()
-		} else if pool.phase == PrePhStr && pool.CoShardID == ShId2TaskCutover {
-			logger.GetLogger().Log(logger.Alert, "CP 21 At PRE phase, enforce TWO_TASK_CUTOVER dbuname integrity, terminate worker: pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
-			w.Terminate()
-		} else if pool.phase == CompletePhStr && pool.CoShardID == ShId2Task {
-			logger.GetLogger().Log(logger.Alert, "CP 21 At COMPLETE phase, enforce TWO_TASK dbuname integrity, terminate worker: pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
-			w.Terminate()
-		} else {
-			logger.GetLogger().Log(logger.Info, "CP 21 dbuname mismatched, but not enforced at", pool.phase, " terminate worker: pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
-		}
+		logger.GetLogger().Log(logger.Alert, "CP 21 CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
+			w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
+		w.Terminate()
 	}
 	logger.GetLogger().Log(logger.Verbose, "CP 21 enforceIntegrity done.", pool.phase, pool.dbUname)
 }
@@ -957,7 +951,6 @@ func (pool *WorkerPool) enforceIntegrity() {
 // At Enable ignore all mismatch (still logs)
 // At Pre ignore the TWO_TASK pool DBUNAME mismatch
 // At Complete ignore TWO_TASK_CUTOVER pool DBUNAME mismatch
-// At Broom ignore all mismatch (still logs)
 
 func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 	if pool.phase == newPhase && pool.dbUname == newDbUname {
@@ -968,22 +961,9 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 	logger.GetLogger().Log(logger.Alert, "CP 20 workerpool", pool.Type, pool.ShardID, "dbUname and dbuname before: [",
 		pool.phase, ",", pool.dbUname, "], new: [", newPhase, ",", newDbUname, "]")
 
-	//
-	// We could optimize to skip calling enforceIntegrity to avoid lock
-	if pool.dbUname != newDbUname && pool.phase != newPhase {
-		logger.GetLogger().Log(logger.Alert, "CP 20 both Phase and DBUname changed call enforce workerpool integrity")
-	}
-
-	if pool.dbUname != newDbUname && pool.phase == newPhase {
-		logger.GetLogger().Log(logger.Alert, "CP 20 DBUname changed only,  call enforce workerpool integrity")
-	}
-	if pool.phase != newPhase && pool.dbUname == newDbUname {
-		logger.GetLogger().Log(logger.Alert, "CP 20 Phase changed only,  call enforce workerpool integrity")
-	}
 	pool.phase = newPhase
 	pool.dbUname = newDbUname
 	pool.enforceIntegrity()
-
 }
 
 /*
@@ -1025,7 +1005,7 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 		}
 
 		select {
-		case w.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false}:
+		case w.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false, cutoverStop: true}:
 		default:
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", w.pid)
@@ -1035,4 +1015,37 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 
 	logger.GetLogger().Log(logger.Verbose, "CP 29 end of StopWorker", pool.phase, pool.dbUname)
 
+}
+
+// Set checkSetUserRole accordingly.
+// if checkSetUserRole is changed, false->true or true->false, it sends a ctrl msg to all workers
+// the flag will also be passed to future new workers as env variable.
+func (pool *WorkerPool) CheckSetUserRole(_enable uint) {
+	if pool.checkSetUserRole != _enable {
+		pool.checkSetUserRole = _enable;
+		//notify all workers of this pool;
+		logger.GetLogger().Log(logger.Verbose, "CP 50 CheckSetUserRole", _enable, "pool shid", pool.CoShardID, "current size", pool.currentSize)
+		cnt := 0
+		var workers []*WorkerClient
+		caltxn := cal.NewCalTransaction("CUTOVER", "workerpoolSetRole", cal.TransOK, "", cal.DefaultTGName)
+		pool.poolCond.L.Lock() // do we need lock? what if a new client pick up a worker
+		for i := 0; i < pool.currentSize; i++ {
+			if pool.workers[i] != nil {
+				workers = append(workers, pool.workers[i])
+				cnt++;
+			}
+		}
+		pool.poolCond.L.Unlock()
+		setflag := pool.checkSetUserRole
+		for _, w := range workers {
+			if w != nil { // do we need to check this ?
+				logger.GetLogger().Log(logger.Verbose, "CP 50 CheckSetUserRole, pool shid", pool.CoShardID, "worker id", w.ID)
+				w.sendUserRoleMsg(setflag)
+			}
+		}
+		caltxn.Completed()
+		logger.GetLogger().Log(logger.Verbose, "CP 50 end of CheckSetUserRole", pool.phase, pool.dbUname, pool.checkSetUserRole)
+	} else {
+		logger.GetLogger().Log(logger.Warning, "CP 50 CheckSetUserRole unchanged", pool.phase, pool.dbUname, pool.checkSetUserRole);
+	}
 }

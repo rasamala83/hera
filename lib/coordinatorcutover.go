@@ -2,9 +2,7 @@ package lib
 
 import (
 	"errors"
-	"strconv"
 
-	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -74,7 +72,7 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 		newActInfo.DbUname = cocfg.DbBy2task[g2TaskName]
 		newActInfo.Phase = cocfg.Phase
 		newActInfo.RwStatus = (ReadOk | WriteOk)
-	} else if cocfg.Phase == CompletePhStr || cocfg.Phase == BroomPhStr {
+	} else if cocfg.Phase == CompletePhStr {
 		newActInfo.ShId = ShId2TaskCutover
 		newActInfo.DbUname = cocfg.DbBy2task[g2TaskCutoverName]
 		newActInfo.Phase = cocfg.Phase
@@ -156,7 +154,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				if newActInfo.ShId != ShId2Task {
 					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. prior to cutover phase config using ShId2TaskCutover!")
 				}
-			} else if newActInfo.Phase == CompletePhStr || newActInfo.Phase == BroomPhStr {
+			} else if newActInfo.Phase == CompletePhStr {
 				if newActInfo.ShId != ShId2TaskCutover {
 					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. post cutover phase config using ShId2Task!")
 				}
@@ -217,37 +215,37 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 }
 
 // only for internal write queries. When read cfg always use two_task shard, write uses two_task shard and cutover shard
-func (crd *Coordinator) processSetCoShardID(val []byte) error {
-	if !GetConfig().EnableCutover { // no need to pass
-		crd.coInternalShId = ShIdUnset
-		return nil
-	}
-	if !crd.isInternal { // not allow external connections
-		return ErrNotInternal
-	}
-
-	sh, err := strconv.ParseInt(string(val), 10, 32)
-	if err != nil {
-		return nil
-	}
-	// cutover enabled. we expect sh to be 0 (two_task) or 1 (two_task_cutover)
-	if sh != 0 && sh != 1 {
-		return ErrBadShardID
-	}
-
-	crd.coInternalShId = ShardByTwoTask(sh)
-	if crd.inTransaction && (crd.worker != nil) {
-		// in transaction, piggy back on the shard variable
-		if int(crd.coInternalShId) != crd.worker.shardID {
-			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
-			evt.AddDataInt("cur_shard_id", int64(crd.worker.shardID))
-			evt.AddDataStr("requested_shard_id", string(val))
-			evt.Completed()
-			// processSetCoShardID has higher priority, switch worker.
-		}
-	}
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "Shard ID forced to", crd.shard.shardID)
-	}
-	return nil
-}
+//func (crd *Coordinator) processSetCoShardID(val []byte) error {
+//	if !GetConfig().EnableCutover { // no need to pass
+//		crd.coInternalShId = ShIdUnset
+//		return nil
+//	}
+//	if !crd.isInternal { // not allow external connections
+//		return ErrNotInternal
+//	}
+//
+//	sh, err := strconv.ParseInt(string(val), 10, 32)
+//	if err != nil {
+//		return nil
+//	}
+//	// cutover enabled. we expect sh to be 0 (two_task) or 1 (two_task_cutover)
+//	if sh != 0 && sh != 1 {
+//		return ErrBadShardID
+//	}
+//
+//	crd.coInternalShId = ShardByTwoTask(sh)
+//	if crd.inTransaction && (crd.worker != nil) {
+//		// in transaction, piggy back on the shard variable
+//		if int(crd.coInternalShId) != crd.worker.shardID {
+//			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
+//			evt.AddDataInt("cur_shard_id", int64(crd.worker.shardID))
+//			evt.AddDataStr("requested_shard_id", string(val))
+//			evt.Completed()
+//			// processSetCoShardID has higher priority, switch worker.
+//		}
+//	}
+//	if logger.GetLogger().V(logger.Debug) {
+//		logger.GetLogger().Log(logger.Debug, crd.id, "Shard ID forced to", crd.shard.shardID)
+//	}
+//	return nil
+//}

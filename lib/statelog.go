@@ -448,7 +448,7 @@ func (sl *StateLog) init() error {
 	if sl.maxShardSize == 0 || !(GetConfig().EnableSharding) {
 		sl.maxShardSize = 1
 		if GetConfig().EnableCutover {
-			logger.GetLogger().Log(logger.Verbose, "shtien init statelog enable cutover")
+			//logger.GetLogger().Log(logger.Verbose, "shtien init statelog enable cutover")
 			sl.maxShardSize = int(MaxDbInCutover)
 			logger.GetLogger().Log(logger.Verbose, "shtien init statelog maxShardSize", sl.maxShardSize)
 		}
@@ -563,11 +563,11 @@ func (sl *StateLog) init() error {
 		typeTitlePrefix[wtypeRW] = GetConfig().StateLogPrefix
 	}
 	for s := 0; s < sl.maxShardSize; s++ {
-		logger.GetLogger().Log(logger.Verbose, "shtien statelog init shard", s)
+		//logger.GetLogger().Log(logger.Verbose, "shtien statelog init shard", s)
 		for t := wtypeRW; t < wtypeTotalCount; t++ {
 			var suffix string
 			if GetConfig().EnableCutover {
-				logger.GetLogger().Log(logger.Verbose, "shtien statelog init enable cutover", t)
+				//logger.GetLogger().Log(logger.Verbose, "shtien statelog init enable cutover", t)
 				if s == int(ShId2TaskCutover) {
 					suffix = ".co"
 				}

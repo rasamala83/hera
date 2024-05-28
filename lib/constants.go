@@ -82,7 +82,8 @@ var (
 	ErrOther,
 	ErrReqParseFail,
 	ErrCutoverReadNotAllowed,
-	ErrCutoverWriteNotAllowed error
+	ErrCutoverWriteNotAllowed,
+	ErrCutoverKill error
 )
 
 // Initializes error strings with a prefix like "HERA"
@@ -114,6 +115,7 @@ func MkErr(prefix string) {
 	ErrReqParseFail = errors.New("Request error")
 	ErrCutoverReadNotAllowed = errors.New(prefix + "-500: active db cutover no read allowed")
 	ErrCutoverWriteNotAllowed = errors.New(prefix + "-501: active db cutover no write allowed")
+	ErrCutoverKill = errors.New(prefix + "-502: db cutover stop txn in progress")
 
 }
 
