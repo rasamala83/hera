@@ -422,7 +422,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		break
 
 	case CutOverPhaseIII:
-		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', wisb_roles='CLOC_RW, remarks='" + comment +
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
 			"' where dbuname='HERADB_TWO' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
 			"' where dbuname='HERADB_ONE' and occ_name='occ'"

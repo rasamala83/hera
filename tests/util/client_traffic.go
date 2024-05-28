@@ -497,6 +497,30 @@ func (ct ClientTraffic) LongTxnTraffic(wg *sync.WaitGroup,
 	CTChan <- CTS
 }
 
+func (ct ClientTraffic) deepCopyCTS(original ClientTrafficStats) ClientTrafficStats {
+	copy := ClientTrafficStats{stats: make(map[string]map[int]*queryStats)}
+	for key, value := range original.stats {
+		copy.stats[key] = make(map[int]*queryStats)
+		for k1, v1 := range value {
+			n := queryStats{successCount: v1.successCount, failureCount: v1.failureCount}
+			copy.stats[key][k1] = &n
+		}
+	}
+
+	return copy
+}
+
+func (ct ClientTraffic) deepCopyCTSMap(original map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
+	copy := make(map[int64]ClientTrafficStats)
+
+	timeMutex.Lock()
+	for key, value := range original {
+		copy[key] = ct.deepCopyCTS(value)
+	}
+	timeMutex.Unlock()
+	return copy
+}
+
 func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 	CTChan chan map[int64]ClientTrafficStats, DumpChan chan map[int64]ClientTrafficStats) {
 	defer wg.Done()
@@ -521,7 +545,7 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 				return
 			case DumpLogs:
 				logger.GetLogger().Log(logger.Alert, "dumping logs")
-				DumpChan <- CTS
+				DumpChan <- ct.deepCopyCTSMap(CTS)
 			}
 		default:
 			n := time.Now().Unix()
