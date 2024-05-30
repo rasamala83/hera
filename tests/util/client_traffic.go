@@ -1,5 +1,6 @@
 package util
 
+import "C"
 import (
 	"context"
 	"database/sql"
@@ -28,6 +29,9 @@ type ClientTraffic struct {
 }
 
 type ClientTrafficStats struct {
+	// string - type of query ReadType, WriteType, TXNType
+	// int - utc in seconds
+	// queryStats - success and failure
 	stats map[string]map[int]*queryStats
 }
 
@@ -241,14 +245,14 @@ func (ct ClientTraffic) txnTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	c.GetConnection()
 
 	if c.Err != nil {
-		ct.incrementFailure(TXN, dbId, CTS[n].stats)
+		ct.incrementFailure(TXN, dbId, CTS[n].stats, c.Err)
 		return
 	}
 
 	defer c.Close()
 	dbId, err = ct.WriteInTxn(c)
 	if err != nil {
-		ct.incrementFailure(TXN, dbId, CTS[n].stats)
+		ct.incrementFailure(TXN, dbId, CTS[n].stats, err)
 	} else {
 		ct.incrementSuccess(TXN, dbId, CTS[n].stats)
 	}
@@ -262,7 +266,7 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 	failed := true
 
 	if c.Err != nil {
-		ct.incrementFailure(WRITE, id, CTS[n].stats)
+		ct.incrementFailure(WRITE, id, CTS[n].stats, c.Err)
 		return
 	}
 
@@ -272,7 +276,7 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 	txn, err := c.conn.BeginTx(c.context, nil)
 
 	if err != nil {
-		ct.incrementFailure(WRITE, id, CTS[n].stats)
+		ct.incrementFailure(WRITE, id, CTS[n].stats, err)
 		txn.Rollback()
 		return
 	}
@@ -291,7 +295,7 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 	}
 
 	if failed {
-		ct.incrementFailure(WRITE, id, CTS[n].stats)
+		ct.incrementFailure(WRITE, id, CTS[n].stats, err)
 	} else {
 		ct.incrementSuccess(WRITE, id, CTS[n].stats)
 	}
@@ -310,7 +314,7 @@ func (ct ClientTraffic) slowReadTraffic(CTS map[int64]ClientTrafficStats, n int6
 			os.Setenv("TLS", "1")
 			return
 		} else {
-			ct.incrementFailure(READ, id, CTS[n].stats)
+			ct.incrementFailure(READ, id, CTS[n].stats, c.Err)
 			return
 		}
 	}
@@ -320,7 +324,7 @@ func (ct ClientTraffic) slowReadTraffic(CTS map[int64]ClientTrafficStats, n int6
 
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, err)
-		ct.incrementFailure(READ, id, CTS[n].stats)
+		ct.incrementFailure(READ, id, CTS[n].stats, err)
 	} else {
 		ct.incrementSuccess(READ, id, CTS[n].stats)
 	}
@@ -338,7 +342,7 @@ func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 			os.Setenv("TLS", "1")
 			return
 		} else {
-			ct.incrementFailure(READ, id, CTS[n].stats)
+			ct.incrementFailure(READ, id, CTS[n].stats, c.Err)
 			return
 		}
 	}
@@ -347,7 +351,7 @@ func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	id, err = ct.identifyDB(c.conn, c.context)
 
 	if err != nil {
-		ct.incrementFailure(READ, id, CTS[n].stats)
+		ct.incrementFailure(READ, id, CTS[n].stats, err)
 	} else {
 		ct.incrementSuccess(READ, id, CTS[n].stats)
 	}
@@ -483,7 +487,7 @@ func (ct ClientTraffic) LongTxnTraffic(wg *sync.WaitGroup,
 		dbId, err := ct.identifyDBTxn(txn.DBTransaction, txn.DBConnection.context)
 		if err != nil {
 			logger.GetLogger().Log(logger.Alert, "Txn failure ", err)
-			ct.incrementFailure(TXN, dbId, CTS[n].stats)
+			ct.incrementFailure(TXN, dbId, CTS[n].stats, err)
 		} else {
 			ct.incrementSuccess(TXN, dbId, CTS[n].stats)
 		}
@@ -583,7 +587,8 @@ func (ct ClientTraffic) incrementSuccess(qsType string, dbId int, stats map[stri
 	m.Unlock()
 }
 
-func (ct ClientTraffic) incrementFailure(qsType string, dbId int, stats map[string]map[int]*queryStats) {
+func (ct ClientTraffic) incrementFailure(qsType string, dbId int, stats map[string]map[int]*queryStats, err error) {
+	logger.GetLogger().Log(logger.Alert, qsType+" Failure: ", err)
 	m := ct.getMutexForType(qsType)
 	m.Lock()
 	stats[qsType][dbId].failureCount += 1

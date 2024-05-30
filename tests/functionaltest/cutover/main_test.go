@@ -112,8 +112,8 @@ func TestCutOverPositive(t *testing.T) {
 	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	writeCutOverValidation := time.Now().Unix() - 3
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, readCutOverValidation, writeCutOverValidation, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterWriteCutOver, writeCutOverValidation, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterWriteCutOver, writeCutOverValidation, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterWriteCutOver+3, writeCutOverValidation, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterWriteCutOver+3, writeCutOverValidation, 2, 1)
 
 	logger.GetLogger().Log(logger.Alert, "Moving to Complete State: ", time.Now().Unix())
 	util.MoveCutOverPhase(t, util.CutOverComplete, true, true)
