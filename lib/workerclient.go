@@ -407,7 +407,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 				}
 
 			} else {
-				logger.GetLogger().Log(logger.Info, "shtien check if sharded", twoTaskEnv, "is not defined")
 				if worker.shardID != 0 {
 					logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
 					et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
@@ -426,7 +425,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			et.Completed()
 			return errors.New("TWO_TASK is not defined")
 		} else {
-			logger.GetLogger().Log(logger.Alert, "CP 50 TWO_TASK is set", twoTask, "worker ID", worker.ID)
 			envUpsert(&attr, envTwoTask, twoTask)
 			if GetConfig().EnableCutover {
 				if worker.ConnTwoTask == ShId2TaskCutover {

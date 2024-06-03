@@ -109,14 +109,6 @@ func InitCutoverCfg(modulename string) error {
 		return nil
 	}
 
-	loadEnvErr := setPermTwoTaskName()
-
-	if loadEnvErr != nil {
-		evt := cal.NewCalEvent(EvtTypeCutover, "error_init_env", cal.TransOK, loadEnvErr.Error())
-		evt.Completed()
-		return loadEnvErr
-	}
-
 	gModuleName = modulename
 
 	i := 0
@@ -141,7 +133,7 @@ func InitCutoverCfg(modulename string) error {
 				evt.Completed()
 				logger.GetLogger().Log(logger.Alert, "error: loadCutoverCfg()", strconv.Itoa(i), err.Error())
 			} else {
-				evt := cal.NewCalEvent(EvtTypeCutover, "init_cutovercfg_"+strconv.Itoa(i), cal.TransOK,"")
+				evt := cal.NewCalEvent(EvtTypeCutover, "init_success_"+strconv.Itoa(i), cal.TransOK,"")
 				evt.Completed()
 				logger.GetLogger().Log(logger.Info, "successful init cutovercfg")
 				break
@@ -151,7 +143,7 @@ func InitCutoverCfg(modulename string) error {
 	}
 
 	if i == maxRetry {
-		evt := cal.NewCalEvent(EvtTypeCutover, "fail_init_cfg", cal.TransOK,strconv.Itoa(i))
+		evt := cal.NewCalEvent(EvtTypeCutover, "init_fail_max_retry", cal.TransOK,strconv.Itoa(i))
 		evt.Completed()
 		return errors.New("failed init cutovercfg after max retry")
 	}
@@ -172,7 +164,7 @@ func InitCutoverCfg(modulename string) error {
 			} else {
 				err = loadCutoverCfg(db)
 				if err != nil {
-					evt := cal.NewCalEvent(EvtTypeCutover, "err_reload_cfg", cal.TransOK, err.Error())
+					evt := cal.NewCalEvent(EvtTypeCutover, "err_reload", cal.TransOK, err.Error())
 					evt.Completed()
 					logger.GetLogger().Log(logger.Warning, "error: reload loadCutoverCfg()", err.Error())
 				} else {
@@ -294,7 +286,7 @@ func loadCutoverCfg(db *sql.DB) error {
 	}
 	// can't have identical occ_two_task
 	if (isCfgSame(records[0].occ2task.String, records[1].occ2task.String)) {
-		return fmt.Errorf("CP 7 error cutover cfg can't have same two_task [%s, %s] [%s, %s]",
+		return fmt.Errorf("error cutover cfg can't have same two_task [%s, %s] [%s, %s]",
 			records[0].occ2task.String, records[0].dbUname.String,
 			records[1].occ2task.String , records[1].dbUname.String)
 	}
