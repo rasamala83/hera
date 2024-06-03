@@ -961,16 +961,21 @@ func (pool *WorkerPool) enforceIntegrity() {
 
 func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 	if pool.phase == newPhase && pool.dbUname == newDbUname {
-		logger.GetLogger().Log(logger.Alert, "CP 20 ChangeCutoverInfo, phase and dbuname no change, done.")
+		logger.GetLogger().Log(logger.Debug, "ChangeCutoverInfo, phase and dbuname no change, done.")
 		return
 	}
 
-	logger.GetLogger().Log(logger.Alert, "CP 20 workerpool", pool.Type, pool.ShardID, "dbUname and dbuname before: [",
+	evt := cal.NewCalEvent(EvtTypeCutover, "update_wp_cfg_change", cal.TransOK, "")
+	evt.Completed()
+
+	logger.GetLogger().Log(logger.Alert, "workerpool", pool.Type, pool.ShardID, "dbUname and dbuname before: [",
 		pool.phase, ",", pool.dbUname, "], new: [", newPhase, ",", newDbUname, "]")
 
 	pool.phase = newPhase
 	pool.dbUname = newDbUname
-	pool.enforceIntegrity()
+	if pool.CoShardID == ShId2TaskCutover {
+		pool.enforceIntegrity()
+	}
 }
 
 /*
