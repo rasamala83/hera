@@ -239,7 +239,7 @@ TestCutOverCompleteInvalidDBUniqueName
 | ROWS | occ_name | occ_two_task | db_uname           | r_status | w_status | phase    |
 ----------------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE_INVALID | N        | N        | COMPLETE |
-| Row1 | occ      | CLOC_CUTOVER | HERADB_ONE_INVALID | Y        | Y        | COMPLETE |
+| Row1 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | Y        | Y        | COMPLETE |
 ----------------------------------------------------------------------------------------
 
 Validation:
@@ -247,14 +247,14 @@ Validation:
     ----------------------------------------------------
     | two task     | num of workers | state            |
     ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy | TODO: FAILING
+    | CLOC         |  1             | accept+wait+busy | TODO: FAILING
     | CLOC_CUTOVER |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
     | db unique name | num of sessions | service name          | state  |
     ---------------------------------------------------------------------
-    | HERADB_ONE     |  25             | herabox_primary_srv   | active | TODO: FAILING
+    | HERADB_ONE     |  1              | herabox_primary_srv   | active | TODO: FAILING
     | HERADB_TWO     |  25             | herabox_secondary_srv | active |
     ---------------------------------------------------------------------
  3. Traffic Validation for the whole 15 seconds
@@ -269,17 +269,17 @@ Validation:
     ----------------------------------------------------
     | two task     | num of workers | state            |
     ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy | TODO: FAILING
+    | CLOC         |  1             | accept+wait+busy | TODO: FAILING
     | CLOC_CUTOVER |  25            | accept+wait+busy |
     ----------------------------------------------------
  5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
-    5.1 OCC Container should be down TODO: FAILING
+    5.1 OCC Container should be up TODO: FAILING
     ----------------------------------------------------------------
     | Traffic Type | Success DB  | No Traffic DB          | state  |
     ----------------------------------------------------------------
-    | READ         |   			 | HERADB_ONE, HERADB_TWO | active |
-    | WRITE        |             | HERADB_ONE, HERADB_TWO | active |
-    | TXN          |             | HERADB_ONE, HERADB_TWO | active |
+    | READ         | HERADB_TWO  | HERADB_ONE | active |
+    | WRITE        | HERADB_TWO  | HERADB_ONE | active |
+    | TXN          | HERADB_TWO  | HERADB_ONE | active |
     ----------------------------------------------------------------
 
 TODO: Need to add logs and CAL log verification
@@ -295,10 +295,10 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CutOverCompletePhaseInvalidDBUniqName, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
-	//stateLog["occ"] = 25
+	stateLog["occ"] = 1
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	//util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	invalidPhaseIII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
@@ -329,9 +329,9 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 		t.Fatalf("OCC is up - which is not expected")
 	}
 
-	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-3)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-32, 2, 1)
 }
 
 /*

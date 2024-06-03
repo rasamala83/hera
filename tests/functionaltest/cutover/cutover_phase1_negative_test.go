@@ -82,7 +82,7 @@ TestCutOver1InvalidNoOfRow
 --------------------------------------------------------------------------------
 | ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | CUTOVER  |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 Validation:
