@@ -91,6 +91,7 @@ type WorkerPool struct {
 	CoShardID ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
 	phase     string         // the phase is updated by the cutovercfg
 	dbUname   string         // the dbuname is updated by the cutovercfg
+	str2task  string
 	checkSetUserRole uint    // 0 disable, >0 enable, whether pool requires workers to do userrole check/set or not
 }
 
@@ -112,6 +113,11 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 	if GetConfig().EnableCutover {
 		pool.CoShardID = pool2task
 		pool.ShardID = int(pool2task)
+		if pool2task == ShId2Task {
+			pool.str2task = Get2TaskName()
+		} else if pool2task == ShId2TaskCutover {
+			pool.str2task = Get2TaskCutoverName()
+		}
 	}
 
 	pool.workers = make([]*WorkerClient, size)
@@ -631,6 +637,7 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 func (pool *WorkerPool) getActiveWorker() (worker *WorkerClient) {
 	var workerclient *WorkerClient
 	var cnt = pool.activeQ.Len()
+logger.GetLogger().Log(logger.Debug, "shtien getActiveWorker()",pool.activeQ.Len(), " type ", pool.Type, ", instance:", pool.InstID)
 	for cnt > 0 {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "poolsize (before get)", pool.activeQ.Len(), " type ", pool.Type, ", instance:", pool.InstID)
@@ -954,16 +961,21 @@ func (pool *WorkerPool) enforceIntegrity() {
 
 func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 	if pool.phase == newPhase && pool.dbUname == newDbUname {
-		logger.GetLogger().Log(logger.Alert, "CP 20 ChangeCutoverInfo, phase and dbuname no change, done.")
+		logger.GetLogger().Log(logger.Debug, "ChangeCutoverInfo, phase and dbuname no change, done.")
 		return
 	}
 
-	logger.GetLogger().Log(logger.Alert, "CP 20 workerpool", pool.Type, pool.ShardID, "dbUname and dbuname before: [",
+	evt := cal.NewCalEvent(EvtTypeCutover, "update_wp_cfg_change", cal.TransOK, "")
+	evt.Completed()
+
+	logger.GetLogger().Log(logger.Alert, "workerpool", pool.Type, pool.ShardID, "dbUname and dbuname before: [",
 		pool.phase, ",", pool.dbUname, "], new: [", newPhase, ",", newDbUname, "]")
 
 	pool.phase = newPhase
 	pool.dbUname = newDbUname
-	pool.enforceIntegrity()
+	if pool.CoShardID == ShId2TaskCutover {
+		pool.enforceIntegrity()
+	}
 }
 
 /*

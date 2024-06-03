@@ -300,7 +300,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R_CUTOVER")
 				envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_CUTOVER", dbHostName))
-				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER %d CUTOVER", worker.ID))
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER CUTOVER %d", worker.ID))
 			} else {
 				// standard RO setup
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R")
@@ -311,32 +311,52 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		envUpsert(&attr, envHeraName, worker.moduleName)
 
 		twoTaskEnv := ""
-		if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
-			twoTaskEnv = "TWO_TASK_READ_CUTOVER" // should this be "_CUTOVER_%d" ? looks yes, see fallback handling below
+		if GetConfig().EnableCutover {
+			if worker.ConnTwoTask == ShId2TaskCutover {
+				twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_CUTOVER_0") // should this be "_CUTOVER_%d" ? looks yes, see fallback handling below
+			} else {
+				twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_0")
+			}
+			logger.GetLogger().Log(logger.Debug, "cutover enabled. define twoTaskEnv=", twoTaskEnv)
+
 		} else {
 			twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_%d", worker.shardID)
 		}
+
 		twoTask = os.Getenv(twoTaskEnv)
 		if twoTask == "" {
-			if worker.shardID != 0 {
-				logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
-				et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
-				et.Completed()
-				return errors.New(twoTaskEnv + " is not defined")
-			}
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
-			}
-			if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2Task {
-				twoTaskEnv = "TWO_TASK_READ_CUTOVER"
+			logger.GetLogger().Log(logger.Debug, "cutover enabled. handle", twoTaskEnv, "not defined")
+			if GetConfig().EnableCutover {
+				logger.GetLogger().Log(logger.Debug, twoTaskEnv, "is not defined, fallback")
+				if worker.ConnTwoTask == ShId2Task {
+					twoTaskEnv = "TWO_TASK_READ"
+				} else {
+					twoTaskEnv = "TWO_TASK_READ_CUTOVER"
+				}
 			} else {
-				twoTaskEnv = "TWO_TASK_READ"
+
+				if worker.shardID != 0 {
+					logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
+					et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
+					et.Completed()
+					return errors.New(twoTaskEnv + " is not defined")
+				}
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
+				}
 			}
 			twoTask = os.Getenv(twoTaskEnv)
 		}
 
 		if twoTask != "" {
 			envUpsert(&attr, envTwoTask, twoTask)
+			if GetConfig().EnableCutover {
+				if worker.ConnTwoTask == ShId2TaskCutover {
+					envUpsert(&attr, "cutover_two_task_key", Get2TaskCutoverName())
+				} else {
+					envUpsert(&attr, "cutover_two_task_key", Get2TaskName())
+				}
+			}
 		} else {
 			if os.Getenv(envTwoTask) == "" {
 				logger.GetLogger().Log(logger.Alert, "TWO_TASK is not defined for READ worker")
@@ -356,7 +376,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_CUTOVER")
 				envUpsert(&attr, envDbHostName, dbHostName)
-				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER %d CUTOVER", worker.ID))
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER CUTOVER %d", worker.ID))
 			} else {
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION")
 				envUpsert(&attr, envDbHostName, dbHostName)
@@ -387,7 +407,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 				}
 
 			} else {
-				logger.GetLogger().Log(logger.Info, "shtien check if sharded", twoTaskEnv, "is not defined")
 				if worker.shardID != 0 {
 					logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
 					et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
@@ -406,8 +425,14 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			et.Completed()
 			return errors.New("TWO_TASK is not defined")
 		} else {
-			logger.GetLogger().Log(logger.Alert, "CP 50 TWO_TASK is set", twoTask, "worker ID", worker.ID)
 			envUpsert(&attr, envTwoTask, twoTask)
+			if GetConfig().EnableCutover {
+				if worker.ConnTwoTask == ShId2TaskCutover {
+					envUpsert(&attr, "cutover_two_task_key", Get2TaskCutoverName())
+				} else {
+					envUpsert(&attr, "cutover_two_task_key", Get2TaskName())
+				}
+			}
 		}
 	}
 
@@ -636,28 +661,26 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			}
 			logger.GetLogger().Log(logger.Alert, "check cutovercfg and workerclient integrity: worker two_task", wkr2task, "target dbuname", coCfg.DbBy2task[wkr2task])
 
-			if coCfg.DbBy2task[wkr2task] != worker.dbUname {
+			cfgDbuname := coCfg.DbBy2task[wkr2task]
+			if cfgDbuname != worker.dbUname {
 				if coCfg.Phase == CutoverPhStr {
-					logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in CUTOVER phase [",
-						coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
-					errmsg := fmt.Sprintf("new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
+					logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in CUTOVER phase [",cfgDbuname, "][", worker.dbUname, "]")
+					errmsg := fmt.Sprintf("new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
 					return errors.New(errmsg)
 				} else {
 					if int(worker.ConnTwoTask) == int(ShId2TaskCutover) {
 						//enforce two_task_cutover pool in PRE
 						if coCfg.Phase == PrePhStr {
-							logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in PRE phase [",
-								coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
-							errmsg := fmt.Sprintf("new workerclient integrity check failed. Expect dbname [%s], %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
+							logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in PRE phase [", cfgDbuname, "][", worker.dbUname, "]")
+							errmsg := fmt.Sprintf("new workerclient integrity check failed. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
 							return errors.New(errmsg)
 						}
 					}
 					if int(worker.ConnTwoTask) == int(ShId2Task) {
 						// enforce two_task pool in Complete
 						if coCfg.Phase == CompletePhStr {
-							logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in COMPLETE phase [",
-								coCfg.DbBy2task[wkr2task], "][", worker.dbUname, "]")
-							errmsg := fmt.Sprintf("new workerclient integrity check failed. Expect dbname [%s] but %d, %d, %d", coCfg.DbBy2task[wkr2task], worker.dbUname, worker.Type, worker.ConnTwoTask)
+							logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in COMPLETE phase [", cfgDbuname, "][", worker.dbUname, "]")
+							errmsg := fmt.Sprintf("new workerclient integrity check failed. Expect dbname [%s] but %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
 							return errors.New(errmsg)
 						}
 					}

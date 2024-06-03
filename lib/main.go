@@ -109,7 +109,7 @@ func Run() {
 	} else if tnsnames == nil {
 		logger.GetLogger().Log(logger.Alert, "CP 0 FindTns() return nil")
 	} else {
-		if !GetConfig().EnableSharding && !GetConfig().EnableTAF {
+		if !(GetConfig().EnableSharding || GetConfig().EnableTAF) {
 			logicdbId := os.Getenv("TWO_TASK_CUTOVER")
 			if logicdbId != "" {
 
@@ -127,7 +127,14 @@ func Run() {
 					}
 					if ok {
 						GetConfig().EnableCutover = true
-						logger.GetLogger().Log(logger.Alert, "CP 0 enable cutover feature")
+						loadEnvErr := setPermTwoTaskName()
+						if loadEnvErr != nil {
+							evt := cal.NewCalEvent(EvtTypeCutover, "error_init_env", cal.TransOK, loadEnvErr.Error())
+							evt.Completed()
+						} else {
+							GetConfig().EnableCutover = true
+							logger.GetLogger().Log(logger.Alert, "CP 0 enable cutover feature")
+						}
 					} else {
 						logger.GetLogger().Log(logger.Alert, "CP 0 disable cutover feature")
 					}
@@ -149,15 +156,6 @@ func Run() {
 
 	GetStateLog().SetStartTime(time.Now())
 
-	// retiring opscfg plan for formal cleanup later.
-	/* go func() {
-		sleep := time.Duration(GetConfig().ConfigReloadTimeMs)
-		for {
-			time.Sleep(time.Millisecond * sleep)
-			CheckOpsConfigChange()
-		}
-	}() */
-
 	CheckEnableProfiling()
 	GoStats()
 
@@ -177,9 +175,9 @@ func Run() {
 		}
 		FullShutdown()
 	}
+
 	for {
 		if pool.GetHealthyWorkersCount() > 0 {
-			logger.GetLogger().Log(logger.Alert, "shtien got healthy worker")
 			break
 		} else {
 			if GetConfig().EnableTAF {
@@ -192,7 +190,26 @@ func Run() {
 		time.Sleep(time.Millisecond * 100)
 	}
 
-	time.Sleep(time.Second * 3)
+	// when cutover is enabled, the coordinator doesn't allow any traffic befor loading very first cutover cfg.
+	if GetConfig().ReadonlyPct > 0 {
+		rpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, 0)
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RO, 0, 0:", err)
+			}
+			FullShutdown()
+		}
+		for {
+			if rpool.GetHealthyWorkersCount() > 0 {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+		evt := cal.NewCalEvent(EvtTypeCutover, "ro_pool_avail", cal.TransOK, "")
+		evt.Completed()
+	}
+
+	time.Sleep(time.Second * 2)
 	if GetConfig().EnableCutover {
 		err = InitCutoverCfg(*namePtr)
 		if err != nil {

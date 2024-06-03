@@ -7,16 +7,6 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-// In cutovercfg.go I have defined this, we don't need ActiveCOInfo
-/*
-type CutoverCfg struct {
-	ActiveTwoTask     string            // FOO or FOO_CUTOVER is the active
-	Phase             string            // current cutover phase
-	DbUnameBy2task    map[string]string // DB_UNAME by two_task and two_task_cutover
-	RWstatusByDbUname map[string]int    //dbuname --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
-}
-*/
-
 // Active shard means the shard either take R, W, or RW sql.
 // If no shard is active, the ActiveDbInfo should container empty strings.
 // Each coordinator will pull the CutoverCfg to check if there is any update.

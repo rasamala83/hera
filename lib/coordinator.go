@@ -794,10 +794,16 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						return err
 					}
 					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead, 0 /*no backlog timeout*/)
+					if err != nil {
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool", err)
+						}
+						return err
+					}
 				} else {
 					// external read sql
 					if (crd.curActDb.Phase == CutoverPhStr) && (crd.curActDb.RwStatus != ReadOk) {
-						logger.GetLogger().Log(logger.Alert, crd.id, "CP 6 OCC-500: active db cutover no read allowed")
+						logger.GetLogger().Log(logger.Alert, crd.id, "OCC-500: active db cutover no read allowed")
 						return ErrCutoverReadNotAllowed
 					}
 					workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, int(crd.curActDb.ShId))
@@ -851,13 +857,13 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 CUTOVER phase isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActDb.RwStatus, "]")
 						if crd.isRead {
 							if (crd.curActDb.RwStatus & ReadOk) != ReadOk {
-								logger.GetLogger().Log(logger.Alert, crd.id, "CP 6.2 OCC-500: active db cutover no read allowed")
+								logger.GetLogger().Log(logger.Alert, crd.id, "OCC-500: active db cutover no read allowed")
 								return ErrCutoverReadNotAllowed
 							}
 
 						} else {
 							if (crd.curActDb.RwStatus & WriteOk) != WriteOk {
-								logger.GetLogger().Log(logger.Alert, crd.id, "CP 6.2 OCC-501: active db cutover no write allowed")
+								logger.GetLogger().Log(logger.Alert, crd.id, "OCC-501: active db cutover no write allowed")
 								return ErrCutoverWriteNotAllowed
 							}
 						}
@@ -974,12 +980,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					// already got a worker need to work on the details. We first check shard
 					if crd.isRead {
 						if (crd.curActDb.RwStatus & ReadOk) != ReadOk {
-							logger.GetLogger().Log(logger.Alert, crd.id, "CP 6.3 OCC-500: active db cutover no read allowed")
+							logger.GetLogger().Log(logger.Alert, crd.id, "OCC-500: active db cutover no read allowed")
 							return ErrCutoverReadNotAllowed
 						}
 					} else {
 						if (crd.curActDb.RwStatus & WriteOk) != WriteOk {
-							logger.GetLogger().Log(logger.Alert, crd.id, "CP 6.3 OCC-501: active db cutover no write allowed")
+							logger.GetLogger().Log(logger.Alert, crd.id, "OCC-501: active db cutover no write allowed")
 							return ErrCutoverWriteNotAllowed
 						}
 					}
