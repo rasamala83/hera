@@ -791,7 +791,7 @@ func (act *calAtomicTransaction) sendSelf() {
 	if act.mDuration >= minDuration{
 		duration = act.mDuration
 	}
-	duration_str = fmt.Sprintf("%.1f", duration)
+	duration_str = fmt.Sprintf("%.2f", duration)
 	var buf bytes.Buffer
 	buf.WriteString(act.mClass)
 	buf.WriteString(act.mTimeStamp)
