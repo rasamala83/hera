@@ -17,17 +17,17 @@ ENABLE CUT-OVER
 */
 
 func TestCutOverDisabled(t *testing.T) {
-	util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RunMsg := util.CT.SendClientTraffic(&wg)
+	defer util.TearDown(t, respChan, dumpChan, RunMsg, logFile)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
 	afterComplete := time.Now().Unix() - 3
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RunMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, beforeStart, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, beforeStart, afterComplete, 1, 2)
@@ -40,7 +40,7 @@ func TestCutOverDisabled(t *testing.T) {
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RunMsg)
 }
 
 /*
@@ -61,17 +61,17 @@ OCC should exit - but as of now it is not
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
-	util.InitialSetup(t)
+	_, log_File := util.Setup(t)
 
 	var wg sync.WaitGroup
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RunMsg := util.CT.SendClientTraffic(&wg)
+	defer util.TearDown(t, respChan, dumpChan, RunMsg, log_File)
 
 	beforeStart := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
 	afterComplete := time.Now().Unix() - 3
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RunMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, beforeStart, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, beforeStart, afterComplete, 1, 2)
@@ -108,7 +108,7 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 		t.Fatalf("OCC is down - which is not expected")
 	}
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RunMsg)
 }
 
 /*
@@ -125,11 +125,11 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledTableMissingPrimary(t *testing.T) {
-	util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
-	respChan, _ := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -144,7 +144,7 @@ func TestCutOverEnabledTableMissingPrimary(t *testing.T) {
 		t.Fatalf("OCC is up - which is not expected")
 	}
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RespMsg)
 }
 
 /*
@@ -160,11 +160,11 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidNumOfRows(t *testing.T) {
-	util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
-	respChan, _ := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -179,14 +179,14 @@ func TestCutOverEnabledInvalidNumOfRows(t *testing.T) {
 		t.Fatalf("OCC is up - which is not expected")
 	}
 
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RespMsg)
 }
 
 /*
 TEST
 1. ENABLE CUT-OVER
 2. Create cut-over management table and insert records for cut-over enabled phase
-3. Enable sharing by making sure management table has right entries and the cdb values are set for sharding
+3. Enable sharding by making sure management table has right entries and the cdb values are set for sharding
 4. Restart OCC (SIGHUP)
 5. Wait for 30 seconds before starting validation
 
@@ -198,7 +198,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledShardedDataBase(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -236,7 +236,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledWrongOCCName(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -266,7 +266,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidUniqueID(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -302,7 +302,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidTNS(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -330,7 +330,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidPhase(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -358,7 +358,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidRead(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -394,7 +394,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledInvalidWrite(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -433,10 +433,10 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
-	util.InitialSetup(t)
+	_, logFile := util.Setup(t)
 	var wg sync.WaitGroup
-	respChan, dumpChan := util.CT.SendClientTraffic(&wg)
-	defer util.CT.TearDown()
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -451,9 +451,9 @@ func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
 	start := time.Now().Unix() + 2
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
-	trafficStats := util.CT.DumpTrafficStat(dumpChan)
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	afterComplete := time.Now().Unix() - 3
-	util.CT.StopClientTraffic(respChan)
+	util.CT.StopClientTraffic(respChan, RespMsg)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, start, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, start, afterComplete, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, start, afterComplete, 1, 2)
@@ -480,7 +480,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledDualWrite(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
@@ -515,7 +515,7 @@ VALIDATION
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOverEnabledDualRead(t *testing.T) {
-	util.InitialSetup(t)
+	util.Setup(t)
 
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)

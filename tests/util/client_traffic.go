@@ -1,5 +1,6 @@
 package util
 
+import "C"
 import (
 	"context"
 	"database/sql"
@@ -9,10 +10,11 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"testing"
 	"time"
 )
 
-var CT = ClientTraffic{ReadTraffic: true, WriteTraffic: true, TransactionTraffic: true, InProgress: false, RunMsg: make(chan string)}
+var CT = ClientTraffic{ReadTraffic: true, WriteTraffic: true, TransactionTraffic: true, InProgress: false}
 
 type queryStats struct {
 	successCount int
@@ -20,7 +22,6 @@ type queryStats struct {
 }
 
 type ClientTraffic struct {
-	RunMsg             chan string
 	ReadTraffic        bool
 	WriteTraffic       bool
 	TransactionTraffic bool
@@ -28,6 +29,9 @@ type ClientTraffic struct {
 }
 
 type ClientTrafficStats struct {
+	// string - type of query ReadType, WriteType, TXNType
+	// int - utc in seconds
+	// queryStats - success and failure
 	stats map[string]map[int]*queryStats
 }
 
@@ -135,6 +139,25 @@ func (ct ClientTraffic) identifyDBTxn(txn *sql.Tx, ctx context.Context) (int, er
 	return id, nil
 }
 
+func (ct ClientTraffic) slowIdentifyDB(conn *sql.Conn, ctx context.Context, sec int) (int, error) {
+	query := fmt.Sprintf("select SLOW_QUERY(%d) from dual", sec)
+
+	rows, err := conn.QueryContext(ctx, query)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+	return 0, errors.New("should not have reached")
+}
+
 func (ct ClientTraffic) identifyDB(conn *sql.Conn, ctx context.Context) (int, error) {
 	query := "select id FROM db_id_test"
 	rows, err := conn.QueryContext(ctx, query)
@@ -190,8 +213,8 @@ func (ct ClientTraffic) CreateCounter(utc int64, counterType string, CTS map[int
 		CTS[utc].stats[counterType][1] = &queryStats{}
 		CTS[utc].stats[counterType][2] = &queryStats{}
 	}
-	statMutex.Unlock()
 	m.Unlock()
+	statMutex.Unlock()
 }
 
 func (ct ClientTraffic) ReadQuery(query string) (int, error) {
@@ -222,14 +245,14 @@ func (ct ClientTraffic) txnTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	c.GetConnection()
 
 	if c.Err != nil {
-		ct.incrementFailure(TXN, dbId, CTS[n].stats)
+		ct.incrementFailure(TXN, dbId, CTS[n].stats, c.Err)
 		return
 	}
 
 	defer c.Close()
 	dbId, err = ct.WriteInTxn(c)
 	if err != nil {
-		ct.incrementFailure(TXN, dbId, CTS[n].stats)
+		ct.incrementFailure(TXN, dbId, CTS[n].stats, err)
 	} else {
 		ct.incrementSuccess(TXN, dbId, CTS[n].stats)
 	}
@@ -243,7 +266,7 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 	failed := true
 
 	if c.Err != nil {
-		ct.incrementFailure(WRITE, id, CTS[n].stats)
+		ct.incrementFailure(WRITE, id, CTS[n].stats, c.Err)
 		return
 	}
 
@@ -253,7 +276,7 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 	txn, err := c.conn.BeginTx(c.context, nil)
 
 	if err != nil {
-		ct.incrementFailure(WRITE, id, CTS[n].stats)
+		ct.incrementFailure(WRITE, id, CTS[n].stats, err)
 		txn.Rollback()
 		return
 	}
@@ -272,11 +295,39 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 	}
 
 	if failed {
-		ct.incrementFailure(WRITE, id, CTS[n].stats)
+		ct.incrementFailure(WRITE, id, CTS[n].stats, err)
 	} else {
 		ct.incrementSuccess(WRITE, id, CTS[n].stats)
 	}
 
+}
+
+func (ct ClientTraffic) slowReadTraffic(CTS map[int64]ClientTrafficStats, n int64, sec int) {
+	ct.CreateCounter(n, READ, CTS)
+	id := 0
+	var err error
+	c := TestConnection{}
+	c.GetConnection()
+	if c.Err != nil {
+		if c.Err.Error() == "Failed to read server info" {
+			logger.GetLogger().Log(logger.Alert, "Enabling TLS on Client Side as server side it is enabled")
+			os.Setenv("TLS", "1")
+			return
+		} else {
+			ct.incrementFailure(READ, id, CTS[n].stats, c.Err)
+			return
+		}
+	}
+
+	defer c.Close()
+	id, err = ct.slowIdentifyDB(c.conn, c.context, sec)
+
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, err)
+		ct.incrementFailure(READ, id, CTS[n].stats, err)
+	} else {
+		ct.incrementSuccess(READ, id, CTS[n].stats)
+	}
 }
 
 func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
@@ -291,7 +342,7 @@ func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 			os.Setenv("TLS", "1")
 			return
 		} else {
-			ct.incrementFailure(READ, id, CTS[n].stats)
+			ct.incrementFailure(READ, id, CTS[n].stats, c.Err)
 			return
 		}
 	}
@@ -300,7 +351,7 @@ func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 	id, err = ct.identifyDB(c.conn, c.context)
 
 	if err != nil {
-		ct.incrementFailure(READ, id, CTS[n].stats)
+		ct.incrementFailure(READ, id, CTS[n].stats, err)
 	} else {
 		ct.incrementSuccess(READ, id, CTS[n].stats)
 	}
@@ -335,33 +386,143 @@ func (ct ClientTraffic) DumpStats(CTS map[int64]ClientTrafficStats) {
 
 }
 
-func (ct ClientTraffic) SendClientTraffic(wg *sync.WaitGroup) (chan map[int64]ClientTrafficStats, chan map[int64]ClientTrafficStats) {
+func (ct ClientTraffic) SendClientTraffic(wg *sync.WaitGroup) (chan map[int64]ClientTrafficStats, chan map[int64]ClientTrafficStats, chan string) {
 	wg.Add(1)
 	CTSChan := make(chan map[int64]ClientTrafficStats)
 	DumpChan := make(chan map[int64]ClientTrafficStats)
-	go ct.traffic(wg, ct.RunMsg, CTSChan, DumpChan)
-	return CTSChan, DumpChan
+	RunMsg := make(chan string)
+	go ct.traffic(wg, RunMsg, CTSChan, DumpChan)
+	return CTSChan, DumpChan, RunMsg
 }
 
-func (ct ClientTraffic) StopClientTraffic(CTSChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
-	ct.RunMsg <- STOP
+func (ct ClientTraffic) StopClientTraffic(CTSChan chan map[int64]ClientTrafficStats, RunMsg chan string) map[int64]ClientTrafficStats {
+	RunMsg <- STOP
 	d := <-CTSChan
 	//ct.DumpStats(d)
 	return d
 }
 
-func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
+func (ct ClientTraffic) DumpTrafficStat(DumpLogChan chan map[int64]ClientTrafficStats, RunMsg chan string) map[int64]ClientTrafficStats {
 	logger.GetLogger().Log(logger.Alert, "DumpTrafficStat")
-	ct.RunMsg <- DumpLogs
+	RunMsg <- DumpLogs
 	d := <-DumpLogChan
 	return d
 }
 
-func (ct ClientTraffic) TearDown() {
+func (ct ClientTraffic) TearDown(respChan chan map[int64]ClientTrafficStats, dumpChan chan map[int64]ClientTrafficStats,
+	msgChan chan string, file *os.File) {
 	logger.GetLogger().Log(logger.Alert, "Traffic InProgress ", ct.InProgress)
 	if ct.InProgress {
-		ct.RunMsg <- KILL
+		msgChan <- KILL
 	}
+	close(respChan)
+	close(dumpChan)
+	close(msgChan)
+	_ = (*os.File).Sync(file)
+	_ = file.Close()
+}
+func (ct ClientTraffic) LongReadTraffic(wg *sync.WaitGroup,
+	CTChan chan map[int64]ClientTrafficStats, numOfTxn int, delay int, t *testing.T) {
+	defer wg.Done()
+
+	CTS := make(map[int64]ClientTrafficStats)
+
+	logger.GetLogger().Log(logger.Alert, "Sending LongReadTraffic")
+	n := time.Now().Unix()
+	counter := 0
+	var wg1 sync.WaitGroup
+	for {
+		counter += 1
+		logger.GetLogger().Log(logger.Alert, "Request ", counter)
+		if counter >= numOfTxn {
+			break
+		}
+		wg1.Add(1)
+		go func() {
+			defer wg1.Done()
+			ct.slowReadTraffic(CTS, n, delay)
+		}()
+	}
+	logger.GetLogger().Log(logger.Alert, "waiting to finish the job")
+	wg1.Wait()
+	logger.GetLogger().Log(logger.Alert, "Sending Stats back")
+	CTChan <- CTS
+}
+
+func (ct ClientTraffic) LongTxnTraffic(wg *sync.WaitGroup,
+	CTChan chan map[int64]ClientTrafficStats, RunMsg chan string, numOfTxn int, delay int, t *testing.T) {
+	defer wg.Done()
+
+	CTS := make(map[int64]ClientTrafficStats)
+	var dbWriteTrans []*DBTxn
+
+	logger.GetLogger().Log(logger.Alert, "Sending Txn Traffic")
+	n := time.Now().Unix()
+	counter := 0
+	for {
+		counter += 1
+		if counter >= numOfTxn {
+			break
+		}
+		ct.slowReadTraffic(CTS, n, delay)
+		txn, err := writeBeginTxn()
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "writeBeginTxn failure ", err)
+			t.Fatalf("txn suppose not to fail here")
+		}
+
+		_, err = ct.identifyDBTxn(txn.DBTransaction, txn.DBConnection.context)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "identifyDBTxn failure ", err)
+			t.Fatalf("txn suppose not to fail here")
+		}
+		dbWriteTrans = append(dbWriteTrans, txn)
+	}
+
+	logger.GetLogger().Log(logger.Alert, "locked ", delay)
+	RunMsg <- "Locked"
+	time.Sleep(time.Duration(delay) * time.Second)
+	for _, txn := range dbWriteTrans {
+
+		dbId, err := ct.identifyDBTxn(txn.DBTransaction, txn.DBConnection.context)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "Txn failure ", err)
+			ct.incrementFailure(TXN, dbId, CTS[n].stats, err)
+		} else {
+			ct.incrementSuccess(TXN, dbId, CTS[n].stats)
+		}
+		rollbackTxn(txn)
+	}
+
+	for _, dbTxn := range dbWriteTrans {
+		rollbackTxn(dbTxn)
+	}
+
+	CTChan <- CTS
+}
+
+func (ct ClientTraffic) deepCopyCTS(original ClientTrafficStats) ClientTrafficStats {
+	copy := ClientTrafficStats{stats: make(map[string]map[int]*queryStats)}
+	for key, value := range original.stats {
+		copy.stats[key] = make(map[int]*queryStats)
+		for k1, v1 := range value {
+			n := queryStats{successCount: v1.successCount, failureCount: v1.failureCount}
+			copy.stats[key][k1] = &n
+		}
+	}
+
+	return copy
+}
+
+func (ct ClientTraffic) deepCopyCTSMap(original map[int64]ClientTrafficStats) map[int64]ClientTrafficStats {
+	copy := make(map[int64]ClientTrafficStats)
+
+	timeMutex.Lock()
+	for key, value := range original {
+		copy[key] = ct.deepCopyCTS(value)
+	}
+	timeMutex.Unlock()
+	return copy
 }
 
 func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
@@ -382,18 +543,20 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 				return
 			case STOP:
 				logger.GetLogger().Log(logger.Alert, "Stopping Client Traffic")
+				logger.GetLogger().Log(logger.Alert, "Traffic InProgress ", ct.InProgress)
 				ct.InProgress = false
 				CTChan <- CTS
 				return
 			case DumpLogs:
 				logger.GetLogger().Log(logger.Alert, "dumping logs")
-				DumpChan <- CTS
+				DumpChan <- ct.deepCopyCTSMap(CTS)
 			}
 		default:
 			n := time.Now().Unix()
 			if !started {
 				logger.GetLogger().Log(logger.Alert, "Traffic StartTime ", n)
 				ct.InProgress = true
+				logger.GetLogger().Log(logger.Alert, "Traffic InProgress ", ct.InProgress)
 			}
 			go ct.readTraffic(CTS, n)
 			go ct.txnTraffic(CTS, n)
@@ -402,7 +565,6 @@ func (ct ClientTraffic) traffic(wg *sync.WaitGroup, runMsg chan string,
 			time.Sleep(200 * time.Millisecond)
 		}
 	}
-
 }
 
 func (ct ClientTraffic) getMutexForType(qsType string) *sync.Mutex {
@@ -425,7 +587,8 @@ func (ct ClientTraffic) incrementSuccess(qsType string, dbId int, stats map[stri
 	m.Unlock()
 }
 
-func (ct ClientTraffic) incrementFailure(qsType string, dbId int, stats map[string]map[int]*queryStats) {
+func (ct ClientTraffic) incrementFailure(qsType string, dbId int, stats map[string]map[int]*queryStats, err error) {
+	logger.GetLogger().Log(logger.Alert, qsType+" Failure: ", err)
 	m := ct.getMutexForType(qsType)
 	m.Lock()
 	stats[qsType][dbId].failureCount += 1
