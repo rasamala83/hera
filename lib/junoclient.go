@@ -123,6 +123,7 @@ func (cli *JunoClient) init() error {
 		ConnPoolSize:      GetConfig().CacheConnectionPoolSize,
 		ConnectTimeout:    util.Duration{Duration: time.Duration(GetConfig().CacheConnectTimeoutMs) * time.Millisecond},
 		ResponseTimeout:   util.Duration{Duration: time.Duration(GetConfig().CacheResponseTimeoutMs) * time.Millisecond},
+		BypassLTM:   	   GetConfig().CacheBypassLTM,
 		Cal: junocal.Config{
 			// To-do: Move this to config
 			Poolname:   cal.GetCalClientInstance().GetPoolName(),
