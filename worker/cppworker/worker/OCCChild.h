@@ -281,6 +281,7 @@ private:
 
 	// variables used for DB cutover
 	bool m_cutover_enabled;
+	std::string m_cutovercfg_tns;
 	bool cutover_role_alarm_set;
 	int m_last_user_role_check;
 public:

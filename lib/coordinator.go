@@ -794,6 +794,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						return err
 					}
 					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead, 0 /*no backlog timeout*/)
+					if err != nil {
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool", err)
+						}
+						return err
+					}
 				} else {
 					// external read sql
 					if (crd.curActDb.Phase == CutoverPhStr) && (crd.curActDb.RwStatus != ReadOk) {

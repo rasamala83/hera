@@ -288,6 +288,14 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		m_cutover_enabled = true;
 	}
 
+	const char* tns_for_cutover  = getenv("cutover_two_task_key");
+	if (tns_for_cutover) {
+		m_cutovercfg_tns = tns_for_cutover;
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "CP 60 cutover_two_task_key set %s", m_cutovercfg_tns.c_str());
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "CP 60 cutover_two_task_key is null");
+	}
+
 	// initialize markdown system
 	if (tns_name)
 		host_name = tns_name;
@@ -5804,16 +5812,16 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 */
 
 int OCCChild::verify_session_role() {
-	char *tns = getenv("TWO_TASK");
 	// fetch enabled role from pypl_occ_cutover, expect 1 row to return.
-	if (!tns) {
+	if (m_cutovercfg_tns.empty()) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "TWO_TASK is NULL");
 		return -1;
 	}
 	char roleSQL[256] = {'\0'};
-	sprintf(roleSQL, "SELECT wisb_roles FROM pypl_occ_cutover WHERE occ_two_task = '%s' AND occ_name = '%s' AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles)", tns, m_module_info.c_str());
+	sprintf(roleSQL, "SELECT wisb_roles FROM pypl_occ_cutover WHERE occ_two_task = '%s' AND occ_name = '%s' AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles)", 
+			m_cutovercfg_tns.c_str(), m_module_info.c_str());
+	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, roleSQL);
 
-	WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "two_task [%s], verify_sql[ %s ]", tns, roleSQL);
 	OCIStmt *stmthp = NULL;
 	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
 	if (rc != OCI_SUCCESS) {
@@ -5904,14 +5912,15 @@ int OCCChild::set_role_for_the_session (){
 	}
 
 	// now handle role mismatch, set the role
-	char *tns = getenv("TWO_TASK");
-	if (!tns) {
+	if (m_cutovercfg_tns.empty()) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "set_role_for_the_session() TWO_TASK is NULL");
 		return -1;
 	}
 	
 	char set_role_SQL[256] = {'\0'};
-       	sprintf(set_role_SQL, "BEGIN FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE occ_two_task = '%s' AND occ_name = '%s' AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP; END;", tns, m_module_info.c_str());
+       	sprintf(set_role_SQL, "BEGIN FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE occ_two_task = '%s' AND occ_name = '%s' AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP; END;", 
+			m_cutovercfg_tns.c_str(), m_module_info.c_str());
+	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set_role SQL:", set_role_SQL);
 	
 
 
