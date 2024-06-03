@@ -325,8 +325,8 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
+	if occStatus == true {
+		t.Fatalf("OCC is up - which is not expected")
 	}
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)

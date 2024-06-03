@@ -100,13 +100,67 @@ func moveToCutOverPhaseII(t *testing.T) (chan map[int64]util.ClientTrafficStats,
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure there is only one row returned from metadata table
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3InvalidNoOfRow
+**************************************
+1. Delete HERADB_ONE row when moving from cutover phase 2 to 3
+
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -161,13 +215,67 @@ func TestCutOver3InvalidNoOfRow(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure source DB unique name is wrong/invalid
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3InvalidDBUniqueName
+**************************************
+1. update db_uname with invalid value when moving from cutover phase 2 to 3
+----------------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname           | r_status | w_status | phase    |
+----------------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE_INVALID | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | Y        | Y        | CUTOVER  |
+----------------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -222,13 +330,67 @@ func TestCutOver3InvalidDBUniqueName(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure occ name is wrong/invalid
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3InvalidOCCName
+**************************************
+1. update occ_name with invalid value when moving from cutover phase 2 to 3
+-----------------------------------------------------------------------------------
+| ROWS | occ_name     | occ_two_task | db_uname   | r_status | w_status | phase    |
+-----------------------------------------------------------------------------------
+| Row1 | occ-invalid  | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ-invalid  | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER  |
+-----------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -283,13 +445,67 @@ func TestCutOver3InvalidOCCName(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure two task name is wrong/invalid
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3InvalidTwoTask
+**************************************
+1. update occ_two_task with invalid value when moving from cutover phase 2 to 3
+-----------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task     | db_uname   | r_status | w_status | phase    |
+-----------------------------------------------------------------------------------
+| Row1 | occ      | TWO_TASK_INVALID | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | TWO_TASK_INVALID | HERADB_TWO | Y        | Y        | CUTOVER  |
+-----------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -344,13 +560,67 @@ func TestCutOver3InvalidTwoTask(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure cut over phase  is wrong/invalid
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3InvalidCutOverPhase
+**************************************
+1. update phase with invalid value when moving from cutover phase 2 to 3
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -405,13 +675,67 @@ func TestCutOver3InvalidCutOverPhase(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure read status is invalid
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3InvalidReadStatus
+**************************************
+1. update r_status with invalid value when moving from cutover phase 2 to 3
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | X        | N        | invalid  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | X        | Y        | invalid  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -466,13 +790,67 @@ func TestCutOver3InvalidReadStatus(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure write status is invalid
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3InvalidWriteStatus
+**************************************
+1. update w_status with invalid value when moving from cutover phase 2 to 3
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | X        | invalid  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | X        | invalid  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -527,13 +905,67 @@ func TestCutOver3InvalidWriteStatus(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure write status is dual
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3DualWriteStatus
+**************************************
+1. update w_status with Y in both rows when moving from cutover phase 2 to 3
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | Y        | invalid  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -588,13 +1020,67 @@ func TestCutOver3DualWriteStatus(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure read status is dual
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3DualReadStatus
+**************************************
+1. update r_status with Y value in both rows when moving from cutover phase 2 to 3
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | invalid  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -649,13 +1135,67 @@ func TestCutOver3DualReadStatus(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure read  is off
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. on restart occ should exit
+**************************************
+TestCutOver3ReadOffStatus
+**************************************
+1. update r_status with N value in both rows when moving from cutover phase 2 to 3
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | Y        | invalid  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |             | HERADB_ONE,HERADB_TWO | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be down after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -710,13 +1250,67 @@ func TestCutOver3ReadOffStatus(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure source DB is down
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. Reads will fail
+**************************************
+TestCutOver3SourceDBDown
+**************************************
+1. shutdown source db when moving from cutover phase 2 to 3
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing random sessions
+
+ 1. Worker validation after killing random sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be up after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -771,13 +1365,67 @@ func TestCutOver3SourceDBDown(t *testing.T) {
 }
 
 /*
-TEST:
- 1. When entering cutover phase III make sure target DB is down
+PRE-SETUP
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should stay in cutover phase
- 2. on session kill occ should continue to run
- 3. Reads will fail
+**************************************
+TestCutOver3TargetDBDown
+**************************************
+1. shutdown target db when moving from cutover phase 2 to 3
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    ---------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB         | state  |
+    ---------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO            | active |
+    | WRITE        |             | HERADB_TWO,HERADB_ONE | active |
+    | TXN          |             | HERADB_TWO,HERADB_ONE | active |
+    ---------------------------------------------------------------
+
+Worker validation after killing all sessions
+
+ 1. Worker validation after killing all sessions
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  0             | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after killing random sessions
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  0              | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+
+3. OCC should be up after restarting OCC and all client calls should fail
 
 TODO: Need to add logs and CAL log verification
 */
@@ -829,11 +1477,180 @@ func TestCutOver3TargetDBDown(t *testing.T) {
 }
 
 /*
-TEST:
- 1. Enter cutover phase III and then rollback to original state
+PRE-SETUP
+-------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER |
+-------------------------------------------------------------------------------
 
-VALIDATE
- 1. occ should comeback to original state
+**************************************
+TestCutOver3Rollback
+**************************************
+
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    --------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB  | state  |
+    --------------------------------------------------------
+    | READ         |  HERADB_TWO | HERADB_ONE     | active |
+    | WRITE        |  HERADB_TWO | HERADB_ONE     | active |
+    | TXN          |  HERADB_TWO | HERADB_ONE     | active |
+    --------------------------------------------------------
+
+# ROLLBACK TO CUTOVER PHASE II
+
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    --------------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB              | state  |
+    --------------------------------------------------------------------
+    | READ         |  HERADB_TWO | HERADB_ONE                 | active |
+    | WRITE        |             | HERADB_ONE, HERADB_TWO     | active |
+    | TXN          |             | HERADB_ONE, HERADB_TWO     | active |
+    --------------------------------------------------------------------
+
+# ROLLBACK TO CUTOVER PHASE I
+
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    --------------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB              | state  |
+    --------------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO                 | active |
+    | WRITE        |             | HERADB_ONE, HERADB_TWO     | active |
+    | TXN          |             | HERADB_ONE, HERADB_TWO     | active |
+    --------------------------------------------------------------------
+
+# ROLLBACK TO PRE
+
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE      |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE      |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    --------------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB  | state  |
+    --------------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO     | active |
+    | WRITE        |  HERADB_ONE | HERADB_TWO     | active |
+    | TXN          |  HERADB_ONE | HERADB_TWO     | active |
+    --------------------------------------------------------------------
+
+# ROLLBACK TO ENABLE
+
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE   |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  1             | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  1              | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    --------------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB  | state  |
+    --------------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO     | active |
+    | WRITE        |  HERADB_ONE | HERADB_TWO     | active |
+    | TXN          |  HERADB_ONE | HERADB_TWO     | active |
+    --------------------------------------------------------------------
 
 TODO: Need to add logs and CAL log verification
 */
@@ -927,5 +1744,81 @@ func TestCutOver3Rollback(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, enableMode+3, trafficStopped-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, enableMode+3, trafficStopped-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, enableMode+3, trafficStopped-3, 1, 2)
+
+}
+
+/*
+PRE-SETUP
+-------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+-------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER |
+-------------------------------------------------------------------------------
+
+**************************************
+TestCutOver3RoleOrderChange
+**************************************
+First update the table and then wait for 10 sec and grant RW role to cutover db
+--------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+--------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER  |
+--------------------------------------------------------------------------------
+
+Validation:
+ 1. Worker validation after 15 seconds
+    ----------------------------------------------------
+    | two task     | num of workers | state            |
+    ----------------------------------------------------
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    ----------------------------------------------------
+ 2. DB validation after 15 seconds
+    ---------------------------------------------------------------------
+    | db unique name | num of sessions | service name          | state  |
+    ---------------------------------------------------------------------
+    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
+    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    ---------------------------------------------------------------------
+ 3. Traffic Validation for the whole 15 seconds
+    --------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB  | state  |
+    --------------------------------------------------------
+    | READ         |  HERADB_TWO | HERADB_ONE     | active |
+    | WRITE        |  HERADB_TWO | HERADB_ONE     | active |
+    | TXN          |  HERADB_TWO | HERADB_ONE     | active |
+    --------------------------------------------------------
+
+TODO: Need to add logs and CAL log verification
+*/
+func TestCutOver3RoleOrderChange(t *testing.T) {
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseII(t)
+	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
+
+	stateLog := make(map[string]int)
+
+	startPhaseIII := time.Now().Unix()
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase III: ", startPhaseIII)
+	util.MoveCutOverPhase(t, util.CutOverPhaseIIIWithoutRole, true, true)
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+	util.GiveRWToSecondary(t)
+	roleChange := time.Now().Unix()
+	logger2.GetLogger().Log(logger2.Alert, "Given RW role to secondary table: ", roleChange)
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 25
+	util.ValidateStateLog(t, stateLog, true)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+	trafficStop := time.Now().Unix()
+	trafficStats := util.CT.StopClientTraffic(respChan, RespMsg)
+
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, roleChange+3, trafficStop-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, roleChange+3, trafficStop-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, roleChange+3, trafficStop-3, 2, 1)
 
 }

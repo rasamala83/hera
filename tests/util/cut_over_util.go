@@ -87,6 +87,7 @@ var CutOverPhaseIReadOff = "CUT_OVER_PHASE_1_READ_OFF"
 var CutOverPhaseIInvalidTwoTask = "CUT_OVER_PHASE_1_INVALID_TWO_TASK"
 var CutOverPhaseII = "CUT_OVER_PHASE_2"
 var CutOverPhaseIII = "CUT_OVER_PHASE_3"
+var CutOverPhaseIIIWithoutRole = "CUT_OVER_PHASE_3_WITHOUT_ROLE"
 var CutOverComplete = "CUT_OVER_COMPLETE"
 var CutOverBroom = "CUT_OVER_BROOM"
 var DeleteCutOverTable = "CUT_OVER_TABLE_DELETE"
@@ -442,6 +443,14 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 	case CutOverBroom:
 		query := "update pypl_occ_cutover set cutover_phase='BROOM', remarks='" + comment +
 			"' where occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case CutOverPhaseIIIWithoutRole:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
+			"' where dbuname='HERADB_TWO' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
+			"' where dbuname='HERADB_ONE' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
