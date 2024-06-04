@@ -802,7 +802,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					}
 				} else {
 					// external read sql
-					if (crd.curActDb.Phase == CutoverPhStr) && (crd.curActDb.RwStatus != ReadOk) {
+					if (crd.curActDb.Phase == CutoverPhStr) && ((crd.curActDb.RwStatus & ReadOk) != ReadOk) {
 						logger.GetLogger().Log(logger.Alert, crd.id, "OCC-500: active db cutover no read allowed")
 						return ErrCutoverReadNotAllowed
 					}
