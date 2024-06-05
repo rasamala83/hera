@@ -54,7 +54,10 @@ var moduleName string
 var gCacheCfg atomic.Value
 
 func getCacheCfgSQL() string {
-	return fmt.Sprintf("SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'", GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, moduleName)
+	return fmt.Sprintf(
+		"SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'",
+		GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, moduleName,
+	)
 }
 
 func getCacheCfg() *CacheCfg {
@@ -104,7 +107,10 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 		var rec CacheRecord
 		var bindVariables sql.NullString
 		var invalidationClause sql.NullString
-		err = rows.Scan(&(rec.query_id), &(rec.sqlHash), &(rec.sqlText), &bindVariables, &(rec.ttl), &(rec.enableShadowTest), &(rec.tableName), &invalidationClause, &(rec.cachingEnabled), &(rec.remarks), &(rec.module))
+		err = rows.Scan(
+			&(rec.query_id), &(rec.sqlHash), &(rec.sqlText), &bindVariables, &(rec.ttl), &(rec.enableShadowTest),
+			&(rec.tableName), &invalidationClause, &(rec.cachingEnabled), &(rec.remarks), &(rec.module),
+		)
 		if err != nil {
 			logger.GetLogger().Log(logger.Alert, "Error (rows scan) loading cache config", err)
 			return fmt.Errorf("Error (rows scan) loading cache config: %s", err.Error())
@@ -122,7 +128,13 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 		// To-Do: Any pre-validation checks if required
 		cfgLoad.cacheCfgRecords[rec.sqlHash] = &rec
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("cacheCfgRecords entry: queryId:%s, sqlHash:%d, sqlText:%s, Binds:%s, TTL: %d, enableShadowTest:%s, tableName:%s, invClause:%s, cachingEnabled:%s, remarks:%s, module:%s", rec.query_id, rec.sqlHash, rec.sqlText, rec.binds, rec.ttl, rec.enableShadowTest, rec.tableName, rec.invalidationClause, rec.cachingEnabled, rec.remarks, rec.module))
+			logger.GetLogger().Log(
+				logger.Verbose, fmt.Sprintf(
+					"cacheCfgRecords entry: queryId:%s, sqlHash:%d, sqlText:%s, Binds:%s, TTL: %d, enableShadowTest:%s, tableName:%s, invClause:%s, cachingEnabled:%s, remarks:%s, module:%s",
+					rec.query_id, rec.sqlHash, rec.sqlText, rec.binds, rec.ttl, rec.enableShadowTest, rec.tableName,
+					rec.invalidationClause, rec.cachingEnabled, rec.remarks, rec.module,
+				),
+			)
 		}
 	}
 	logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("Loaded %d sqlhashes, %d cacheCfg entries", len(cfgLoad.cacheCfgRecords), rowCount))

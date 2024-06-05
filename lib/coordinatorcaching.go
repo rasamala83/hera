@@ -21,13 +21,13 @@ import (
 	// "time"
 	"context"
 	"fmt"
-	"strings"
-	"math/rand"
-	"strconv"
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
+	"math/rand"
+	"strconv"
+	"strings"
 )
 
 func getKey(request *netstring.Netstring, corrId string, sqlHash int32) ([]byte, string, error) {
