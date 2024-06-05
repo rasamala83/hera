@@ -304,7 +304,7 @@ func loadCutoverCfg(db *sql.DB) error {
 		return fmt.Errorf("error: query result has invalid cutover_phase")
 
 	}
-	// can't have identical dbuname
+	// can't have identical dbuname. we shouldn't need to allow this.
 	if (isCfgSame(records[0].dbUname.String, records[1].dbUname.String)){ 
 		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_dbuname", cal.TransOK, "")
 		evt.Completed()
@@ -315,7 +315,7 @@ func loadCutoverCfg(db *sql.DB) error {
 	}
 
 	for i := 0; i<2; i++ {
-		if !(validRw(records[i].rstatus.String, records[i].wstatus.String)) {
+		if !(isValidRw(records[i].rstatus.String, records[i].wstatus.String)) {
 			return fmt.Errorf("error: read or write status invalid")
 		}
 	}
@@ -784,11 +784,14 @@ func validatePhase(phase string) int {
 
 }
 
-func validRw(rec1 string, rec2 string) bool {
-	if rec1[0] == 'Y'|| rec1[0] == 'N'{
-		return true
+// rec1 and rec2 are string representing write/read_status
+// anything besides 'Y' or 'N' of first letter will return false
+func isValidRw(rec1 string, rec2 string) bool {
+	isValid := false
+	if (rec1[0] == 'Y'|| rec1[0] == 'N') && (rec2[0] == 'Y'|| rec2[0] == 'N') {
+		isValid = true
 	}
-	return false
+	return isValid
 }
 
 // return true if two phases are the same otherwise false.
