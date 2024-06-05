@@ -973,7 +973,8 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 
 	pool.phase = newPhase
 	pool.dbUname = newDbUname
-	if pool.CoShardID == ShId2TaskCutover {
+	// only enforce two_task_cutover pool's dbuname integrity at PRE and CUTOVER
+	if pool.CoShardID == ShId2TaskCutover && (pool.phase == CutoverPhStr || pool.phase == PrePhStr) {
 		pool.enforceIntegrity()
 	}
 }

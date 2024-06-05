@@ -204,6 +204,54 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	}
 }
 
+func (crd *Coordinator) ProceedReadInCutover() error {
+	if (crd.curActDb.Phase == CutoverPhStr) && ((crd.curActDb.RwStatus & ReadOk) != ReadOk) {
+		logger.GetLogger().Log(logger.Alert, crd.id, "OCC-500: active db cutover no read allowed")
+		return ErrCutoverReadNotAllowed
+	}
+	return nil
+}
+
+func (crd *Coordinator) ProceedWriteInCutover() error {
+	if (crd.curActDb.Phase == CutoverPhStr) && ((crd.curActDb.RwStatus & WriteOk) != WriteOk) {
+		logger.GetLogger().Log(logger.Alert, crd.id, "OCC-501: active db cutover no write allowed")
+		return ErrCutoverWriteNotAllowed
+	}
+	return nil
+}
+
+func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
+	shardToUse := ShIdUnset
+	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 cutover - run external query", crd.curActDb.Phase)
+	if crd.curActDb.Phase == CutoverPhStr {
+		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 CUTOVER phase isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActDb.RwStatus, "]")
+		if crd.isRead {
+			if (crd.curActDb.RwStatus & ReadOk) != ReadOk {
+				logger.GetLogger().Log(logger.Alert, crd.id, "OCC-500: active db cutover no read allowed")
+				return shardToUse, ErrCutoverReadNotAllowed
+			}
+		} else {
+			if (crd.curActDb.RwStatus & WriteOk) != WriteOk {
+				logger.GetLogger().Log(logger.Alert, crd.id, "OCC-501: active db cutover no write allowed")
+				return shardToUse, ErrCutoverWriteNotAllowed
+			}
+		}
+
+		shardToUse = crd.curActDb.ShId
+		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 CUTOVER phase, dispatch to", int(shardToUse), "workers")
+	} else if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == PrePhStr {
+		shardToUse = ShId2Task
+		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 ENABLE or PRE phase, dispatch to two_task workers", int(shardToUse))
+	} else if crd.curActDb.Phase == CompletePhStr {
+		shardToUse = ShId2TaskCutover
+		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 COMPLETE phase, dispatch to two_task_cutover", int(shardToUse))
+	} else {
+		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 dispatchRequest error invalid cutover phase")
+		return shardToUse, errors.New("Invalid cutover phase")
+	}
+	return shardToUse, nil
+}
+
 // only for internal write queries. When read cfg always use two_task shard, write uses two_task shard and cutover shard
 //func (crd *Coordinator) processSetCoShardID(val []byte) error {
 //	if !GetConfig().EnableCutover { // no need to pass

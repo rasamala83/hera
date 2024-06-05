@@ -286,6 +286,8 @@ func loadCutoverCfg(db *sql.DB) error {
 	}
 	// can't have identical occ_two_task
 	if (isCfgSame(records[0].occ2task.String, records[1].occ2task.String)) {
+		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_occ2task", cal.TransOK, "")
+		evt.Completed()
 		return fmt.Errorf("error cutover cfg can't have same two_task [%s, %s] [%s, %s]",
 			records[0].occ2task.String, records[0].dbUname.String,
 			records[1].occ2task.String , records[1].dbUname.String)
@@ -293,6 +295,8 @@ func loadCutoverCfg(db *sql.DB) error {
 
 	// both the returned rows have identical value of cutover_phase
 	if (!isCfgSame(records[0].phase.String, records[1].phase.String)) {
+		evt := cal.NewCalEvent(EvtTypeCutover, "err_diff_phase", cal.TransOK, "")
+		evt.Completed()
 		logger.GetLogger().Log(logger.Alert, "error: load cutovercfg has inconsistent cutover_phase", records[0].phase, records[1].phase)
 		return fmt.Errorf("error: query result has inconsistent phase %s, %s", records[0].phase, records[1].phase)
 	}
@@ -300,11 +304,13 @@ func loadCutoverCfg(db *sql.DB) error {
 	// the value of cutover_phase in the two rows is not among ‘Enable’, ‘Pre’, ‘Cutover’, ‘Complete’ (case insensitive)
 	ph := validatePhase(records[0].phase.String)
 	if ph == 0 {
+		evt := cal.NewCalEvent(EvtTypeCutover, "err_invalid_phase", cal.TransOK, "")
+		evt.Completed()
 		logger.GetLogger().Log(logger.Alert, "error: load cutovercfg has invalid cutover_phase", records[0].phase)
 		return fmt.Errorf("error: query result has invalid cutover_phase")
 
 	}
-	// can't have identical dbuname
+	// can't have identical dbuname. we shouldn't need to allow this.
 	if (isCfgSame(records[0].dbUname.String, records[1].dbUname.String)){ 
 		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_dbuname", cal.TransOK, "")
 		evt.Completed()
@@ -315,7 +321,7 @@ func loadCutoverCfg(db *sql.DB) error {
 	}
 
 	for i := 0; i<2; i++ {
-		if !(validRw(records[i].rstatus.String, records[i].wstatus.String)) {
+		if !(isValidRw(records[i].rstatus.String, records[i].wstatus.String)) {
 			return fmt.Errorf("error: read or write status invalid")
 		}
 	}
@@ -352,27 +358,19 @@ func loadCutoverCfg(db *sql.DB) error {
 			} else if rec2task == g2TaskCutoverName {
 				newcfg.ActiveShardId = ShId2TaskCutover
 			} else {
-				// this shouldn't never happen w/ the defined sql
-				evt := cal.NewCalEvent(EvtTypeCutover, "err_cfg_2task_not_mismatch", cal.TransOK, rec2task)
+				// this should never happen w/ the defined sql
+				evt := cal.NewCalEvent(EvtTypeCutover, "err_undefined_occ2task", cal.TransOK, rec2task)
 				evt.Completed()
 				logger.GetLogger().Log(logger.Alert, "error: occ2task not match defined two_task or two_task_cutover", rec2task)
 				newcfg.ActiveTwoTask = UnsetStr
 				newcfg.ActiveShardId = ShIdUnset
 			}
 			if active >= 2 {
+				evt := cal.NewCalEvent(EvtTypeCutover, "err_multi_active_db", cal.TransOK, "")
+				evt.Completed()
 				logger.GetLogger().Log(logger.Alert, "error: cutovercfg has multi active db")
-				// stop moving further, ignore this new update
-				//if newcfg.Phase == CutoverPhStr {
-					newcfg.ActiveTwoTask = UnsetStr // just to be safe.
-					evt := cal.NewCalEvent(EvtTypeCutover, "err_multi_active_db", cal.TransOK, "skip this reload")
-					evt.Completed()
-					return fmt.Errorf("error dual active db")
-				//} else {
-				//	evt := cal.NewCalEvent(EvtTypeCutover, "CP 7 cfgerror_dual_active", cal.TransOK, "dual active db cfg")
-				//	evt.Completed()
-				//	newcfg.ActiveTwoTask = UnsetStr // just to be safe.
-				//	newcfg.ActiveShardId = ShIdUnset
-				//}
+				newcfg.ActiveTwoTask = UnsetStr // just to be safe.
+				return fmt.Errorf("error dual active db")
 			}
 
 		}
@@ -391,16 +389,13 @@ func loadCutoverCfg(db *sql.DB) error {
 
 	// handle no active db when phase is Cutover
 	if active == 0 {
-		if newcfg.Phase == CutoverPhStr {
-			// set it to None, this can be valid
-			newcfg.ActiveTwoTask = UnsetStr // reset to two_task
-			newcfg.ActiveShardId = ShIdUnset
-		}
+		evt := cal.NewCalEvent(EvtTypeCutover, "no_active_db", cal.TransOK, "")
+		evt.Completed()
+		// set it to None, this can be valid
+		newcfg.ActiveTwoTask = UnsetStr // reset to two_task
+		newcfg.ActiveShardId = ShIdUnset
 		logger.GetLogger().Log(logger.Alert, "CP 7 no active DB at Cutover phase")
 	}
-
-
-
 
 	// finish all the common validation and verification, proceed to actions and update
 	logger.GetLogger().Log(logger.Verbose, "CP 7 dump newcfg active db info (TwoTask, ShardId, Phase, rwstatus)=(",
@@ -435,10 +430,9 @@ func loadCutoverCfg(db *sql.DB) error {
 					if wpool != nil {
 						if shid == int(ShId2Task) {
 							wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[g2TaskName])
-						} else if shid == int(ShId2TaskCutover) {
+						}
+						if shid == int(ShId2TaskCutover) {
 							wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[g2TaskCutoverName])
-						} else {
-							return fmt.Errorf("Max number db exceeds 2")
 						}
 					} else {
 						logger.GetLogger().Log(logger.Alert, "loadCutoverCfg() can't get workerpool [shid, type] [", shid, ",", t, "]")
@@ -453,7 +447,7 @@ func loadCutoverCfg(db *sql.DB) error {
 	} else {
 		changed, changedAttr := CheckCfgChange(*precfg, newcfg)
 		if !changed {
-			logger.GetLogger().Log(logger.Alert, "CP 14 cutovercfg has no change")
+			logger.GetLogger().Log(logger.Info, "CP 14 cutovercfg has no change")
 		} else {
 
 			/**
@@ -654,12 +648,15 @@ func doAbortWorker(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 			}
 
 			// active db remains the same, see if any change from Y to N
+			stopRwCalName := "stop"
 			if ((curcfg.RWstatusByDb[curActDb]&ReadOk) == ReadOk) && ((nextcfg.RWstatusByDb[curActDb]&ReadOk) == 0) {
 				stopR = true
+				stopRwCalName += "_r"
 			}
-			
+
 			if ((curcfg.RWstatusByDb[curActDb]&WriteOk) == WriteOk) && ((nextcfg.RWstatusByDb[curActDb]&WriteOk) == 0) {
 				stopW = true
+				stopRwCalName += "_w"
 			}
 
 			if !(stopR || stopW) {
@@ -672,56 +669,47 @@ func doAbortWorker(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 				logger.GetLogger().Log(logger.Alert, "CP 27 Require to stop in-progress request. stopR =", stopR, ", stopW =", stopW)
 				wpool, err := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 				if err != nil {
-					logger.GetLogger().Log(logger.Alert, "CP 27 ", t, "error:", err.Error())
+					logger.GetLogger().Log(logger.Info, "CP 27 ", t, "error:", err.Error())
 				} else {
 					if wpool != nil {
-						if shid == int(ShId2Task) {
-							wpool.StopWorker(stopR, stopW)
-						}
-						if shid == int(ShId2TaskCutover) {
-							wpool.StopWorker(stopR, stopW)
-						}
+						evt := cal.NewCalEvent(EvtTypeCutover, stopRwCalName,cal.TransOK,"") 
+						evt.Completed()
+						wpool.StopWorker(stopR, stopW)
 					} else {
-						logger.GetLogger().Log(logger.Alert, "CP 27 workerpool nil. [shid, type] [", shid, ",", t, "]")
+						logger.GetLogger().Log(logger.Alert, "error: can't get workerpool to stop r/w [shid, type] [", shid, ",", t, "]")
 					}
 					wpool = nil
 				}
 			}
 
 		} else {
-			// active db is changed between current and next cfg. the action is made based on current.
-			// if curcfg is no active, nothing to stop
+			// active db is changed between current and next cfg. The stopR/W action is made to current active db.
+			// if curcfg is no active, nothing to stop 
+			// active is defined as R/W is configured 'Y'
 			if curAct2task == UnsetStr {
 				return
 			}
 
-			// next config has no active db 
+			// next config has no active db, stop rw on cur active db
 			if nextAct2task == UnsetStr {
-				/*
-					| DB1 |* | Y | Y |  -> | DB1 |  | N | N |
-					| DB2 |  | N | N |     | DB2 |  | N | N |
-				*/
 				stopR = true
 				stopW = true
 				// stop sent to current active db
 				shid := int(curcfg.ActiveShardId)
 				for t := 0; t <= maxtype; t++ {
-					logger.GetLogger().Log(logger.Alert, "CP 27 Require to stop in-progress request. stopR =", stopR, ", stopW =", stopW)
+					logger.GetLogger().Log(logger.Info, "CP 27 Require to stop in-progress request. stopR =", stopR, ", stopW =", stopW)
 					wpool, err := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 					if err != nil {
-						logger.GetLogger().Log(logger.Alert, "CP 27 ", t, "error:", err.Error())
+						logger.GetLogger().Log(logger.Info, "CP 27 ", t, "error:", err.Error())
 					} else {
 						if wpool != nil {
-							if shid == int(ShId2Task) {
-								wpool.StopWorker(stopR, stopW)
-							}
-							if shid == int(ShId2TaskCutover) {
-								wpool.StopWorker(stopR, stopW)
-							}
+							evt := cal.NewCalEvent(EvtTypeCutover, "stop_rw",cal.TransOK,"") 
+							evt.Completed()
+							wpool.StopWorker(stopR, stopW)
 						} else {
-							logger.GetLogger().Log(logger.Alert, "CP 27 workerpool nil. [shid, type] [", shid, ",", t, "]")
+							logger.GetLogger().Log(logger.Info, "CP 27 workerpool nil. [shid, type] [", shid, ",", t, "]")
 						}
-							wpool = nil
+						wpool = nil
 					}
 				}
 				return
@@ -732,22 +720,19 @@ func doAbortWorker(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 			// stop sent to current active db
 			shid := int(curcfg.ActiveShardId)
 			for t := 0; t <= maxtype; t++ {
-				logger.GetLogger().Log(logger.Alert, "CP 27 Require to stop in-progress request. stopR =", stopR, ", stopW =", stopW)
+				logger.GetLogger().Log(logger.Info, "CP 27 Require to stop in-progress request. stopR =", stopR, ", stopW =", stopW)
 				wpool, err := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 				if err != nil {
-					logger.GetLogger().Log(logger.Alert, "CP 27 ", t, "error:", err.Error())
+					logger.GetLogger().Log(logger.Info, "CP 27 ", t, "error:", err.Error())
 				} else {
 					if wpool != nil {
-						if shid == int(ShId2Task) {
-							wpool.StopWorker(stopR, stopW)
-						}
-						if shid == int(ShId2TaskCutover) {
-							wpool.StopWorker(stopR, stopW)
-						}
+						evt := cal.NewCalEvent(EvtTypeCutover, "stop_rw",cal.TransOK,"") 
+						evt.Completed()
+						wpool.StopWorker(stopR, stopW)
 					} else {
-						logger.GetLogger().Log(logger.Alert, "CP 27 workerpool nil. [shid, type] [", shid, ",", t, "]")
+						logger.GetLogger().Log(logger.Info, "CP 27 workerpool nil. [shid, type] [", shid, ",", t, "]")
 					}
-						wpool = nil
+					wpool = nil
 				}
 			}
 		}
@@ -784,11 +769,14 @@ func validatePhase(phase string) int {
 
 }
 
-func validRw(rec1 string, rec2 string) bool {
-	if rec1[0] == 'Y'|| rec1[0] == 'N'{
-		return true
+// rec1 and rec2 are string representing write/read_status
+// anything besides 'Y' or 'N' of first letter will return false
+func isValidRw(rec1 string, rec2 string) bool {
+	isValid := false
+	if (rec1[0] == 'Y'|| rec1[0] == 'N') && (rec2[0] == 'Y'|| rec2[0] == 'N') {
+		isValid = true
 	}
-	return false
+	return isValid
 }
 
 // return true if two phases are the same otherwise false.
