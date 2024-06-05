@@ -852,6 +852,14 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 
 				} else {
 					// not an internal sql, now need to check the phase
+					// TODO
+					// Use coordinatorcutover.go func getShardByCutoverCfg() 
+					// tgtshard, err = crd.getShardByCutoverCfg()
+					// if err != nil {
+					//   error handling
+					// }
+					//
+					//
 					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 cutover - run external query", crd.curActDb.Phase)
 					if crd.curActDb.Phase == CutoverPhStr {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 CUTOVER phase isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActDb.RwStatus, "]")
