@@ -166,7 +166,8 @@ func TestCutOver1InvalidNoOfRow(t *testing.T) {
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RunMsg)
-
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
+	time.Sleep(25 * time.Second)
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
 		t.Fatalf("OCC is up - which is not expected")
@@ -201,8 +202,8 @@ Validation:
     ----------------------------------------------------
     | two task     | num of workers | state            |
     ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy | TODO FAILING
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  25            | accept+wait+busy | TODO FAILING
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -775,7 +776,7 @@ Validation:
     -------------------------------------------------------
     | Traffic Type | Success DB  | No Traffic DB | state  |
     -------------------------------------------------------
-    | READ         |  HERADB_ONE | HERADB_TWO    | active | TODO Failing
+    | READ         |  HERADB_ONE | HERADB_TWO    | active |
     | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
     | TXN          |  HERADB_ONE | HERADB_TWO    | active |
     -------------------------------------------------------

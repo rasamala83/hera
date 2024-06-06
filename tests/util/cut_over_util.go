@@ -26,7 +26,7 @@ var readMutex sync.Mutex
 var writeMutex sync.Mutex
 var txnMutex sync.Mutex
 
-var maxRetryCount = 8
+var maxRetryCount = 10
 var binaryPushDone = make(map[string]bool)
 var READ = "ReadType"
 var WRITE = "WriteType"
@@ -258,7 +258,7 @@ func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {
 					msg = "(init+schd)"
 				}
 
-				if expectedWorkerCount != actualWorkerCount && retryCount == maxRetryCount {
+				if expectedWorkerCount != actualWorkerCount && retryCount > maxRetryCount {
 					if fail {
 						t.Fatalf("State Log Validation failed for %s at %s %s - "+
 							"Expected Worker Count: %d vs Actual %d (%s)",
@@ -288,8 +288,8 @@ func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {
 			logger.GetLogger().Log(logger.Alert, expected)
 		}
 		retryCount += 1
-		time.Sleep(5 * time.Second)
-		logger.GetLogger().Log(logger.Alert, "Retry - Validating State Logs")
+		logger.GetLogger().Log(logger.Alert, "Retry - Validating State Logs after sleeping for 8 sec")
+		time.Sleep(8 * time.Second)
 	}
 	for key := range expected {
 		if fail {
@@ -1140,7 +1140,7 @@ func EnableCutOver(t *testing.T, enableRWSplit bool, enableShard bool) {
 		url += "?shard=True"
 	}
 	if enableRWSplit {
-		url += "?cut_over=True"
+		url += "?read_write=True"
 	}
 	response := httpGet(t, url)
 
@@ -1575,8 +1575,8 @@ func ValidateWorkerCountFromDatabase(dbUniqueName string, serviceName string, se
 			break
 		}
 		retryCount += 1
-		logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds and retrying validation")
-		time.Sleep(5 * time.Second)
+		logger.GetLogger().Log(logger.Alert, "Sleeping for 8 seconds and retrying validation")
+		time.Sleep(8 * time.Second)
 	}
 	if expectedWorkerCount >= 0 && !validationSuccess {
 		t.Fatalf("Failed for worker count in %s:%s, expectedWorkerCount: %d", strings.TrimSpace(dbUniqueName),

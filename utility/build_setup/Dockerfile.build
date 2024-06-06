@@ -24,6 +24,8 @@ RUN mkdir -p /opt/instantclient_19_17/sdk/include && \
     ln -s /x/home/oracle/product/19.17*/lib64/* /opt/instantclient_19_17 && \
     ln -s /x/home/oracle/product/19.17*/sdk/include/* /opt/instantclient_19_17/sdk/include
 
+RUN mkdir /opt/oracle/ && ln -s /opt/instantclient_19_17/ /opt/oracle/instantclient_19_22 
+
 RUN mkdir -p /go$CURRENT_GO_VERSION/src/pypl_patch
 COPY ./go${CURRENT_GO_VERSION}_patch/* /go${CURRENT_GO_VERSION}/src/pypl_patch
 COPY env.sh /pypl/
