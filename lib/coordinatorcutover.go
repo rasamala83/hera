@@ -3,6 +3,7 @@ package lib
 import (
 	"errors"
 
+	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -11,8 +12,6 @@ import (
 // If no shard is active, the ActiveDbInfo should container empty strings.
 // Each coordinator will pull the CutoverCfg to check if there is any update.
 // The information is stored in a structure ActiveDbInfo as for which shard and RW, R, or W
-//
-// Or, should we let the cutoverCfg to "push" the change to the coordinator? is it possible and better? where does the coordinator is tracked?
 type ActiveDbInfo struct {
 	ShId       ShardByTwoTask // active pool shard id
 	Phase      string         // current cutover phase
@@ -87,15 +86,18 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 }
 
 /*
+PreprocessCutover returns bool: hang up client connection or not regardless if error is nil. error: if there is an error in process.
 Every sqlrequest goes through PreprocessCutover. The function loads the latest cfg and detect which pool shard it should go
 and disconnect the client if needed.
-// (00000) identical
-// (00001) 1 if (active) twotask changes (shard id changes), terminate ongoing txn
-// (00010) 2 if dbuname changes (doesn't affect shard id)
-// (00100) 4 if phase changes (may force shard id )
-// (01000) 8 if RWStatus changes. any type (of R or W) is stopped, terminate ongoing txn
 
-info required.
+	(00000) identical
+	(00001) 1 if (active) twotask changes (shard id changes), terminate ongoing txn
+	(00010) 2 if dbuname changes (doesn't affect shard id)
+	(00100) 4 if phase changes (may force shard id )
+	(01000) 8 if RWStatus changes. any type (of R or W) is stopped, terminate ongoing txn
+
+	info required.
+
 a. which workerpool (sh + type) to dispatch such request
 b. some phase has default behavior and different policy
 c. update the ActiveInfo struct
@@ -151,6 +153,8 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 			} else if newActInfo.Phase == CutoverPhStr {
 				//cutover phase, swithc worker pool
 				logger.GetLogger().Log(logger.Alert, crd.id, "cutover phase worker pool switch")
+				evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_db", cal.TransOK, "")
+				evt.Completed()
 				interrupt = true
 				err = errors.New("cutover database switch")
 			} else {
@@ -172,12 +176,16 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 			if newActInfo.Phase == CutoverPhStr {
 				if crd.curActDb.RwStatus > newActInfo.RwStatus { // either W or R or both RW are newly disabled.
 					if newActInfo.RwStatus == 0 {
+						evt := cal.NewCalEvent(EvtTypeCutover, "crd_stop_in_rw", cal.TransOK, "")
+						evt.Completed()
 						interrupt = true //we will check this later
 						err = errors.New("cutover stop in-txn")
 					}
 					if newActInfo.RwStatus&0x0001 == 0 { // read is disabled now
 						// stop READ
 						if crd.isRead {
+							evt := cal.NewCalEvent(EvtTypeCutover, "crd_stop_in_r", cal.TransOK, "")
+							evt.Completed()
 							interrupt = true // we will check this later
 							err = errors.New("cutover stop in-txn read")
 						}
@@ -185,6 +193,8 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 					if newActInfo.RwStatus&0x0002 == 0 { // write is disabled now
 						// stop WRTIE
 						if !crd.isRead {
+							evt := cal.NewCalEvent(EvtTypeCutover, "crd_stop_in_w", cal.TransOK, "")
+							evt.Completed()
 							interrupt = true // we will check this later
 							err = errors.New("cutover top in-txn write")
 						}
@@ -251,39 +261,3 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 	}
 	return shardToUse, nil
 }
-
-// only for internal write queries. When read cfg always use two_task shard, write uses two_task shard and cutover shard
-//func (crd *Coordinator) processSetCoShardID(val []byte) error {
-//	if !GetConfig().EnableCutover { // no need to pass
-//		crd.coInternalShId = ShIdUnset
-//		return nil
-//	}
-//	if !crd.isInternal { // not allow external connections
-//		return ErrNotInternal
-//	}
-//
-//	sh, err := strconv.ParseInt(string(val), 10, 32)
-//	if err != nil {
-//		return nil
-//	}
-//	// cutover enabled. we expect sh to be 0 (two_task) or 1 (two_task_cutover)
-//	if sh != 0 && sh != 1 {
-//		return ErrBadShardID
-//	}
-//
-//	crd.coInternalShId = ShardByTwoTask(sh)
-//	if crd.inTransaction && (crd.worker != nil) {
-//		// in transaction, piggy back on the shard variable
-//		if int(crd.coInternalShId) != crd.worker.shardID {
-//			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
-//			evt.AddDataInt("cur_shard_id", int64(crd.worker.shardID))
-//			evt.AddDataStr("requested_shard_id", string(val))
-//			evt.Completed()
-//			// processSetCoShardID has higher priority, switch worker.
-//		}
-//	}
-//	if logger.GetLogger().V(logger.Debug) {
-//		logger.GetLogger().Log(logger.Debug, crd.id, "Shard ID forced to", crd.shard.shardID)
-//	}
-//	return nil
-//}
