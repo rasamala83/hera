@@ -148,9 +148,33 @@ const (
 	SrcPrefixAppKey string = "srcPrefixApp"
 )
 
+// rapid cutover overloaded some of the sharding definition
+// two_task pool is shard 0
+// two_task_cutover is shard 1
+// support max 2 db at this time
 const (
 	ShId2Task        ShardByTwoTask = 0
 	ShId2TaskCutover ShardByTwoTask = 1
 	MaxDbInCutover   ShardByTwoTask = 2
 	ShIdUnset        ShardByTwoTask = 3
+)
+
+const (
+	EnablePhStr   = "ENABLE"
+	PrePhStr      = "PRE"
+	CutoverPhStr  = "CUTOVER"
+	CompletePhStr = "COMPLETE"
+	UnsetStr      = "NONE"
+)
+
+const (
+	EnablePhId   = 1
+	PrePhId      = 2
+	CutoverPhId  = 3
+	CompletePhId = 4
+)
+
+const (
+	ReadOk  int = 0x0001
+	WriteOk int = 0x0002
 )

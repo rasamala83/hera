@@ -788,7 +788,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
 			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6 worker == nil, sql is read and RW split enabled.")
 
-			if GetConfig().EnableCutover == false {
+			if !GetConfig().EnableCutover {
 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
 				if err != nil {
 					return err
@@ -832,8 +832,11 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		} else {
 			// worker nil, sql is write, or is read with disabled rw split
 			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1")
-			if GetConfig().EnableCutover == false {
+			if !GetConfig().EnableCutover {
 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
+				if err != nil {
+					return err
+				}
 				if crd.isInternal {
 					worker, ticket, err = workerpool.GetWorker(crd.sqlhash, crd.isRead, 0 /*no backlog timeout*/)
 				} else {
@@ -845,7 +848,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					}
 					return err
 				}
-
 			} else {
 				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 cutover - process write sql, or read without RW split. isRead", crd.isRead)
 				var tgtshard ShardByTwoTask
@@ -873,7 +875,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		}
 	} else {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6 worker not nil")
-		if GetConfig().EnableCutover == false {
+		if !GetConfig().EnableCutover {
 			if crd.isRead {
 				if crd.shard.shardID != worker.shardID {
 					// we allow this but we need to have a different worker since it is a different shard
@@ -908,14 +910,13 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				}
 			}
 		} else {
-			// Worker not nil, for cutover, we always need to compare
+			// Worker not nil in cutover
+			// the logic relies on the curActDb that gets updated from PreprocessCutover(). We won't check again here.
 			// 1. CUTOVER: follow the active DB and RW status
 			// 2. PRE/ENABLE, COMPLETE/BROOM: change to either two_task or two_task_cutover but this shouldn't be allowed.
+			//
 			if !crd.isInternal {
 				var tgtshard ShardByTwoTask
-				newcfg := cvtActiveInfo(GetCutoverCfg())
-				rc := compActiveInfo(*newcfg, *crd.curActDb)
-				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 info only: checking if crd curActInfo is out of date", rc)
 				wType := wtypeRW
 				if crd.isRead && GetConfig().ReadonlyPct > 0 {
 					wType = wtypeRO

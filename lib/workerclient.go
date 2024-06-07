@@ -66,8 +66,8 @@ type workerMsg struct {
 	// EOR IN_TRANSACTION or EOR IN_CURSOR_IN_TRANSACTION is received
 	inTransaction bool
 	// tell coordinator to abort dosession with an ErrWorkerFail. call will recover worker.
-	abort     bool
-	bindEvict bool
+	abort       bool
+	bindEvict   bool
 	cutoverStop bool
 	// the request counter / Id
 	rqId uint32
@@ -100,7 +100,7 @@ type WorkerClient struct {
 	shardID       int              // also reused in cutover
 	racID         int              // for RAC maintenance, the rac ID where the worker connected
 	dbUname       string           // the database name where the worker connected
-	roleCheck     int 
+	roleCheck     int
 	// when coordinator uses this worker via GetWorker(), we will reset this.
 	crdIsRead bool
 
@@ -608,7 +608,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 				subp := strings.TrimSpace(string(ns.Payload[i:]))
 				info := strings.Fields(subp)
 				worker.dbUname = info[0]
-				if len(info) > 1 {
+				if GetConfig().EnableCutover && (info) > 1 {
 					flag, err := strconv.Atoi(info[1])
 					if err != nil {
 						logger.GetLogger().Log(logger.Alert, "Can't get valid roleCheck flag")
@@ -619,11 +619,21 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 							logger.GetLogger().Log(logger.Alert, "attachToWorker can't get workerpool")
 							// we need recylce
 						}
+
 						if pool.checkSetUserRole != uint(flag) {
-							buff := []byte{byte(pool.checkSetUserRole)}
+							var wpflag uint
+							if pool.phase == CutoverPhStr {
+								wpflag = pool.checkSetUserRole
+							} else {
+								wpflag = 0 // disable
+							}
+							evt := cal.NewCalEvent(EvtTypeCutover, "update_wkr_role_flag", cal.TransOK, strconv.Itoa(int(wpflag)))
+							evt.Completed()
+							buff := []byte{byte(wpflag)}
 							ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
 							worker.workerOOBConn.Write(ns.Serialized)
 						}
+
 					}
 				}
 				break
@@ -664,7 +674,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 			cfgDbuname := coCfg.DbBy2task[wkr2task]
 			if cfgDbuname != worker.dbUname {
 				if coCfg.Phase == CutoverPhStr {
-					logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in CUTOVER phase [",cfgDbuname, "][", worker.dbUname, "]")
+					logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in CUTOVER phase [", cfgDbuname, "][", worker.dbUname, "]")
 					errmsg := fmt.Sprintf("new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
 					return errors.New(errmsg)
 				} else {
@@ -1160,7 +1170,7 @@ func (worker *WorkerClient) isProcessRunning() bool {
 
 func (worker *WorkerClient) sendUserRoleMsg(_enable uint) {
 	buff := []byte{byte(_enable)}
-        ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
-	logger.GetLogger().Log(logger.Alert, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg",ns.Cmd, ns.Payload)
-        worker.workerOOBConn.Write(ns.Serialized)
+	ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
+	logger.GetLogger().Log(logger.Alert, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg", ns.Cmd, ns.Payload)
+	worker.workerOOBConn.Write(ns.Serialized)
 }
