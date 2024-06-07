@@ -608,7 +608,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 				subp := strings.TrimSpace(string(ns.Payload[i:]))
 				info := strings.Fields(subp)
 				worker.dbUname = info[0]
-				if GetConfig().EnableCutover && (info) > 1 {
+				if GetConfig().EnableCutover && len(info) > 1 {
 					flag, err := strconv.Atoi(info[1])
 					if err != nil {
 						logger.GetLogger().Log(logger.Alert, "Can't get valid roleCheck flag")
