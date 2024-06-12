@@ -18,8 +18,11 @@
 package lib
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	otellogger "github.com/paypal/hera/utility/logger/otel"
+	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -50,7 +53,7 @@ func Run() {
 
 	rand.Seed(time.Now().Unix())
 
-	err := InitConfig()
+	err := InitConfig(*namePtr)
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to initialize configuration:", err.Error())
@@ -105,6 +108,18 @@ func Run() {
 	caltxn = cal.NewCalTransaction(cal.TransTypeAPI, "mux-go-start", cal.TransOK, "", cal.DefaultTGName)
 	caltxn.SetCorrelationID("runtxn")
 	caltxn.Completed()
+
+	//Initialize OTEL
+	if otelconfig.OTelConfigData.Enabled {
+		shutdownFunc, err := otellogger.InitializeOTelSDK(context.Background())
+		if err != nil {
+			release := calclient.GetReleaseBuildNum()
+			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("failed to initialize OTEL, err: %v", err))
+			evt := cal.NewCalEvent("OTEL_INIT", release, "2", fmt.Sprintf("erro: %v", err))
+			evt.Completed()
+		}
+		defer shutdownFunc(context.Background()) //During exit from mux, this will takecare of OTEL providers clean-up
+	}
 
 	GetStateLog().SetStartTime(time.Now())
 
