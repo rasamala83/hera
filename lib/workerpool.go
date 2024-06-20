@@ -88,11 +88,11 @@ type WorkerPool struct {
 
 	// Cutover feaeture
 	// dbUname: set by 1) when workerpool is created 2) when cutovercfg is changed
-	CoShardID ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
-	phase     string         // the phase is updated by the cutovercfg
-	dbUname   string         // the dbuname is updated by the cutovercfg
-	str2task  string
-	checkSetUserRole uint    // 0 disable, >0 enable, whether pool requires workers to do userrole check/set or not
+	CoShardID        ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
+	phase            string         // the phase is updated by the cutovercfg
+	dbUname          string         // the dbuname is updated by the cutovercfg
+	str2task         string
+	checkSetUserRole uint // 0 disable, >0 enable, whether pool requires workers to do userrole check/set or not
 }
 
 // Init creates the pool by creating the workers and making all the initializations
@@ -637,7 +637,7 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 func (pool *WorkerPool) getActiveWorker() (worker *WorkerClient) {
 	var workerclient *WorkerClient
 	var cnt = pool.activeQ.Len()
-logger.GetLogger().Log(logger.Debug, "shtien getActiveWorker()",pool.activeQ.Len(), " type ", pool.Type, ", instance:", pool.InstID)
+	logger.GetLogger().Log(logger.Debug, "shtien getActiveWorker()", pool.activeQ.Len(), " type ", pool.Type, ", instance:", pool.InstID)
 	for cnt > 0 {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "poolsize (before get)", pool.activeQ.Len(), " type ", pool.Type, ", instance:", pool.InstID)
@@ -918,13 +918,10 @@ func (pool *WorkerPool) enforceIntegrity() {
 	if pool == nil {
 		return
 	}
-	if pool.phase == EnablePhStr {
+	if pool.phase == EnablePhStr || pool.phase == CompletePhStr {
 		return
 	}
 	if (pool.phase == PrePhStr) && (pool.CoShardID == ShId2Task) {
-		return
-	}
-	if (pool.phase == CompletePhStr) && (pool.CoShardID == ShId2TaskCutover) {
 		return
 	}
 
@@ -1035,7 +1032,7 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 // the flag will also be passed to future new workers as env variable.
 func (pool *WorkerPool) CheckSetUserRole(_enable uint) {
 	if pool.checkSetUserRole != _enable {
-		pool.checkSetUserRole = _enable;
+		pool.checkSetUserRole = _enable
 		//notify all workers of this pool;
 		logger.GetLogger().Log(logger.Verbose, "CP 50 CheckSetUserRole", _enable, "pool shid", pool.CoShardID, "current size", pool.currentSize)
 		cnt := 0
@@ -1045,7 +1042,7 @@ func (pool *WorkerPool) CheckSetUserRole(_enable uint) {
 		for i := 0; i < pool.currentSize; i++ {
 			if pool.workers[i] != nil {
 				workers = append(workers, pool.workers[i])
-				cnt++;
+				cnt++
 			}
 		}
 		pool.poolCond.L.Unlock()
@@ -1059,6 +1056,6 @@ func (pool *WorkerPool) CheckSetUserRole(_enable uint) {
 		caltxn.Completed()
 		logger.GetLogger().Log(logger.Verbose, "CP 50 end of CheckSetUserRole", pool.phase, pool.dbUname, pool.checkSetUserRole)
 	} else {
-		logger.GetLogger().Log(logger.Warning, "CP 50 CheckSetUserRole unchanged", pool.phase, pool.dbUname, pool.checkSetUserRole);
+		logger.GetLogger().Log(logger.Warning, "CP 50 CheckSetUserRole unchanged", pool.phase, pool.dbUname, pool.checkSetUserRole)
 	}
 }
