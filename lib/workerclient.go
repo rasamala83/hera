@@ -677,23 +677,10 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 					logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in CUTOVER phase [", cfgDbuname, "][", worker.dbUname, "]")
 					errmsg := fmt.Sprintf("new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
 					return errors.New(errmsg)
-				} else {
-					if int(worker.ConnTwoTask) == int(ShId2TaskCutover) {
-						//enforce two_task_cutover pool in PRE
-						if coCfg.Phase == PrePhStr {
-							logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in PRE phase [", cfgDbuname, "][", worker.dbUname, "]")
-							errmsg := fmt.Sprintf("new workerclient integrity check failed. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
-							return errors.New(errmsg)
-						}
-					}
-					if int(worker.ConnTwoTask) == int(ShId2Task) {
-						// enforce two_task pool in Complete
-						if coCfg.Phase == CompletePhStr {
-							logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in COMPLETE phase [", cfgDbuname, "][", worker.dbUname, "]")
-							errmsg := fmt.Sprintf("new workerclient integrity check failed. Expect dbname [%s] but %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
-							return errors.New(errmsg)
-						}
-					}
+				} else if (coCfg.Phase == PrePhStr) && (worker.ConnTwoTask == ShId2TaskCutover) {
+						logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in PRE phase [", cfgDbuname, "][", worker.dbUname, "]")
+						errmsg := fmt.Sprintf("new workerclient integrity check failed in PRE phase. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
+						return errors.New(errmsg)
 				}
 			}
 		} else {
