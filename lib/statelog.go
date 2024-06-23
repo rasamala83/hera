@@ -133,11 +133,6 @@ type StateLog struct {
 	// start time since epoch in ns
 	//
 	mServerStartTime int64
-
-	//
-	//Channel to send statelog data. OTEL observer periodically pull data from channel
-	//
-	mStateDataChan chan otel_logger.WorkersStateData
 }
 
 // StateEventType is an event published by proxy when state changes.
@@ -576,14 +571,13 @@ func (sl *StateLog) init() error {
 
 	if otelconfig.OTelConfigData.Enabled {
 		// Initialize statelog_metrics to send metrics information currently we are ignoring registration object returned from this call
-		stateStartErr := otel_logger.StartMetricsCollection(sl.mStateDataChan,
+		stateStartErr := otel_logger.StartMetricsCollection(totalWorkersCount,
 			otel_logger.WithMetricProvider(otel.GetMeterProvider()),
 			otel_logger.WithAppName(otelconfig.OTelConfigData.PoolName))
 
 		if stateStartErr != nil {
 			logger.GetLogger().Log(logger.Alert, "failed to start metric collection agent for statelogs", stateStartErr)
 		}
-		sl.mStateDataChan = make(chan otel_logger.WorkersStateData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*2) //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2
 	}
 	//
 	// start periodical reporting
@@ -828,7 +822,7 @@ func (sl *StateLog) genReport() {
 					//Adding req and response metrics to OTEL
 					workerStatesData.StateData["req"] = int64(reqCnt - sl.mLastReqCnt[s][HeraWorkerType(t)][n])
 					workerStatesData.StateData["resp"] = int64(respCnt - sl.mLastRspCnt[s][HeraWorkerType(t)][n])
-					sl.mStateDataChan <- workerStatesData
+					otel_logger.AddDataPointToOTELStateDataChan(&workerStatesData)
 				} else {
 					for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
 						buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))

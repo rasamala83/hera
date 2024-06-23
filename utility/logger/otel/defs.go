@@ -13,30 +13,30 @@ const (
 	AccptConnCountMetric     = "accept_connection.count"
 	WaitConnCountMetric      = "wait_connection.count"
 	BusyConnCountMetric      = "busy_connection.count"
-	ScheduledConnCountMetric = "schd.connection.count"
-	FinishedConnCountMetric  = "fnsh.connection.count"
-	QuiescedConnCountMetric  = "quce.connection.count"
+	ScheduledConnCountMetric = "scheduled_connection.count"
+	FinishedConnCountMetric  = "finished_connection.count"
+	QuiescedConnCountMetric  = "quiesced_connection.count"
 
 	// Connection States
-	AssignedConnCountMetric = "asgn.connection.count"
+	AssignedConnCountMetric = "assigned_connection.count"
 	IdleConnCountMetric     = "idle_connection.count"
 	BacklogConnCountMetric  = "backlog_connection.count"
-	StrdConnCountMetric     = "strd_connection.count"
+	StrdConnCountMetric     = "stranded_connection.count"
 
 	//Max value within window
 	InitConnCountMetricMax      = "init_connection.count.max"
 	AccptConnCountMetricMax     = "accept_connection.count.max"
 	WaitConnCountMetricMax      = "wait_connection.count.max"
 	BusyConnCountMetricMax      = "busy_connection.count.max"
-	ScheduledConnCountMetricMax = "schd.connection.count.max"
-	FinishedConnCountMetricMax  = "fnsh.connection.count.max"
-	QuiescedConnCountMetricMax  = "quce.connection.count.max"
+	ScheduledConnCountMetricMax = "scheduled_connection.count.max"
+	FinishedConnCountMetricMax  = "finished_connection.count.max"
+	QuiescedConnCountMetricMax  = "quiesced_connection.count.max"
 
 	// Connection States
-	AssignedConnCountMetricMax = "asgn.connection.count.max"
+	AssignedConnCountMetricMax = "assigned_connection.count.max"
 	IdleConnCountMetricMax     = "idle_connection.count.max"
 	BacklogConnCountMetricMax  = "backlog_connection.count.max"
-	StrdConnCountMetricMax     = "strd_connection.count.max"
+	StrdConnCountMetricMax     = "stranded_connection.count.max"
 
 	//Worker Request Response Count metrics suffix names
 	WorkerRequestCountMetric  = "worker.req.count"
@@ -66,27 +66,6 @@ const COLLECTOR_POLLING_INTERVAL_SECONDS int32 = 5
 const StateLogMeterName = "occ-statelog-data"
 
 //****************************** variables ***************************
-
-var ()
-
-// ************************************ Types ****************************
-type CMetric int
-
-const (
-	initConn CMetric = CMetric(iota)
-	acceptConn
-	waitConn
-	busyConn
-	scheduledConn
-	finishedConn
-	quiescedConn
-	assignedConn
-	idleConn
-	backlogConn
-	strdConn
-	workerReq
-	workerResp
-)
 
 type Tags struct {
 	TagName  string
@@ -125,14 +104,12 @@ type StateLogMetrics struct {
 	meter metric.Meter
 
 	//Channel to receive statelog data
-	mStateDataChan <-chan WorkersStateData
+	mStateDataChan chan *WorkersStateData
 
 	//Channel to close sending data
-	doneCh <-chan struct{}
-	//This lock prevents a race between batch observer and instrument registration
-	registerStateMetrics sync.Once
+	doneCh chan struct{}
 
-	recordLock sync.Mutex
+	stateLock sync.Mutex
 
 	registration metric.Registration
 
@@ -148,20 +125,20 @@ type StateLogMetrics struct {
 	bklgState metric.Int64ObservableGauge
 	strdState metric.Int64ObservableGauge
 
-	initStateMax metric.Int64ObservableGauge
-	acptStateMax metric.Int64ObservableGauge
-	waitStateMax metric.Int64ObservableGauge
-	busyStateMax metric.Int64ObservableGauge
-	schdStateMax metric.Int64ObservableGauge
-	fnshStateMax metric.Int64ObservableGauge
-	quceStateMax metric.Int64ObservableGauge
-	asgnStateMax metric.Int64ObservableGauge
-	idleStateMax metric.Int64ObservableGauge
-	bklgStateMax metric.Int64ObservableGauge
-	strdStateMax metric.Int64ObservableGauge
+	/*	initStateMax metric.Int64ObservableGauge
+		acptStateMax metric.Int64ObservableGauge
+		waitStateMax metric.Int64ObservableGauge
+		busyStateMax metric.Int64ObservableGauge
+		schdStateMax metric.Int64ObservableGauge
+		fnshStateMax metric.Int64ObservableGauge
+		quceStateMax metric.Int64ObservableGauge
+		asgnStateMax metric.Int64ObservableGauge
+		idleStateMax metric.Int64ObservableGauge
+		bklgStateMax metric.Int64ObservableGauge
+		strdStateMax metric.Int64ObservableGauge
 
-	workerReqCount  metric.Int64ObservableUpDownCounter
-	workerRespCount metric.Int64ObservableUpDownCounter
+		workerReqCount  metric.Int64ObservableUpDownCounter
+		workerRespCount metric.Int64ObservableUpDownCounter*/
 }
 
 // Object represents the workers states data for worker belongs to specific shardId and workperType with flat-map

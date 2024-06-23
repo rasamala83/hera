@@ -118,10 +118,12 @@ func Run() {
 			evt := cal.NewCalEvent("OTEL_INIT", release, "2", fmt.Sprintf("erro: %v", err))
 			evt.Completed()
 		}
+		GetStateLog().SetStartTime(time.Now())
+		defer otellogger.StopMetricCollection()  //Stop sending metrics data
 		defer shutdownFunc(context.Background()) //During exit from mux, this will takecare of OTEL providers clean-up
+	} else {
+		GetStateLog().SetStartTime(time.Now())
 	}
-
-	GetStateLog().SetStartTime(time.Now())
 
 	go func() {
 		sleep := time.Duration(GetConfig().ConfigReloadTimeMs)

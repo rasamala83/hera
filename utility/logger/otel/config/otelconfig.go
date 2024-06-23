@@ -20,6 +20,7 @@ type OTelConfig struct {
 	TraceURLPath        string
 	Environment         string
 	PoolName            string
+	ResourceType        string
 	Enabled             bool
 	SkipCalStateLog     bool
 	ResolutionTimeInSec int
@@ -43,9 +44,6 @@ func (config *OTelConfig) validate() error {
 func (config *OTelConfig) setDefaultIfNotDefined() {
 	if config.Environment == "" {
 		config.Environment = "QA"
-	}
-	if config.MetricsURLPath == "" {
-		config.MetricsURLPath = "v1/datapoint"
 	}
 }
 

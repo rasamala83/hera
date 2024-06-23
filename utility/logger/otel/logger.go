@@ -306,7 +306,7 @@ func getResourceInfo(appName string) *resource.Resource {
 	}
 	hostname, _ := os.Hostname()
 
-	resource := resource.NewWithAttributes("juno resource",
+	resource := resource.NewWithAttributes(fmt.Sprintf("%s resource", config.OTelConfigData.ResourceType),
 		attribute.String("container_host", hostname),
 		attribute.String("az", colo),
 		attribute.String("environment", env),

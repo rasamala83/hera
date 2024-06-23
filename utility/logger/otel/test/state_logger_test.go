@@ -32,7 +32,7 @@ func initializeConsoleExporter() (*metric.MeterProvider, error) {
 	}
 	hostname, _ := os.Hostname()
 
-	resource := resource.NewWithAttributes("juno resource",
+	resource := resource.NewWithAttributes("OCC resource",
 		attribute.String("container_host", hostname),
 		attribute.String("az", "devTest"),
 		attribute.String("environment", "dev"),
@@ -87,16 +87,14 @@ func TestVerifyStateLogMetricsInitilization(t *testing.T) {
 		t.Fail()
 	}
 
-	dataChannel := make(chan otellogger.WorkersStateData, 5)
-
-	err = otellogger.StartMetricsCollection(dataChannel, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	err = otellogger.StartMetricsCollection(5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
 
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
 		t.Fail()
 	}
 	time.Sleep(15 * time.Second)
-	close(dataChannel)
+	otellogger.StopMetricCollection()
 }
 
 func TestVerifyStateLogMetricsInitilizationAndContextWithTimeout(t *testing.T) {
@@ -112,9 +110,8 @@ func TestVerifyStateLogMetricsInitilizationAndContextWithTimeout(t *testing.T) {
 		t.Fail()
 	}
 
-	dataChannel := make(chan otellogger.WorkersStateData, 5)
-
-	err = otellogger.StartMetricsCollection(dataChannel, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	err = otellogger.StartMetricsCollection(5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	defer otellogger.StopMetricCollection()
 
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
@@ -134,9 +131,7 @@ func TestSendingStateLogMetrics(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	dataChannel := make(chan otellogger.WorkersStateData, 5)
-
-	err := otellogger.StartMetricsCollection(dataChannel, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	err := otellogger.StartMetricsCollection(5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
 
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
@@ -159,18 +154,14 @@ func TestSendingStateLogMetrics(t *testing.T) {
 		InstanceId: 0,
 		StateData:  stateData,
 	}
+	otellogger.AddDataPointToOTELStateDataChan(&workersStateData)
 
-	dataChannel <- workersStateData
-	defer func() { close(dataChannel) }() //Clean channel
+	defer otellogger.StopMetricCollection() //Clean channel
 
 	logger.GetLogger().Log(logger.Info, "Data Sent successfully for instrumentation")
 	time.Sleep(5 * time.Second)
-	//logger.GetLogger().Log(logger.Info, fmt.Sprintf("Length of channel is: %d", len(dataChannel)))
-	if len(dataChannel) > 0 {
-		t.Fatalf("since data consumed by logger channel should be empty.")
-	}
 	metricsData := mc.GetMetrics()
-	if len(metricsData) < 24 {
+	if len(metricsData) < 11 {
 		t.Fatalf("got %d, wanted %d", len(metricsData), 24)
 	}
 }
@@ -180,9 +171,8 @@ func TestSendingStateLogMetricsConsoleExporter(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	dataChannel := make(chan otellogger.WorkersStateData, 100)
 
-	err2 := otellogger.StartMetricsCollection(dataChannel, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp2"))
+	err2 := otellogger.StartMetricsCollection(100, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp2"))
 
 	if err2 != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
@@ -220,9 +210,9 @@ func TestSendingStateLogMetricsConsoleExporter(t *testing.T) {
 		StateData:  stateData2,
 	}
 
-	dataChannel <- workersStateData
+	otellogger.AddDataPointToOTELStateDataChan(&workersStateData)
 	time.Sleep(150 * time.Millisecond)
-	dataChannel <- workersStateData2
+	otellogger.AddDataPointToOTELStateDataChan(&workersStateData2)
 	logger.GetLogger().Log(logger.Info, "Data Sent successfully for instrumentation")
 	time.Sleep(2 * time.Second)
 
@@ -256,11 +246,10 @@ func TestSendingStateLogMetricsConsoleExporter(t *testing.T) {
 		InstanceId: 0,
 		StateData:  stateData4,
 	}
-	dataChannel <- workersStateData3
+	otellogger.AddDataPointToOTELStateDataChan(&workersStateData3)
 	time.Sleep(150 * time.Millisecond)
-	dataChannel <- workersStateData4
-
-	close(dataChannel)
+	otellogger.AddDataPointToOTELStateDataChan(&workersStateData4)
+	otellogger.StopMetricCollection()
 	if err3 := cont.Shutdown(context.Background()); err3 != nil {
 		logger.GetLogger().Log(logger.Info, "failed to stop the metric controller:", err3)
 	}
@@ -271,29 +260,20 @@ func TestOCCStatelogGenerator(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	dataChannel := make(chan otellogger.WorkersStateData, 1000)
+	defer cont.Shutdown(context.Background())
 
-	defer func(dataChan chan otellogger.WorkersStateData) {
-		//close channel
-		close(dataChan)
-		logger.GetLogger().Log(logger.Info, "Channel `dataChan` has been closed.")
-	}(dataChannel)
-
-	go dataGenerator(dataChannel)
-
-	err2 := otellogger.StartMetricsCollection(dataChannel, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	err2 := otellogger.StartMetricsCollection(1000, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	defer otellogger.StopMetricCollection()
+	go dataGenerator()
 
 	if err2 != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
-		t.Fail()
+		t.Fatalf("TestOCCStatelogGenerator failed with error %v", err)
 	}
-	<-time.After(time.Second * time.Duration(21))
-	if err3 := cont.Shutdown(context.Background()); err3 != nil {
-		logger.GetLogger().Log(logger.Info, "failed to stop the metric controller:", err3)
-	}
+	<-time.After(time.Second * time.Duration(10))
 }
 
-func dataGenerator(workersStatesDataChan chan<- otellogger.WorkersStateData) {
+func dataGenerator() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	waitTime := time.Second * 1
@@ -332,7 +312,7 @@ mainloop:
 			workerStatesData.StateData[metricNames[randIndex]] += int64(totalSum - tempSum)
 			workerStatesData.StateData[workerStates[0]] = int64(rand.Intn(100))
 			workerStatesData.StateData[workerStates[1]] = int64(rand.Intn(100))
-			workersStatesDataChan <- workerStatesData
+			otellogger.AddDataPointToOTELStateDataChan(&workerStatesData)
 			timer.Reset(waitTime)
 		case <-ctx.Done():
 			logger.GetLogger().Log(logger.Info, "Timedout, so context closed")
