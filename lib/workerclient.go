@@ -663,28 +663,31 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		}
 
 		if coCfg != nil {
-			var wkr2task string
-			if int(worker.ConnTwoTask) == int(ShId2Task) {
-				wkr2task = Get2TaskName()
-			} else {
-				wkr2task = Get2TaskCutoverName()
-			}
-			logger.GetLogger().Log(logger.Alert, "check cutovercfg and workerclient integrity: worker two_task", wkr2task, "target dbuname", coCfg.DbBy2task[wkr2task])
-
-			cfgDbuname := coCfg.DbBy2task[wkr2task]
-			if cfgDbuname != worker.dbUname {
-				if coCfg.Phase == CutoverPhStr {
-					logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in CUTOVER phase [", cfgDbuname, "][", worker.dbUname, "]")
-					errmsg := fmt.Sprintf("new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
-					return errors.New(errmsg)
-				} else if (coCfg.Phase == PrePhStr) && (worker.ConnTwoTask == ShId2TaskCutover) {
-						logger.GetLogger().Log(logger.Alert, "CP 11 dbuname mismatch in PRE phase [", cfgDbuname, "][", worker.dbUname, "]")
-						errmsg := fmt.Sprintf("new workerclient integrity check failed in PRE phase. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
+			if coCfg.Phase == PrePhStr || coCfg.Phase == CutoverPhStr {
+				wkr2task := Get2TaskCutoverName()
+				if worker.ConnTwoTask == ShId2Task {
+					wkr2task = Get2TaskName()
+				}
+				cfgDbuname := coCfg.DbBy2task[wkr2task]
+				logger.GetLogger().Log(logger.Info, "check cutovercfg and workerclient integrity: worker two_task", wkr2task, "target dbuname", cfgDbuname)
+				if cfgDbuname != worker.dbUname {
+					if (worker.ConnTwoTask == ShId2TaskCutover) {
+						logger.GetLogger().Log(logger.Alert, "CP 11 target dbuname mismatch in Pre/Cutover phase [", cfgDbuname, "][", worker.dbUname, "]")
+						et := cal.NewCalEvent(EvtTypeCutover, "tgt_new_dbun_mismatch", cal.TransOK, "")
+						et.Completed()
+						errmsg := fmt.Sprintf("new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
 						return errors.New(errmsg)
+					} else {
+						logger.GetLogger().Log(logger.Alert, "CP 11 source dbuname mismatch in Pre/Cutover phase [", cfgDbuname, "][", worker.dbUname, "]")
+						et := cal.NewCalEvent(EvtTypeCutover, "warn_src_new_dbun_mismatch", cal.TransOK, "")
+						et.Completed()
+					}
 				}
 			}
 		} else {
-			logger.GetLogger().Log(logger.Alert, "CP 11 workerclient integrity check but GetCutoverCfg() return nil, likely during INIT. Continue")
+			logger.GetLogger().Log(logger.Alert, "CP 11 workerclient integrity check but GetCutoverCfg() return nil, likely during server startup. Continue without checking")
+			et := cal.NewCalEvent(EvtTypeCutover, "startup_new_dbun_skip", cal.TransOK, "")
+			et.Completed()
 		}
 
 	}
