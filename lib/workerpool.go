@@ -916,13 +916,17 @@ func (pool *WorkerPool) decBacklogCnt() {
 func (pool *WorkerPool) enforceIntegrity() {
 	logger.GetLogger().Log(logger.Verbose, "CP 21 invoked")
 	if pool == nil {
+		evt := cal.NewCalEvent(EvtTypeCutover, "wp_nil_dbun_skip", cal.TransOK, "")
+		evt.Completed()
 		return
 	}
 	if pool.phase == EnablePhStr || pool.phase == CompletePhStr {
 		return
 	}
-	if (pool.phase == PrePhStr) && (pool.CoShardID == ShId2Task) {
-		return
+
+	warnOnly := true // warning only unless for Cutover workerpool at Pre and Cutover phase
+	if (pool.phase == PrePhStr || pool.phase == CutoverPhStr) && (pool.CoShardID == ShId2TaskCutover) {
+		warnOnly = false
 	}
 
 	cnt := 0
@@ -944,7 +948,17 @@ func (pool *WorkerPool) enforceIntegrity() {
 	for _, w := range workers {
 		logger.GetLogger().Log(logger.Alert, "CP 21 CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
 			w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
-		w.Terminate()
+		if warnOnly {
+			//add calevent
+			calname := fmt.Sprintf("warn_diff_dbun_%d_%d_%d", int(pool.CoShardID), int(w.Type), w.instID)
+			evt := cal.NewCalEvent(EvtTypeCutover, calname, cal.TransOK, "")
+			evt.Completed()
+		} else {
+			calname := fmt.Sprintf("kill_diff_dbun_%d_%d", int(w.Type), w.instID)
+			evt := cal.NewCalEvent(EvtTypeCutover, calname, cal.TransOK, "")
+			evt.Completed()
+			w.Terminate()
+		}
 	}
 	logger.GetLogger().Log(logger.Verbose, "CP 21 enforceIntegrity done.", pool.phase, pool.dbUname)
 }
@@ -971,7 +985,7 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 	pool.phase = newPhase
 	pool.dbUname = newDbUname
 	// only enforce two_task_cutover pool's dbuname integrity at PRE and CUTOVER
-	if pool.CoShardID == ShId2TaskCutover && (pool.phase == CutoverPhStr || pool.phase == PrePhStr) {
+	if pool.phase == CutoverPhStr || pool.phase == PrePhStr {
 		pool.enforceIntegrity()
 	}
 }

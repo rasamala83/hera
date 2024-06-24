@@ -469,12 +469,11 @@ func loadCutoverCfg(db *sql.DB) error {
 							// integrity is mainly for the workerpool phase + dbuname
 							// if phase changed only, apply to all pools
 							// if phase didn't change, we can add protection?
-							if shid == int(ShId2Task) {
-								wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[g2TaskName])
-							}
+							tname := g2TaskName
 							if shid == int(ShId2TaskCutover) {
-								wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[g2TaskCutoverName])
+								tname = g2TaskCutoverName
 							}
+							wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[tname])
 						} else {
 							logger.GetLogger().Log(logger.Alert, "CP 14 can't get workerpool [shid, type] [", shid, ",", t, "]")
 						}
