@@ -81,7 +81,7 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 			newActInfo.RwStatus = cocfg.RWstatusByDb[actDb]
 		}
 	}
-	logger.GetLogger().Log(logger.Alert, "CP 5 convert cfg to newActInfo (ShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
+	logger.GetLogger().Log(logger.Info, "CP 5 convert cfg to newActInfo (ShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
 	return &newActInfo
 }
 
