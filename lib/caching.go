@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-// CacheRecord Cache config record to store the <ManagementTablePrefix>_sql_caching entries
+// CacheRecord represents the <ManagementTablePrefix>_sql_caching record
 type CacheRecord struct {
 	query_id           string
 	sqlHash            uint32
@@ -45,6 +45,7 @@ type CacheRecord struct {
 	module             string
 }
 
+// CacheCfg contains a map of CacheRecords and is used to determine whether a sql is enabled for caching
 type CacheCfg struct {
 	cacheCfgRecords map[uint32]*CacheRecord
 	lock            *sync.Mutex
@@ -53,6 +54,7 @@ type CacheCfg struct {
 var moduleName string
 var gCacheCfg atomic.Value
 
+// getCacheCfgSQL returns the query to load cache cfg.
 func getCacheCfgSQL() string {
 	return fmt.Sprintf(
 		"SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'",
@@ -60,6 +62,7 @@ func getCacheCfgSQL() string {
 	)
 }
 
+// getCacheCfg returns the cache cfg.
 func getCacheCfg() *CacheCfg {
 	cfg := gCacheCfg.Load()
 	if cfg == nil {
@@ -70,6 +73,7 @@ func getCacheCfg() *CacheCfg {
 	return cfg.(*CacheCfg) //Assertion to type case
 }
 
+// loadCacheCfg queries the <ManagementTablePrefix>_sql_caching table and populates the cache cfg.
 func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "Begin loading CacheCfg")
@@ -151,6 +155,8 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 	return err
 }
 
+// InitCachingCfg tries to load the cache cfg. If it fails after 3 attempts, it gives up. If the initial load is successful,
+// it tries to refresh the cache cfg every CachingCfgReloadInterval seconds.
 func InitCachingCfg(modName string) error {
 	logger.GetLogger().Log(logger.Verbose, "InitCachingCfg for module:", modName)
 	moduleName = modName
