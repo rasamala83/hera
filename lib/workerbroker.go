@@ -168,7 +168,7 @@ func (broker *WorkerBroker) init() error {
 		if GetConfig().EnableCutover {
 			// as the worker pool is setting up configs, we don't know the state of cutover
 			workercnt := GetNumRWorkers(s)
-			if workercnt <= 2 {
+			if workercnt == 1 {
 				workercnt = 2
 			}
 			broker.poolCfgs[s][wtypeRO].maxWorkerCnt = workercnt / 2
@@ -192,10 +192,10 @@ func (broker *WorkerBroker) init() error {
 
 		if GetConfig().EnableCutover {
 			workercnt := GetNumWWorkers(s)
-			if workercnt <= 2 {
+			if workercnt == 1 {
 				workercnt = 2
 			}
-			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = workercnt
+			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = workercnt / 2
 			switch s {
 			case int(ShId2Task):
 				broker.poolCfgs[s][wtypeRW].p2t = ShId2Task
