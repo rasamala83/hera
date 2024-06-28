@@ -182,7 +182,7 @@ func (c *heraConnection) SetClientInfo(poolName string, host string)(error){
 	}
 
 	pid := os.Getpid()
-	data := fmt.Sprintf("PID: %d, HOST: %s, Poolname: %s, Command: SetClientInfo,", pid, host, poolName)
+	data := fmt.Sprintf("PID: %d, HOST: %s, Poolname: %s, Command: SetClientInfo, ClientSupportedProtocolVersions: 2.0", pid, host, poolName)
         c.clientinfo = netstring.NewNetstringFrom(common.CmdClientInfo, []byte(string(data)))
                 if logger.GetLogger().V(logger.Verbose) {
                         logger.GetLogger().Log(logger.Verbose, "SetClientInfo", c.clientinfo.Serialized)

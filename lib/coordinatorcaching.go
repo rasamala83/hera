@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/paypal/hera/cal"
+	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
@@ -170,6 +171,19 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 				for idx, split := range splits {
 					if len(split) > 0 {
 						logger.GetLogger().Log(logger.Debug, crd.id, "Responding to client...")
+						if crd.sendResponseMetadata {
+							if idx == len(splits)-2 {
+								logger.GetLogger().Log(logger.Debug, "Before ResponseMetadata:", split)
+								prefix := "1:6,"
+								pos := strings.Index(split, prefix)
+								if pos != -1 {
+									// CmdServerRespondedFromCache = 1020
+									ns := netstring.NewNetstringFrom(common.RcNoMoreData, []byte("1020"))
+									split = string(ns.Serialized)
+								}
+								logger.GetLogger().Log(logger.Debug, "After ResponseMetadata:", split)
+							}
+						}
 						err := crd.respond([]byte(split))
 						// _, err = crd.conn.Write([]byte(split))
 						caltxn.AddDataInt(fmt.Sprintf("%d", idx), int64(len([]byte(split))))
@@ -264,8 +278,9 @@ func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.N
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, crd.id, "doCacheRequest: request completed")
 				}
-				evt := cal.NewCalEvent("doCacheRequest", "client_req_completed", cal.TransOK, "")
-				evt.Completed()
+				// Disable writing to CAL
+				//evt := cal.NewCalEvent("doCacheRequest", "client_req_completed", cal.TransOK, "")
+				//evt.Completed()
 				return
 			}
 		}

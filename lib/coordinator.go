@@ -23,13 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
-	"math/rand"
-	"strconv"
 	"time"
 
 	"github.com/paypal/hera/cal"
@@ -56,6 +56,7 @@ type Coordinator struct {
 	clientHostName   string
 	poolName         string
 	clientPoolStack  string
+	sendResponseMetadata bool
 	// tells if the current request is SELECT
 	isRead bool
 	// for debugging
@@ -600,12 +601,23 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 	if len(hostname) >= 40 {
 		hostname = hostname[:39]
 	}
-	serverInfo := fmt.Sprintf("%s:load_saved_sessions*CalThreadId=0*TopLevelTxnStartTime=TopLevelTxn not set*Host=%s",
-		cal.GetCalClientInstance().GetPoolName(), hostname)
+	prefix := "ClientSupportedProtocolVersions: 2.0" // Send response metadata to clients with version 2.0
+	pos := strings.Index(clientInfo, prefix)
+	var serverInfo string
+	if pos != -1 {
+		crd.sendResponseMetadata = true
+		// Indicate to the client that the server is going to send additional metadata while responding to requests.
+		serverInfo = fmt.Sprintf("%s:load_saved_sessions*CalThreadId=0*TopLevelTxnStartTime=TopLevelTxn not set*Host=%s*ServerSupportedProtocolVersion:2",
+			cal.GetCalClientInstance().GetPoolName(), hostname)
+	} else {
+		crd.sendResponseMetadata = false
+		serverInfo = fmt.Sprintf("%s:load_saved_sessions*CalThreadId=0*TopLevelTxnStartTime=TopLevelTxn not set*Host=%s",
+			cal.GetCalClientInstance().GetPoolName(), hostname)
+	}
 	ns := netstring.NewNetstringFrom(common.RcOK, []byte(serverInfo))
 	crd.respond(ns.Serialized)
-	prefix := "Poolname: "
-	pos := strings.LastIndex(clientInfo, prefix)
+	prefix = "Poolname: "
+	pos = strings.LastIndex(clientInfo, prefix)
 	if pos != -1 {
 		pos += len(prefix)
 		crd.poolName = clientInfo[pos:]
