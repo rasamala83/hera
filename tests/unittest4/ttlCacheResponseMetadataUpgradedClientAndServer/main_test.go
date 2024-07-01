@@ -70,8 +70,10 @@ func populateCache() error {
 	}
 	mux := gosqldriver.InnerConn(conn)
 	mux.SetCalCorrID("5af5e4a2758e")
-
-
+	err = mux.SetClientInfoWithPayload("testApplication", "localhost", "ClientSupportedProtocolVersions: 2.0")
+	if err != nil {
+		return err
+	}
 	rows, _ := conn.QueryContext(ctx, "SELECT 'pqr' from dual")
 
 	if !rows.Next() {
@@ -101,8 +103,8 @@ func before() error {
 }
 
 // GET (Cache MISS) + SET
-func TestTTLCacheResponseMetadata(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestTTLCacheResponseMetadata begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestTTLCacheResponseMetadataUpgradedClientAndServer(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestTTLCacheResponseMetadataUpgradedClientAndServer begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	testutil.RunDML("DELETE from hera_sql_caching")
 	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, hera_module) VALUES  ('1', '3029497934', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', '', 'hera-test')")
@@ -153,6 +155,14 @@ func TestTTLCacheResponseMetadata(t *testing.T) {
 		t.Fatalf("Error: query should be sent to the database")
 	}
 
+	if testutil.RegexCountFile("Before ResponseMetadata: 1:6,", "hera.log") > 0 {
+		t.Fatalf("Error: should not have entered this block during cache miss")
+	}
+
+	if testutil.RegexCountFile("After ResponseMetadata: 6:6 1020,", "hera.log") > 0 {
+		t.Fatalf("Error: should not have entered this block during cache miss")
+	}
+
 	time.Sleep(2 * time.Second)
 
 	shard := 0
@@ -172,7 +182,7 @@ func TestTTLCacheResponseMetadata(t *testing.T) {
 	mux := gosqldriver.InnerConn(conn)
 	mux.SetCalCorrID("5af5e4a2758e")
 
-	err = mux.SetClientInfo("testApplication", "localhost")
+	err = mux.SetClientInfoWithPayload("testApplication", "localhost", "ClientSupportedProtocolVersions: 2.0")
 	if err != nil {
 		t.Fatalf("Unable to set CLIENT_INFO")
 	}
@@ -187,7 +197,7 @@ func TestTTLCacheResponseMetadata(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 
-	if testutil.RegexCountFile("Connection handler read.*Command: SetClientInfo, ClientSupportedProtocolVersions: 2.0", "hera.log") < 1 {
+	if testutil.RegexCountFile("Connection handler read.*ClientSupportedProtocolVersions: 2.0", "hera.log") < 1 {
 		t.Fatalf("Error: expected ClientSupportedProtocolVersions in CLIENT_INFO")
 	}
 
@@ -223,7 +233,41 @@ func TestTTLCacheResponseMetadata(t *testing.T) {
 		t.Fatalf("Error: should have entered this block when ClientSupportedProtocolVersions is sent by the client")
 	}
 
+	mux.SetCalCorrID("5af5e4a2758e")
+	// Re-use same connection
+	rows, _ = conn.QueryContext(ctx, "SELECT 'pqr' from dual")
+
+	if !rows.Next() {
+		t.Fatalf("Expected 1 row")
+	}
+	rows.Close()
+	time.Sleep(3 * time.Second)
+
+	if testutil.RegexCountFile("3029497934 CachingEnabled for  GET : true", "hera.log") < 3 {
+		t.Fatalf("Error: should have entered this block")
+	}
+
+	if testutil.RegexCountFile("coordinator doCacheRequest: starting", "hera.log") < 3 {
+		t.Fatalf("Error: should have entered doCacheRequest when caching is enabled")
+	}
+
+	if testutil.RegexCountFile("Trying GET with key", "hera.log") < 3 {
+		t.Fatalf("Error: should have entered getRecordFromCache when caching is enabled")
+	}
+
+	if testutil.RegexCountFile(".*GET\t3029497934\t0.*", "cal.log") < 2 {
+		t.Fatalf("Error: should be a cache HIT")
+	}
+
+	if testutil.RegexCountFile("Before ResponseMetadata: 1:6,", "hera.log") < 2 {
+		t.Fatalf("Error: should have entered this block when ClientSupportedProtocolVersions is sent by the client")
+	}
+
+	if testutil.RegexCountFile("After ResponseMetadata: 6:6 1020,", "hera.log") < 2 {
+		t.Fatalf("Error: should have entered this block when ClientSupportedProtocolVersions is sent by the client")
+	}
+
 	conn.Close()
 
-	logger.GetLogger().Log(logger.Debug, "TestTTLCacheResponseMetadata done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	logger.GetLogger().Log(logger.Debug, "TestTTLCacheResponseMetadataUpgradedClientAndServer done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 }
