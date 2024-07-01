@@ -128,9 +128,6 @@ func (crd *Coordinator) Run() {
 	for running {
 		select {
 		case ns, ok := <-crd.clientchannel:
-			if crd.worker == nil {
-				logger.GetLogger().Log(logger.Debug, crd.id, "CP 23 A coordinator worker is nil.")
-			}
 			if !ok {
 				if logger.GetLogger().V(logger.Debug) {
 					logger.GetLogger().Log(logger.Debug, crd.id, "Coordinator exiting (closed channel) ...")
