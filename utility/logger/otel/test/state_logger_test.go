@@ -21,14 +21,15 @@ import (
 // This initializes console exported for metrics
 func initializeConsoleExporter() (*metric.MeterProvider, error) {
 	otelconfig.OTelConfigData = &otelconfig.OTelConfig{
-		Host:                "localhost",
-		HttpPort:            4318,
-		Enabled:             true,
-		UseOtelGRPC:         false,
-		ResolutionTimeInSec: 3,
-		PoolName:            "occ-testapp",
-		MetricNamePrefix:    "pp.occ",
-		MetricsURLPath:      DefaultMetricsPath,
+		Host:                       "localhost",
+		HttpPort:                   4318,
+		Enabled:                    true,
+		UseOtelGRPC:                false,
+		ResolutionTimeInSec:        3,
+		OTelErrorReportingInterval: 10,
+		PoolName:                   "occ-testapp",
+		MetricNamePrefix:           "pp.occ",
+		MetricsURLPath:             DefaultMetricsPath,
 	}
 	hostname, _ := os.Hostname()
 
@@ -56,18 +57,19 @@ func initializeConsoleExporter() (*metric.MeterProvider, error) {
 
 func initializeCustomOTelExporter(t *testing.T) func(ctx context.Context) error {
 	otelconfig.OTelConfigData = &otelconfig.OTelConfig{
-		Host:                "localhost",
-		HttpPort:            4318,
-		Enabled:             true,
-		UseOtelGRPC:         false,
-		ResolutionTimeInSec: 3,
-		PoolName:            "occ-testapp",
-		MetricNamePrefix:    "pp.occ",
-		MetricsURLPath:      DefaultMetricsPath,
+		Host:                       "localhost",
+		HttpPort:                   4318,
+		Enabled:                    true,
+		UseOtelGRPC:                false,
+		ResolutionTimeInSec:        3,
+		OTelErrorReportingInterval: 10,
+		PoolName:                   "occ-testapp",
+		MetricNamePrefix:           "pp.occ",
+		MetricsURLPath:             DefaultMetricsPath,
 	}
 	otelconfig.SetOTelIngestToken("welcome123")
 	ctx := context.Background()
-	shutdownFn, err := otellogger.InitializeOTelSDK(ctx)
+	shutdownFn, err := otellogger.Init(ctx)
 
 	if err != nil {
 		t.Log(fmt.Sprintf("failed to initialize OTEL sdk during test, error: %v", err))

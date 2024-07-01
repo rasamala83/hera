@@ -258,7 +258,7 @@ func generateWeakCertificate() (*pemCertificate, error) {
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"otel-go"},
+			Organization: []string{"otel_basic-go"},
 		},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,

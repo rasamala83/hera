@@ -111,12 +111,15 @@ func Run() {
 
 	//Initialize OTEL
 	if otelconfig.OTelConfigData.Enabled {
-		shutdownFunc, err := otellogger.InitializeOTelSDK(context.Background())
+		shutdownFunc, err := otellogger.Init(context.Background())
 		if err != nil {
-			release := calclient.GetReleaseBuildNum()
 			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("failed to initialize OTEL, err: %v", err))
-			evt := cal.NewCalEvent("OTEL_INIT", release, "2", fmt.Sprintf("erro: %v", err))
+			evt := cal.NewCalEvent("OTEL_INIT", *namePtr, "2", fmt.Sprintf("erro: %v", err))
 			evt.Completed()
+			if otelconfig.OTelConfigData.SkipCalStateLog {
+				logger.GetLogger().Log(logger.Alert, fmt.Sprintf("OTEL initialization failed. Only the OTEL state-log has been enabled. It is not safe to start the server"))
+				FullShutdown()
+			}
 		}
 		GetStateLog().SetStartTime(time.Now())
 		defer otellogger.StopMetricCollection()  //Stop sending metrics data

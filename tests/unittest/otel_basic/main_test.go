@@ -32,7 +32,8 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
-
+	os.Setenv("AVAILABILITY_ZONE", "test-dev")
+	os.Setenv("ENVIRONMENT", "dev")
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
@@ -114,6 +115,14 @@ func TestOTELMetricsBasic(t *testing.T) {
 		logFilePath)
 	if tagsCount < 1 {
 		t.Fatalf("mandatory tags InstanceId, ShardId, WorkerType should present")
+	}
+	azCount := testutil.RegexCountFile("{\"key\":\"az\",\"value\":{\"stringValue\":\"test-dev\"}", logFilePath)
+	if azCount < 1 {
+		t.Fatalf("az configured as test-dev and its value should present in otel metric dimension")
+	}
+	envCount := testutil.RegexCountFile("{\"key\":\"environment\",\"value\":{\"stringValue\":\"dev\"}", logFilePath)
+	if envCount < 1 {
+		t.Fatalf("az configured as test-dev and its value should present in otel metric dimension")
 	}
 	logger.GetLogger().Log(logger.Debug, "TestOTELMetricsBasic done  -------------------------------------------------------------")
 }

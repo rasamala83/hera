@@ -1,7 +1,6 @@
 package otel
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -18,40 +17,54 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	"io"
 	"os"
-	"strings"
+	"sync"
 	"time"
 )
 
+var oTelInitializeOnce sync.Once
+
+// Init takes care of initialize OTEL SDK once during startup
+func Init(ctx context.Context) (shutdown func(ctx context.Context) error, err error) {
+	oTelInitializeOnce.Do(func() {
+		shutdown, err = initializeOTelSDK(ctx)
+	})
+	return shutdown, err
+}
+
 // InitializeOTelSDK SetupOTelSDK bootstrap the OTEL SDK pipeline initialization
-func InitializeOTelSDK(ctx context.Context) (shutdown func(ctx context.Context) error, err error) {
-
+func initializeOTelSDK(ctx context.Context) (shutdown func(ctx context.Context) error, err error) {
 	var shutdownFuncs []func(context.Context) error
-
 	//shutdown calls cleanup function registered via shutdown functions
 	//The errors from calls are joined
 	shutdown = func(ctx context.Context) error {
-		var err error
+		var localErr error
 		for _, fn := range shutdownFuncs {
 			if fnErr := fn(ctx); fnErr != nil {
-				err = errors.Join(err, fnErr) // You can use other error accumulation strategies if needed
+				localErr = errors.Join(localErr, fnErr) // You can use other error accumulation strategies if needed
 			}
 		}
+		if localErr != nil {
+			logger.GetLogger().Log(logger.Warning, fmt.Sprintf("error while performing otel shutdown, err: %v", localErr))
+		}
 		shutdownFuncs = nil
-		return err
+		return localErr
 	}
 
-	//handle error calls shutdownfor cleanup and make sure all errors returhed
+	//handle error calls shutdown for cleanup and make sure all errors returned
 	handleErr := func(inErr error) {
 		err = errors.Join(inErr, shutdown(ctx))
 	}
 
-	//Initialize trace provider
-	traceProvider, err := newTraceProvider(ctx)
+	errorTicker = time.NewTicker(time.Duration(config.OTelConfigData.OTelErrorReportingInterval) * time.Second)
+
+	errorDataMap := make(map[string]*OTelErrorData) //Initialize the map after process it.
+	gErrorDataMap.Store(errorDataMap)
+
+	traceProvider, err := newTraceProvider(ctx) //Initialize trace provider
 	if err != nil {
 		handleErr(err)
-		return
+		return nil, err
 	}
 	shutdownFuncs = append(shutdownFuncs, traceProvider.Shutdown)
 	otel.SetTracerProvider(traceProvider)
@@ -61,10 +74,18 @@ func InitializeOTelSDK(ctx context.Context) (shutdown func(ctx context.Context) 
 	otel.SetMeterProvider(meterProvider)
 	if err != nil {
 		handleErr(err)
-		return
+		return nil, err
 	}
 	shutdownFuncs = append(shutdownFuncs, meterProvider.Shutdown)
-	return
+
+	oTelErrorHandler := OTelErrorHandler{}
+	otel.SetErrorHandler(oTelErrorHandler)  //Register custom error handler
+	oTelErrorHandler.processOTelErrorsMap() //Spawn Go routine peridically process OTEL errors
+	shutdownFuncs = append(shutdownFuncs, func(ctx context.Context) error {
+		errorTicker.Stop()
+		return nil
+	})
+	return shutdown, err
 }
 
 func newTraceProvider(ctx context.Context) (*trace.TracerProvider, error) {
@@ -258,59 +279,25 @@ func newGRPCTraceExporter(ctx context.Context) (*otlptrace.Exporter, error) {
 	)
 }
 
-// getEnvFromSyshieraYaml returns the env: line from /etc/syshiera.yaml
-func getEnvFromSyshieraYaml() (string, string, error) {
-	filePath := "/etc/syshiera.yaml"
-	var colo string = "qa"
-	var env string = config.OTelConfigData.Environment
-	var az, dc string
-	var err error
-	file, err := os.Open(filePath)
-	if err != nil {
-		return colo, env, err
-	}
-	defer file.Close()
-	fileReader := bufio.NewReader(file)
-	scanner := bufio.NewScanner(fileReader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		err = scanner.Err()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return colo, env, err
-		}
-
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "pp_az:") {
-			az = strings.TrimSpace(line[6:len(line)])
-		} else if strings.HasPrefix(line, "dc:") {
-			dc = strings.TrimSpace(line[3:len(line)])
-		} else if strings.HasPrefix(line, "env:") {
-			env = strings.TrimSpace(line[4:len(line)])
-		}
-	}
-	if az != "" {
-		colo = az
-	} else if dc != "" {
-		colo = dc
-	}
-	return colo, env, err
-}
-
+// getResourceInfo provide application context level attributes during initialization
 func getResourceInfo(appName string) *resource.Resource {
-	colo, env, _err := getEnvFromSyshieraYaml()
-	if _err != nil {
-		logger.GetLogger().Log(logger.Alert, "Error while reading /etc/syshiera.yaml file. ", _err.Error())
-	}
 	hostname, _ := os.Hostname()
 
-	resource := resource.NewWithAttributes(fmt.Sprintf("%s resource", config.OTelConfigData.ResourceType),
+	// Create a slice to hold the attributes
+	attributes := []attribute.KeyValue{
 		attribute.String("container_host", hostname),
-		attribute.String("az", colo),
-		attribute.String("environment", env),
 		attribute.String("application", appName),
+	}
+
+	if config.OTelConfigData.AvailabilityZone != "" {
+		attributes = append(attributes, attribute.String("az", config.OTelConfigData.AvailabilityZone))
+	}
+
+	if config.OTelConfigData.Environment != "" {
+		attributes = append(attributes, attribute.String("environment", config.OTelConfigData.Environment))
+	}
+	resource := resource.NewWithAttributes(fmt.Sprintf("%s resource", config.OTelConfigData.ResourceType),
+		attributes...,
 	)
 	return resource
 }

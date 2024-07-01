@@ -32,7 +32,7 @@ func setup(cfg cfgFunc) error {
 
 func teardown() {
 	mx.StopServer()
-	//mx.StopOTelAgent()
+	mx.StopOTelAgent()
 }
 
 func copyFile(src, dest string) error {

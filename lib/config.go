@@ -489,8 +489,10 @@ func initializeOTELConfigs(cdb config.Config, poolName string) {
 	otelconfig.OTelConfigData.ResolutionTimeInSec = cdb.GetOrDefaultInt("otel_resolution_time_in_sec", 10)
 	otelconfig.OTelConfigData.ExporterTimeout = cdb.GetOrDefaultInt("otel_exporter_time_in_sec", 30)
 	otelconfig.OTelConfigData.EnableRetry = cdb.GetOrDefaultBool("otel_enable_exporter_retry", false)
-	otelconfig.OTelConfigData.Environment = "PayPal"
+	otelconfig.OTelConfigData.Environment = os.Getenv("ENVIRONMENT")
+	otelconfig.OTelConfigData.AvailabilityZone = os.Getenv("AVAILABILITY_ZONE")
 	otelconfig.OTelConfigData.ResourceType = gAppConfig.StateLogPrefix
+	otelconfig.OTelConfigData.OTelErrorReportingInterval = cdb.GetOrDefaultInt("otel_error_reporting_interval_in_sec", 60)
 	otelconfig.SetOTelIngestToken(cdb.GetOrDefaultString("otel_ingest_token", ""))
 }
 

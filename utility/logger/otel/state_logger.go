@@ -200,7 +200,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 
 	stateLogMetrics.registration, err = stateLogMetrics.meter.RegisterCallback(
 		func(ctx context.Context, observer metric.Observer) error {
-			return stateLogMetrics.asyncStatelogMetricsPoll(ctx, observer)
+			return stateLogMetrics.asyncStateLogMetricsPoll(observer)
 		},
 		[]metric.Observable{
 			stateLogMetrics.initState,
@@ -214,19 +214,6 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 			stateLogMetrics.idleState,
 			stateLogMetrics.bklgState,
 			stateLogMetrics.strdState,
-			//stateLogMetrics.initStateMax,
-			//stateLogMetrics.acptStateMax,
-			//stateLogMetrics.waitStateMax,
-			//stateLogMetrics.busyStateMax,
-			//stateLogMetrics.schdStateMax,
-			//stateLogMetrics.fnshStateMax,
-			//stateLogMetrics.quceStateMax,
-			//stateLogMetrics.asgnStateMax,
-			//stateLogMetrics.idleStateMax,
-			//stateLogMetrics.bklgStateMax,
-			//stateLogMetrics.strdStateMax,
-			//stateLogMetrics.workerReqCount,
-			//stateLogMetrics.workerRespCount,
 		}...)
 
 	if err != nil {
@@ -239,7 +226,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
  * AasyncStatelogMetricsPoll poll operation involved periodically by OTEL collector based-on its polling interval
  * it poll metrics from channel do aggregation or compute max based combination of shardId + workerType + InstanceId
  */
-func (stateLogMetrics *StateLogMetrics) asyncStatelogMetricsPoll(ctx context.Context, observer metric.Observer) (err error) {
+func (stateLogMetrics *StateLogMetrics) asyncStateLogMetricsPoll(observer metric.Observer) (err error) {
 	stateLogMetrics.stateLock.Lock()
 	defer stateLogMetrics.stateLock.Unlock()
 	stateLogsData := make(map[string]map[string]int64)
@@ -286,7 +273,7 @@ mainloop:
 	}
 	//Process metrics data
 	if len(stateLogsData) > 0 {
-		err = stateLogMetrics.sendMetricsDataToCollector(ctx, observer, stateLogsData)
+		err = stateLogMetrics.sendMetricsDataToCollector(observer, stateLogsData)
 	}
 	return err
 }
@@ -294,7 +281,7 @@ mainloop:
 /*
  *  Send metrics datat data-points to collector
  */
-func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(ctx context.Context, observer metric.Observer, stateLogsData map[string]map[string]int64) (err error) {
+func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(observer metric.Observer, stateLogsData map[string]map[string]int64) (err error) {
 	for key, aggStatesData := range stateLogsData {
 		logger.GetLogger().Log(logger.Info, fmt.Sprintf("calculated max value and aggregation of updown counter for key: %s using datapoints size: %d", key, aggStatesData[Datapoints]))
 		commonLabels := []attribute.KeyValue{
@@ -304,6 +291,7 @@ func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(ctx context.C
 		}
 		//Observe states data
 		// 1. Worker States
+
 		observer.ObserveInt64(stateLogMetrics.initState, aggStatesData["init"], metric.WithAttributes(commonLabels...))
 		observer.ObserveInt64(stateLogMetrics.acptState, aggStatesData["acpt"], metric.WithAttributes(commonLabels...))
 		observer.ObserveInt64(stateLogMetrics.waitState, aggStatesData["wait"], metric.WithAttributes(commonLabels...))

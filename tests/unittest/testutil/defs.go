@@ -30,8 +30,8 @@ service:
 const otelCollectorDockerDef = `version: '3.8'
 
 services:
-  otel-collector:
-    container_name: otel-collector
+  otel_basic-collector:
+    container_name: otel_basic-collector
     image: otel/opentelemetry-collector-contrib:latest
     ports:
       - "4317:4317"  #gRPC port

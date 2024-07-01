@@ -12,23 +12,25 @@ var OTelIngestTokenData atomic.Value
 
 // OTelConfig represent configuration related to OTEL collector to export data
 type OTelConfig struct {
-	MetricNamePrefix    string
-	Host                string
-	HttpPort            int
-	GRPCPort            int
-	MetricsURLPath      string
-	TraceURLPath        string
-	Environment         string
-	PoolName            string
-	ResourceType        string
-	Enabled             bool
-	SkipCalStateLog     bool
-	ResolutionTimeInSec int
-	ExporterTimeout     int
-	UseTls              bool
-	TLSCertPath         string
-	UseOtelGRPC         bool
-	EnableRetry         bool
+	MetricNamePrefix           string
+	Host                       string
+	HttpPort                   int
+	GRPCPort                   int
+	MetricsURLPath             string
+	TraceURLPath               string
+	Environment                string
+	AvailabilityZone           string
+	PoolName                   string
+	ResourceType               string
+	Enabled                    bool
+	SkipCalStateLog            bool
+	ResolutionTimeInSec        int
+	ExporterTimeout            int
+	UseTls                     bool
+	TLSCertPath                string
+	UseOtelGRPC                bool
+	OTelErrorReportingInterval int
+	EnableRetry                bool
 }
 
 // Validation function to check whether pool name is configured or not

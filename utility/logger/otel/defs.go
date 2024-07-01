@@ -22,25 +22,6 @@ const (
 	IdleConnCountMetric     = "idle_connection.count"
 	BacklogConnCountMetric  = "backlog_connection.count"
 	StrdConnCountMetric     = "stranded_connection.count"
-
-	//Max value within window
-	InitConnCountMetricMax      = "init_connection.count.max"
-	AccptConnCountMetricMax     = "accept_connection.count.max"
-	WaitConnCountMetricMax      = "wait_connection.count.max"
-	BusyConnCountMetricMax      = "busy_connection.count.max"
-	ScheduledConnCountMetricMax = "scheduled_connection.count.max"
-	FinishedConnCountMetricMax  = "finished_connection.count.max"
-	QuiescedConnCountMetricMax  = "quiesced_connection.count.max"
-
-	// Connection States
-	AssignedConnCountMetricMax = "assigned_connection.count.max"
-	IdleConnCountMetricMax     = "idle_connection.count.max"
-	BacklogConnCountMetricMax  = "backlog_connection.count.max"
-	StrdConnCountMetricMax     = "stranded_connection.count.max"
-
-	//Worker Request Response Count metrics suffix names
-	WorkerRequestCountMetric  = "worker.req.count"
-	WorkerResponseCountMetric = "worker.resp.count"
 )
 
 const (
@@ -56,7 +37,7 @@ const (
 
 const OtelInstrumentationVersion string = "v1.0"
 
-// default OTEL configurations point to QA collector
+// DEFAULT_OTEL_COLLECTOR_PROTOCOL default OTEL configurations point to QA collector
 const DEFAULT_OTEL_COLLECTOR_PROTOCOL string = "grpc"
 const DEFAULT_OTEL_COLLECTOR__IP string = "0.0.0.0"
 const DEFAULT_GRPC_OTEL_COLLECTOR_PORT string = "4317"
@@ -64,6 +45,9 @@ const DEFAULT_HTTP_OTEL_COLLECTOR_PORT string = "4318"
 const COLLECTOR_POLLING_INTERVAL_SECONDS int32 = 5
 
 const StateLogMeterName = "occ-statelog-data"
+
+// LoggingOTELPublishingInterval This controls how frequently log OTEL publishing error
+const LoggingOTELPublishingInterval = 15
 
 //****************************** variables ***************************
 
@@ -124,21 +108,6 @@ type StateLogMetrics struct {
 	idleState metric.Int64ObservableGauge
 	bklgState metric.Int64ObservableGauge
 	strdState metric.Int64ObservableGauge
-
-	/*	initStateMax metric.Int64ObservableGauge
-		acptStateMax metric.Int64ObservableGauge
-		waitStateMax metric.Int64ObservableGauge
-		busyStateMax metric.Int64ObservableGauge
-		schdStateMax metric.Int64ObservableGauge
-		fnshStateMax metric.Int64ObservableGauge
-		quceStateMax metric.Int64ObservableGauge
-		asgnStateMax metric.Int64ObservableGauge
-		idleStateMax metric.Int64ObservableGauge
-		bklgStateMax metric.Int64ObservableGauge
-		strdStateMax metric.Int64ObservableGauge
-
-		workerReqCount  metric.Int64ObservableUpDownCounter
-		workerRespCount metric.Int64ObservableUpDownCounter*/
 }
 
 // Object represents the workers states data for worker belongs to specific shardId and workperType with flat-map
