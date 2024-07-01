@@ -219,44 +219,44 @@ func (sl *StateLog) GetStartTime() int64 {
 func (sl *StateLog) HasActiveWorkerForCutover() bool {
 	//When cutover is enabled, internally we have two shards but we only check the active shard.
 	activeSh := 0
-	if GetConfig().EnableCutover {
-		shdCnt = 1
-		cocfg := GetCutoverCfg()
-		if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
-			activeSh = 0
-		} else if cocfg.Phase == CompletePhStr {
-			activeSh = 1
-		} else if cocfg.Phase == CutoverPhStr {
-			activeSh = ShId2Task
-			if cocfg.ActiveShardId = ShId2TaskCutover {
-				activeSh = int(ShId2TaskCutover)
-			}
-			if cocfg.ActiveShardId = ShIdUnset {
-				return false 
-			}
-		} else {
-			// can't be here
-			return false
-		}
-		
-		rwpool, era := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, activeSh)
-		if era != nil {
-			// wow, is this possible?
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "no RW pool")
-			}
-			return false
-		}
-		if rwpool.GetHealthyWorkersCount() > 0 {
-			return true
-		}
+	cocfg := GetCutoverCfg()
+	if cocfg == nil {
+		return false
+	}
 
-		roPool, erc := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, activeSh)
-		if erc == nil {
-			return roPool.GetHealthyWorkersCount() > 0
+	if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
+		activeSh = 0
+	} else if cocfg.Phase == CompletePhStr {
+		activeSh = 1
+	} else if cocfg.Phase == CutoverPhStr {
+		activeSh = int(ShId2Task)
+		if cocfg.ActiveShardId == ShId2TaskCutover {
+			activeSh = int(ShId2TaskCutover)
 		}
+		if cocfg.ActiveShardId == ShIdUnset {
+			return false
+		}
+	} else {
+		// can't be here
+		return false
+	}
+	rwpool, era := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, activeSh)
+	if era != nil {
+		// wow, is this possible?
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "no RW pool")
+		}
+		return false
+	}
+	if rwpool.GetHealthyWorkersCount() > 0 {
 		return true
 	}
+
+	roPool, erc := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, activeSh)
+	if erc == nil {
+		return roPool.GetHealthyWorkersCount() > 0
+	}
+	return true
 }
 
 // HasActiveWorker is a best effort, without thread locking, telling if at least a worker is active
@@ -378,40 +378,40 @@ func (sl *StateLog) GetWorkerCountForPool(workerState HeraWorkerStatus, shardID 
 // helper for cutover enabled version
 func (sl *StateLog) ProxyHasCapacityForCutover(_wlimit int, _rlimit int) (bool, int) {
 	activeSh := 0
-	if GetConfig().EnableCutover {
-		shdCnt = 1
-		cocfg := GetCutoverCfg()
-		if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
-			activeSh = 0
-		} else if cocfg.Phase == CompletePhStr {
-			activeSh = 1
-		} else if cocfg.Phase == CutoverPhStr {
-			activeSh = ShId2Task
-			if cocfg.ActiveShardId = ShId2TaskCutover {
-				activeSh = int(ShId2TaskCutover)
-			}
-			if cocfg.ActiveShardId = ShIdUnset {
-				return false 
-			}
-		} else {
-			// can't be here
-			return false
+	cocfg := GetCutoverCfg()
+	if cocfg == nil {
+		return false, 0
+	}
+
+	if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
+		activeSh = 0
+	} else if cocfg.Phase == CompletePhStr {
+		activeSh = 1
+	} else if cocfg.Phase == CutoverPhStr {
+		activeSh = int(ShId2Task)
+		if cocfg.ActiveShardId == ShId2TaskCutover {
+			activeSh = int(ShId2TaskCutover)
 		}
-		
+		if cocfg.ActiveShardId == ShIdUnset {
+			return false, 128
+		}
+	} else {
+		// can't be here
+		return false, 0
 	}
 	var wbacklog = 0
 	var rbacklog = 0
 	var readerCnt = 0
-		instCnt := len(sl.mWorkerStates[activeSh][wtypeRW])
-		for n := 0; n < instCnt; n++ {
-			wbacklog += sl.mConnStates[activeSh][wtypeRW][n].perStateCnt[Backlog]
-		}
+	instCnt := len(sl.mWorkerStates[activeSh][wtypeRW])
+	for n := 0; n < instCnt; n++ {
+		wbacklog += sl.mConnStates[activeSh][wtypeRW][n].perStateCnt[Backlog]
+	}
 
-		//logger.GetLogger().Log(logger.Verbose, "proxyhascap wba ", wbacklog, _wlimit)
-		instCnt = len(sl.mWorkerStates[activeSh][wtypeRO])
-		for n := 0; n < instCnt; n++ {
-			readerCnt += len(sl.mWorkerStates[activeSh][wtypeRO][n])
-			rbacklog += sl.mConnStates[activeSh][wtypeRO][n].perStateCnt[Backlog]
+	//logger.GetLogger().Log(logger.Verbose, "proxyhascap wba ", wbacklog, _wlimit)
+	instCnt = len(sl.mWorkerStates[activeSh][wtypeRO])
+	for n := 0; n < instCnt; n++ {
+		readerCnt += len(sl.mWorkerStates[activeSh][wtypeRO][n])
+		rbacklog += sl.mConnStates[activeSh][wtypeRO][n].perStateCnt[Backlog]
 	}
 	return (wbacklog <= _wlimit) && ((rbacklog <= _rlimit) || (readerCnt == 0)), wbacklog + rbacklog
 }
@@ -420,8 +420,8 @@ func (sl *StateLog) ProxyHasCapacityForCutover(_wlimit int, _rlimit int) (bool, 
 // ProxyHasCapacity checks if there is enough capacity
 func (sl *StateLog) ProxyHasCapacity(_wlimit int, _rlimit int) (bool, int) {
 	if GetConfig().EnableCutover {
-		return ProxyHasCapacity(_wlimit, _rlimit)
-	}	
+		return sl.ProxyHasCapacityForCutover(_wlimit, _rlimit)
+	}
 
 	shdCnt := sl.maxShardSize
 	if GetConfig().EnableWhitelistTest {

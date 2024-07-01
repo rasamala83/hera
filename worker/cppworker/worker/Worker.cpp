@@ -740,7 +740,7 @@ void Worker::check_opscfg()
 			log_level = StringUtil::to_int(val);
 		}
 		// just for dev test, remove after development
-		log_level = LOG_DEBUG;
+		//log_level = LOG_DEBUG;
 		if (m_log_level != log_level)
 		{
 			m_log_level = log_level;

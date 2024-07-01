@@ -96,49 +96,59 @@ func Run() {
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
 	tnsnames, err := FindTns()
-	// Rapid cutover is enabled when meeting the following both conditions at start-up
-	// Also, cutover feature is mutually exclusive to sharding and taf.
-	//
-	// 1. TWO_TASK_CUTOVER is defined. e.g. TWO_TASK_CUTOVER=CLOC_CUTOVER
-	// 2. The tns key CLOC_CUTOVER is defined in tnsnames.ora
-	// maybe we should have another condition as master control.
-	// (?) 3. occ.cdb has cutover_enabled = true.
 	GetConfig().EnableCutover = false
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "CP 0 FindTns() failed. Skip checking for cutover enablement", err.Error())
 	} else if tnsnames == nil {
 		logger.GetLogger().Log(logger.Alert, "CP 0 FindTns() return nil")
 	} else {
+		// Enable db rapid cutover if the condition meets the requirement at server start-up
+		// 1. cutover feature can't be enabled if sharding and/or taf are enabled.
+		// 2. env TWO_TASK_CUTOVER is defined. e.g. TWO_TASK_CUTOVER=HERA_CUTOVER
+		// 3. tns key HERA_CUTOVER is defined. (for oracle it's in tnsnames.ora)
 		if !(GetConfig().EnableSharding || GetConfig().EnableTAF) {
 			logicdbId := os.Getenv("TWO_TASK_CUTOVER")
-			if logicdbId != "" {
-
+			if len(logicdbId) > 0 {
 				_, ok := tnsnames[logicdbId]
 				if ok {
-					logger.GetLogger().Log(logger.Alert, "CP 0 Found TWO_TASK_CUTOVER", logicdbId)
 					if GetConfig().ReadonlyPct > 0 { // r/w split enabled
 						rlogicdbId := os.Getenv("TWO_TASK_READ_CUTOVER")
-						_, ok = tnsnames[rlogicdbId]
-						if ok {
-							logger.GetLogger().Log(logger.Alert, "CP 0 found [ TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER ] = [", logicdbId, ",", rlogicdbId, "]")
-						} else {
-							logger.GetLogger().Log(logger.Alert, "CP 0 [ TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER ] = [", logicdbId, ",", rlogicdbId, "] not found")
+						if len(rlogicdbId) == 0 {
+							rlogicdbId = os.Getenv("TWO_TASK_READ_CUTOVER_0")
+						}
+						ok = false
+						if len(rlogicdbId) > 0 {
+							_, ok = tnsnames[rlogicdbId]
+							if !ok {
+								evt := cal.NewCalEvent(EvtTypeCutover, "startup_miss_cutover_read_tns", cal.TransOK, "")
+								evt.Completed()
+								if logger.GetLogger().V(logger.Info) {
+									logger.GetLogger().Log(logger.Info, "[ TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER ] = [", logicdbId, ",", rlogicdbId, "] not found")
+								}
+							}
 						}
 					}
+
 					if ok {
-						GetConfig().EnableCutover = true
 						loadEnvErr := setPermTwoTaskName()
 						if loadEnvErr != nil {
-							evt := cal.NewCalEvent(EvtTypeCutover, "error_init_env", cal.TransOK, loadEnvErr.Error())
+							evt := cal.NewCalEvent(EvtTypeCutover, "startup_envvar_error", cal.TransOK, loadEnvErr.Error())
 							evt.Completed()
+							if logger.GetLogger().V(logger.Info) {
+								logger.GetLogger().Log(logger.Info, "startup incomplete env vars, cutover disabled", loadEnvErr.Error())
+							}
 						} else {
 							GetConfig().EnableCutover = true
-							logger.GetLogger().Log(logger.Alert, "CP 0 enable cutover feature")
 						}
-					} else {
-						logger.GetLogger().Log(logger.Alert, "CP 0 disable cutover feature")
 					}
 				}
+			}
+		}
+		if GetConfig().EnableCutover {
+			evt := cal.NewCalEvent(EvtTypeCutover, "enabled", cal.TransOK, "")
+			evt.Completed()
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "mux starts up - cutover enabled")
 			}
 		}
 	}
@@ -190,8 +200,8 @@ func Run() {
 		time.Sleep(time.Millisecond * 100)
 	}
 
-	// when cutover is enabled, the coordinator doesn't allow any traffic befor loading very first cutover cfg.
-	if GetConfig().ReadonlyPct > 0 {
+	// when cutover is enabled, it can't allow any traffic befor loading very first cutover cfg.
+	if GetConfig().ReadonlyPct > 0 && GetConfig().EnableCutover {
 		rpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, 0)
 		if err != nil {
 			if logger.GetLogger().V(logger.Alert) {
@@ -209,21 +219,22 @@ func Run() {
 		evt.Completed()
 	}
 
-	time.Sleep(time.Second * 2)
-	if GetConfig().EnableCutover {
-		err = InitCutoverCfg(*namePtr)
-		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err)
-			}
-			FullShutdown()
-		}
-	}
 	var lsn Listener
 	if GetConfig().KeyFile != "" {
 		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
 	} else {
 		lsn = NewTCPListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
+	}
+
+	time.Sleep(time.Second * 1)
+	if GetConfig().EnableCutover {
+		err = InitCutoverCfg(*namePtr)
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err.Error())
+			}
+			FullShutdown()
+		}
 	}
 
 	if GetConfig().EnableSharding {
