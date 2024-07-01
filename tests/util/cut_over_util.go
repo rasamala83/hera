@@ -77,6 +77,7 @@ var CutOverCompletePhaseDualRead = "CUT_OVER_COMPLETE_PHASE_DUAL_READ"
 var CutOverPhaseIIIReadOff = "CUT_OVER_PHASE_3_READ_OFF"
 var CutOverCompletePhaseReadOff = "CUT_OVER_COMPLETE_PHASE_READ_OFF"
 var CutOverPhaseIInvalidUniqName = "CUT_OVER_PHASE_1_INVALID_UNIQ_NAME"
+var CutOverPhaseICorrectUniqName = "CUT_OVER_PHASE_1_CORRECT_UNIQ_NAME"
 var CutOverPhaseIInvalidOCCName = "CUT_OVER_PHASE_1_INVALID_OCC_NAME"
 var CutOverPhaseIInvalidPhase = "CUT_OVER_PHASE_1_INVALID_PHASE"
 var CutOverPhaseIInvalidWriteStatus = "CUT_OVER_PHASE_1_INVALID_WRITE"
@@ -210,6 +211,8 @@ func InitialSetup(t *testing.T) []DBStatus {
 		}
 	}
 	dbStatus = LockUnlockUser(t, "unlock", true)
+	GiveRWToPrimary(t)
+	GiveROToSecondary(t)
 	logger.GetLogger().Log(logger.Alert, "********************************")
 	logger.GetLogger().Log(logger.Alert, "END OF INITIAL SETUP")
 	logger.GetLogger().Log(logger.Alert, "********************************")
@@ -626,7 +629,14 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
-
+	case CutOverPhaseICorrectUniqName:
+		GiveROToPrimary(t)
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_ONE', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
+			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_TWO', write_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
 	case CutOverPhaseIInvalidOCCName:
 		GiveROToPrimary(t)
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
@@ -956,13 +966,13 @@ func OCCBinarySetup(t *testing.T, filePath string, filename string) {
 		}
 
 		req.Header.Set("Content-Type", "application/octet-stream")
-		resp, _ := client.Do(req)
+		resp, err := client.Do(req)
 		if resp == nil {
 			if retryCount >= maxRetryCount {
 				t.Fatalf("unable to push the binary to Herabox setup")
 			}
 			retryCount += 1
-			logger.GetLogger().Log(logger.Alert, "sleeping 5 sec before retrying")
+			logger.GetLogger().Log(logger.Alert, "sleeping 5 sec before retrying ", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}

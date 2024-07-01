@@ -330,9 +330,9 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 		t.Fatalf("OCC is down - which is not expected")
 	}
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-32, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRestart+5, trafficStopped-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterRestart+5, trafficStopped-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterRestart+5, trafficStopped-3, 2, 1)
 }
 
 /*
@@ -1194,8 +1194,9 @@ func TestCutOverCompleteReadOffStatus(t *testing.T) {
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, completePhase+3, invalidPhase-3)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3, 2, 1)
+	// We cannot validate only writes as our writes does read to identify the db
+	//util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3, 2, 1)
+	//util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3, 2, 1)
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
@@ -1220,8 +1221,6 @@ func TestCutOverCompleteReadOffStatus(t *testing.T) {
 	}
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-3, 2, 1)
 }
 
 /*

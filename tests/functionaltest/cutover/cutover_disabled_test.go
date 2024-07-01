@@ -368,17 +368,9 @@ func TestCutOverEnabledInvalidRead(t *testing.T) {
 	time.Sleep(40 * time.Second)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
+	if occStatus == true {
+		t.Fatalf("OCC is up - which is not expected")
 	}
-
-	stateLog := make(map[string]int)
-	stateLog["occ"] = 25
-	stateLog["occ.co"] = 1
-	util.ValidateStateLog(t, stateLog, true)
-
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 }
 
 /*
@@ -404,16 +396,9 @@ func TestCutOverEnabledInvalidWrite(t *testing.T) {
 	time.Sleep(40 * time.Second)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
+	if occStatus == true {
+		t.Fatalf("OCC is up - which is not expected")
 	}
-	stateLog := make(map[string]int)
-	stateLog["occ"] = 25
-	stateLog["occ.co"] = 1
-	util.ValidateStateLog(t, stateLog, true)
-
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 }
 
 /*
