@@ -161,7 +161,6 @@ func (broker *WorkerBroker) init() error {
 		broker.poolCfgs[s][wtypeRO] = new(WorkerPoolCfg)
 		broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s)
 		if broker.poolCfgs[s][wtypeRO].maxWorkerCnt > 0 {
-			logger.GetLogger().Log(logger.Info, "shtien RO MaxWorkerCnt", broker.poolCfgs[s][wtypeRO].maxWorkerCnt, "sh=", s)
 			broker.poolCfgs[s][wtypeRO].instCnt = 1
 		}
 
@@ -182,8 +181,8 @@ func (broker *WorkerBroker) init() error {
 				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset // ??
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
+			logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRO].maxWorkerCnt=", broker.poolCfgs[s][wtypeRO].maxWorkerCnt, " s=", s)
 		}
-		logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRO].maxWorkerCnt=",broker.poolCfgs[s][wtypeRO].maxWorkerCnt, " s=", s)
 
 		broker.poolCfgs[s][wtypeRW] = new(WorkerPoolCfg)
 		broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s)

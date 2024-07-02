@@ -637,7 +637,6 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 func (pool *WorkerPool) getActiveWorker() (worker *WorkerClient) {
 	var workerclient *WorkerClient
 	var cnt = pool.activeQ.Len()
-	logger.GetLogger().Log(logger.Debug, "shtien getActiveWorker()", pool.activeQ.Len(), " type ", pool.Type, ", instance:", pool.InstID)
 	for cnt > 0 {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "poolsize (before get)", pool.activeQ.Len(), " type ", pool.Type, ", instance:", pool.InstID)
