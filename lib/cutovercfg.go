@@ -327,7 +327,7 @@ func loadCutoverCfg(db *sql.DB) error {
 		if newcfg.RWstatusByDb[recDbUname] > 0 {
 			active++
 			newcfg.ActiveTwoTask = rec2task
-			if logger.GetLogger().V(logger.Deubg) {
+			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, "rec", i, "active db - two_task", newcfg.ActiveTwoTask, ", RWStatusByDb =", newcfg.RWstatusByDb[newcfg.DbBy2task[rec2task]])
 			}
 
@@ -447,7 +447,7 @@ func loadCutoverCfg(db *sql.DB) error {
 			}
 		}
 		doAbortWorker(nil, &newcfg)
-		setUserRole(nil, &newcfg)
+		setUserRole(&newcfg)
 
 	} else {
 		changed, changedAttr := CheckCfgChange(*precfg, newcfg)
@@ -488,10 +488,10 @@ func loadCutoverCfg(db *sql.DB) error {
 					// workerpool tracks phase, dbuname and enforce integrity at Pre, Cutover
 					if wpool != nil {
 						evtn := fmt.Sprint("err_wpool_", shid, "_", t)
-						evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, initerr.Error())
+						evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, err.Error())
 						evt.Completed()
 						if logger.GetLogger().V(logger.Warning) {
-							logger.GetLogger().Log(logger.Warning, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]", initerr.Error())
+							logger.GetLogger().Log(logger.Warning, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]", err.Error())
 						}
 						tname := g2TaskName
 						if shid == int(ShId2TaskCutover) {
