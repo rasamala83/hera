@@ -488,10 +488,10 @@ func loadCutoverCfg(db *sql.DB) error {
 					// workerpool tracks phase, dbuname and enforce integrity at Pre, Cutover
 					if wpool != nil {
 						evtn := fmt.Sprint("err_wpool_", shid, "_", t)
-						evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, err.Error())
+						evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, "")
 						evt.Completed()
 						if logger.GetLogger().V(logger.Warning) {
-							logger.GetLogger().Log(logger.Warning, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]", err.Error())
+							logger.GetLogger().Log(logger.Warning, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]")
 						}
 						tname := g2TaskName
 						if shid == int(ShId2TaskCutover) {
