@@ -1040,21 +1040,22 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 
 }
 
-// Set checkSetUserRole accordingly.
-// if checkSetUserRole is changed, false->true or true->false, it sends a ctrl msg to all workers
-// the flag will also be passed to future new workers as env variable.
-// 0 do not check-set, 1 check-set
+// cutovercfg calls this function. 0 is disabled, > 1 is enabled
+// if the new enable flag value is different from what workerpool currently has, it sends a ctrl msg to all existing workers
+// The flag will be passed to future new workers as env variable
+// Worker init in progress
 func (pool *WorkerPool) CheckSetUserRole(_enable uint) {
 	if pool.checkSetUserRole == _enable {
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "wpool CheckSetUserRole flag unchanged", pool.phase, pool.dbUname, pool.checkSetUserRole)
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "wpool CheckSetUserRole flag unchanged", pool.phase, pool.dbUname, pool.checkSetUserRole)
 		}
 		return
 	}
 	pool.checkSetUserRole = _enable
-	cnt := 0
+	setflag := pool.checkSetUserRole
 	var workers []*WorkerClient
 	caltxn := cal.NewCalTransaction(EvtTypeCutover, "wpool_set_role", cal.TransOK, "", cal.DefaultTGName)
+	cnt := 0
 	pool.poolCond.L.Lock() // do we need lock? what if a new client pick up a worker
 	for i := 0; i < pool.currentSize; i++ {
 		if pool.workers[i] != nil {
@@ -1062,14 +1063,16 @@ func (pool *WorkerPool) CheckSetUserRole(_enable uint) {
 			cnt++
 		}
 	}
-	pool.poolCond.L.Unlock()
-	setflag := pool.checkSetUserRole
-	for _, w := range workers {
-		if w != nil { // do we need to check this ?
-			logger.GetLogger().Log(logger.Verbose, "CP 50 CheckSetUserRole, pool shid", pool.CoShardID, "worker id", w.ID)
-			w.sendUserRoleMsg(setflag)
-		}
-	}
 	caltxn.Completed()
-	logger.GetLogger().Log(logger.Verbose, "CP 50 end of CheckSetUserRole", pool.phase, pool.dbUname, pool.checkSetUserRole)
+	for _, w := range workers {
+		if w == nil {
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "wpool set user role flag nil worker | shid, co-shid", pool.ShardID, pool.CoShardID, " | worker id", w.ID)
+			}
+			continue
+		}
+		w.sendUserRoleMsg(setflag)
+
+	}
+	pool.poolCond.L.Unlock()
 }
