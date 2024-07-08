@@ -95,56 +95,19 @@ func Run() {
 	//
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
-	tnsnames, err := FindTns()
-	GetConfig().EnableCutover = false
-	if err != nil {
-		logger.GetLogger().Log(logger.Alert, "CP 0 FindTns() failed. Skip checking for cutover enablement", err.Error())
-	} else if tnsnames == nil {
-		logger.GetLogger().Log(logger.Alert, "CP 0 FindTns() return nil")
-	} else {
-		// Enable db rapid cutover if the condition meets the requirement at server start-up
-		// 1. cutover feature can't be enabled if sharding and/or taf are enabled.
-		// 2. env TWO_TASK_CUTOVER is defined. e.g. TWO_TASK_CUTOVER=HERA_CUTOVER
-		// 3. tns key HERA_CUTOVER is defined. (for oracle it's in tnsnames.ora)
-		if !(GetConfig().EnableSharding || GetConfig().EnableTAF) {
-			logicdbId := os.Getenv("TWO_TASK_CUTOVER")
-			if len(logicdbId) > 0 {
-				_, ok := tnsnames[logicdbId]
-				if ok {
-					if GetConfig().ReadonlyPct > 0 { // r/w split enabled
-						rlogicdbId := os.Getenv("TWO_TASK_READ_CUTOVER")
-						if len(rlogicdbId) == 0 {
-							rlogicdbId = os.Getenv("TWO_TASK_READ_CUTOVER_0")
-						}
-						ok = false
-						if len(rlogicdbId) > 0 {
-							_, ok = tnsnames[rlogicdbId]
-							if !ok {
-								evt := cal.NewCalEvent(EvtTypeCutover, "startup_miss_cutover_read_tns", cal.TransOK, "")
-								evt.Completed()
-								if logger.GetLogger().V(logger.Info) {
-									logger.GetLogger().Log(logger.Info, "[ TWO_TASK_CUTOVER, TWO_TASK_READ_CUTOVER ] = [", logicdbId, ",", rlogicdbId, "] not found")
-								}
-							}
-						}
-					}
-
-					if ok {
-						loadEnvErr := setPermTwoTaskName()
-						if loadEnvErr != nil {
-							evt := cal.NewCalEvent(EvtTypeCutover, "startup_envvar_error", cal.TransOK, loadEnvErr.Error())
-							evt.Completed()
-							if logger.GetLogger().V(logger.Info) {
-								logger.GetLogger().Log(logger.Info, "startup incomplete env vars, cutover disabled", loadEnvErr.Error())
-							}
-						} else {
-							GetConfig().EnableCutover = true
-						}
-					}
-				}
+	// enable_cutover is the cdb switch
+	// Later the query to pypl_occ_cutover requires two_task and two_task_cutover key names so quit starting up if any is missing
+	// e.g. TWO_TASK=HERA, TWO_TASK_CUTOVER=HERA_CUTOVER
+	if GetConfig().EnableCutover {
+		loadEnvErr := setPermTwoTaskName()
+		if loadEnvErr != nil {
+			evt := cal.NewCalEvent(EvtTypeCutover, "startup_error", cal.TransOK, loadEnvErr.Error())
+			evt.Completed()
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, loadEnvErr.Error())
 			}
-		}
-		if GetConfig().EnableCutover {
+			FullShutdown()
+		} else {
 			evt := cal.NewCalEvent(EvtTypeCutover, "enabled", cal.TransOK, "")
 			evt.Completed()
 			if logger.GetLogger().V(logger.Info) {
@@ -200,7 +163,7 @@ func Run() {
 		time.Sleep(time.Millisecond * 100)
 	}
 
-	// when cutover is enabled, it can't allow any traffic befor loading very first cutover cfg.
+	// when cutover is enabled, it requires at least one read connection from two_task pool
 	if GetConfig().ReadonlyPct > 0 && GetConfig().EnableCutover {
 		rpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, 0)
 		if err != nil {

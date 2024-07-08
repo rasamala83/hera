@@ -611,13 +611,19 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 				if GetConfig().EnableCutover && len(info) > 1 {
 					flag, err := strconv.Atoi(info[1])
 					if err != nil {
-						logger.GetLogger().Log(logger.Alert, "Can't get valid roleCheck flag")
+						if logger.GetLogger().V(logger.Alert) {
+							logger.GetLogger().Log(logger.Alert, "Can't get valid roleCheck flag")
+						}
+						return fmt.Errorf("cutover enabled but can't get roleCheck flag in control message (%s)", info)
 					} else {
 						logger.GetLogger().Log(logger.Verbose, "worker returned m_set_user_reload", flag)
 						pool, err := GetWorkerBrokerInstance().GetWorkerPool(worker.Type, worker.instID, worker.shardID)
 						if err != nil {
-							logger.GetLogger().Log(logger.Alert, "attachToWorker can't get workerpool")
-							// we need recylce
+							// is this possible?
+							if logger.GetLogger().V(logger.Alert) {
+								logger.GetLogger().Log(logger.Alert, "cutover attachToWorker can't get workerpool")
+							}
+							return fmt.Errorf("cutover enabled but attachToWorker can't get workerpool")
 						}
 
 						if pool.checkSetUserRole != uint(flag) {
@@ -633,7 +639,6 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 							ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
 							worker.workerOOBConn.Write(ns.Serialized)
 						}
-
 					}
 				}
 				break
@@ -654,38 +659,37 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		logger.GetLogger().Log(logger.Info, "Got control message from worker (", worker.ID, ",", worker.pid, ",", worker.racID, ",", worker.dbUname, ")")
 	}
 
-	// if we are at cutover, we need to check pool integrity, but is it here?
+	// At Pre and Cutover phase, enforce pool integrity for the new two_task_cutover workers, only warning to two_task workers.
 	if GetConfig().EnableCutover {
 		coCfg := GetCutoverCfg()
-		if os.Getenv(envTwoTask) == "" {
-			// something wrong
-			logger.GetLogger().Log(logger.Alert, "two_task env is not defined at workerclient start")
-		}
-
 		if coCfg != nil {
 			if coCfg.Phase == PrePhStr || coCfg.Phase == CutoverPhStr {
-				wkr2task := Get2TaskCutoverName()
+				tnsKeyName := Get2TaskCutoverName()
 				if worker.ConnTwoTask == ShId2Task {
-					wkr2task = Get2TaskName()
+					tnsKeyName = Get2TaskName()
 				}
-				cfgDbuname := coCfg.DbBy2task[wkr2task]
-				logger.GetLogger().Log(logger.Info, "check cutovercfg and workerclient integrity: worker two_task", wkr2task, "target dbuname", cfgDbuname)
-				if cfgDbuname != worker.dbUname {
-					if (worker.ConnTwoTask == ShId2TaskCutover) {
-						logger.GetLogger().Log(logger.Alert, "CP 11 target dbuname mismatch in Pre/Cutover phase [", cfgDbuname, "][", worker.dbUname, "]")
-						et := cal.NewCalEvent(EvtTypeCutover, "tgt_new_dbun_mismatch", cal.TransOK, "")
+				cfgDbun := coCfg.DbBy2task[tnsKeyName]
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, "check cutovercfg and workerclient integrity: worker two_task", tnsKeyName, "target dbuname", cfgDbun)
+				}
+				if cfgDbun != worker.dbUname {
+					if worker.ConnTwoTask == ShId2TaskCutover {
+						logger.GetLogger().Log(logger.Alert, "CP 11 target dbuname mismatch in Pre/Cutover phase [", cfgDbun, "][", worker.dbUname, "]")
+						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
+						et := cal.NewCalEvent(EvtTypeCutover, "tgt_new_dbun_mismatch", cal.TransOK, msg)
 						et.Completed()
-						errmsg := fmt.Sprintf("new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %d, %d, %d", cfgDbuname, worker.dbUname, worker.Type, worker.ConnTwoTask)
+						errmsg := fmt.Sprintf("new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %s, %d, %d", cfgDbun, worker.dbUname, worker.Type, worker.ConnTwoTask)
 						return errors.New(errmsg)
 					} else {
-						logger.GetLogger().Log(logger.Alert, "CP 11 source dbuname mismatch in Pre/Cutover phase [", cfgDbuname, "][", worker.dbUname, "]")
-						et := cal.NewCalEvent(EvtTypeCutover, "warn_src_new_dbun_mismatch", cal.TransOK, "")
+						// only warning
+						logger.GetLogger().Log(logger.Alert, "CP 11 source dbuname mismatch in Pre/Cutover phase [", cfgDbun, "][", worker.dbUname, "]")
+						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
+						et := cal.NewCalEvent(EvtTypeCutover, "warn_src_new_dbun_mismatch", cal.TransOK, msg)
 						et.Completed()
 					}
 				}
 			}
 		} else {
-			logger.GetLogger().Log(logger.Alert, "CP 11 workerclient integrity check but GetCutoverCfg() return nil, likely during server startup. Continue without checking")
 			et := cal.NewCalEvent(EvtTypeCutover, "startup_new_dbun_skip", cal.TransOK, "")
 			et.Completed()
 		}

@@ -371,6 +371,11 @@ func InitConfig() error {
 	}
 	// DB Cutover
 	gAppConfig.EnableCutover = cdb.GetOrDefaultBool("enable_cutover", false)
+	if gAppConfig.EnableCutover {
+		if gAppConfig.EnableSharding == true || gAppConfig.EnableTAF == true {
+			gAppConfig.EnableCutover = false
+		}
+	}
 	gAppConfig.CutoverCfgReloadInterval = cdb.GetOrDefaultInt("cutover_cfg_reload_interval", 2)
 
 	var numWorkers int
