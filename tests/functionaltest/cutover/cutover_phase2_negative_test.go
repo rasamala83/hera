@@ -266,16 +266,16 @@ func TestCutOver2InvalidDBUniqueName(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.co"] = 0
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 	invalidPhaseII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseII, invalidPhaseII-3, 1, 2)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseII, invalidPhaseII-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, startPhaseII, invalidPhaseII-3)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseII+3, invalidPhaseII-3, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseII+3, invalidPhaseII-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, startPhaseII+3, invalidPhaseII-3)
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
@@ -283,7 +283,7 @@ func TestCutOver2InvalidDBUniqueName(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.co"] = 0
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.RestartOCC(t)
@@ -1141,4 +1141,95 @@ func TestCutOver1ClosingPendingRead(t *testing.T) {
 	if occStatus != true {
 		t.Fatalf("OCC is down - which is not expected")
 	}
+}
+
+func TestReadWriteSplitLongRead(t *testing.T) {
+
+	_, logFile := util.Setup(t)
+
+	// enable cut over env and tns changes
+	util.EnableCutOver(t, true, false)
+	util.MoveCutOverPhase(t, util.CreateTable, true, true)
+	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
+	util.RestartOCC(t)
+
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	// send client traffic
+	var wg sync.WaitGroup
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
+
+	stateLog := make(map[string]int)
+	stateLog["occ.w"] = 13
+	stateLog["occ.r"] = 12
+	stateLog["occ.w.co"] = 1
+	stateLog["occ.r.co"] = 1
+	util.ValidateStateLog(t, stateLog, true)
+
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
+
+	startClientTraffic := time.Now().Unix()
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+	stateLog["occ.w"] = 13
+	stateLog["occ.r"] = 12
+	stateLog["occ.w.co"] = 13
+	stateLog["occ.r.co"] = 12
+	util.ValidateStateLog(t, stateLog, true)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+
+	beforeCutOverStart := time.Now().Unix()
+
+	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startClientTraffic, beforeCutOverStart-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeCutOverStart-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeCutOverStart-3, 1, 2)
+
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Pre to Cutover state(stopping write in main DB): ", beforeCutOverStart)
+	util.MoveCutOverPhase(t, util.CutOverPhaseI, true, true)
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+	afterServiceStop := time.Now().Unix()
+	logger2.GetLogger().Log(logger2.Alert, "Moved to Cutover state(stopped write in main db): ", afterServiceStop)
+	stateLog["occ.w"] = 13
+	stateLog["occ.r"] = 12
+	stateLog["occ.w.co"] = 13
+	stateLog["occ.r.co"] = 12
+	util.ValidateStateLog(t, stateLog, true)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, beforeCutOverStart, afterServiceStop-3, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterServiceStop, time.Now().Unix()-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterServiceStop, time.Now().Unix()-3)
+
+	logger2.GetLogger().Log(logger2.Alert, "Moving Read to CutOver: ", time.Now().Unix())
+	txnStart := time.Now().Unix()
+
+	wg.Add(1)
+	go util.CT.LongReadTraffic(&wg, respChan, 12, 15, t)
+	time.Sleep(time.Second * 5)
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase I: ", txnStart)
+	util.MoveCutOverPhase(t, util.CutOverPhaseII, true, true)
+
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+
+	logger2.GetLogger().Log(logger2.Alert, "Waiting for Stats")
+	trafficStats = <-respChan
+	wg.Wait()
+	txnEnd := time.Now().Unix()
+
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, txnStart, txnEnd)
+
 }

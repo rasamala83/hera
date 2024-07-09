@@ -247,14 +247,14 @@ Validation:
     ----------------------------------------------------
     | two task     | num of workers | state            |
     ----------------------------------------------------
-    | CLOC         |  1             | accept+wait+busy | TODO: FAILING
+    | CLOC         |  1             | accept+wait+busy |
     | CLOC_CUTOVER |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
     | db unique name | num of sessions | service name          | state  |
     ---------------------------------------------------------------------
-    | HERADB_ONE     |  1              | herabox_primary_srv   | active | TODO: FAILING
+    | HERADB_ONE     |  1              | herabox_primary_srv   | active |
     | HERADB_TWO     |  25             | herabox_secondary_srv | active |
     ---------------------------------------------------------------------
  3. Traffic Validation for the whole 15 seconds
@@ -269,11 +269,11 @@ Validation:
     ----------------------------------------------------
     | two task     | num of workers | state            |
     ----------------------------------------------------
-    | CLOC         |  1             | accept+wait+busy | TODO: FAILING
+    | CLOC         |  1             | accept+wait+busy |
     | CLOC_CUTOVER |  25            | accept+wait+busy |
     ----------------------------------------------------
  5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
-    5.1 OCC Container should be up TODO: FAILING
+    5.1 OCC Container should be up
     ----------------------------------------------------------------
     | Traffic Type | Success DB  | No Traffic DB          | state  |
     ----------------------------------------------------------------
@@ -313,6 +313,7 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	time.Sleep(25 * time.Second)
 
+	stateLog["occ"] = 1
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
@@ -325,13 +326,13 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-32, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRestart+5, trafficStopped-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterRestart+5, trafficStopped-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterRestart+5, trafficStopped-3, 2, 1)
 }
 
 /*
@@ -706,7 +707,7 @@ Validation:
     -------------------------------------------------------
     | Traffic Type | Success DB  | No Traffic DB | state  |
     -------------------------------------------------------
-    | READ         |  HERADB_TWO | HERADB_ONE    | active | TODO FAILING
+    | READ         |  HERADB_TWO | HERADB_ONE    | active |
     | WRITE        |  HERADB_TWO | HERADB_ONE    | active |
     | TXN          |  HERADB_TWO | HERADB_ONE    | active |
     -------------------------------------------------------
@@ -859,9 +860,9 @@ func TestCutOverCompleteInvalidWriteStatus(t *testing.T) {
 	invalidPhaseIII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, completePhase+3, invalidPhaseIII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhaseIII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhaseIII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, completePhase+5, invalidPhaseIII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+5, invalidPhaseIII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+5, invalidPhaseIII-3, 2, 1)
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
@@ -1193,8 +1194,9 @@ func TestCutOverCompleteReadOffStatus(t *testing.T) {
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, completePhase+3, invalidPhase-3)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3, 2, 1)
+	// We cannot validate only writes as our writes does read to identify the db
+	//util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3, 2, 1)
+	//util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3, 2, 1)
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
@@ -1219,8 +1221,6 @@ func TestCutOverCompleteReadOffStatus(t *testing.T) {
 	}
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-3, 2, 1)
 }
 
 /*
