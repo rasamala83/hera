@@ -197,11 +197,11 @@ func TestTTLCacheResponseMetadataUpgradedClientAndServer(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 
-	if testutil.RegexCountFile("Connection handler read.*ClientSupportedProtocolVersions: 2.0", "hera.log") < 1 {
+	if testutil.RegexCountFile("Connection handler read.*ClientSupportedProtocolVersions: 2.0", "hera.log") < 2 {
 		t.Fatalf("Error: expected ClientSupportedProtocolVersions in CLIENT_INFO")
 	}
 
-	if testutil.RegexCountFile("server info:.*ServerSupportedProtocolVersion:2", "hera.log") < 1 {
+	if testutil.RegexCountFile("server info:.*ServerSupportedProtocolVersion:2", "hera.log") < 2 {
 		t.Fatalf("Error: expected to respond with ServerSupportedProtocolVersion")
 	}
 
