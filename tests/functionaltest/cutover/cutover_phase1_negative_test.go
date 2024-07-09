@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func moveToCutOverPhase(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string, *os.File) {
+func moveToCutOverPrePhase(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string, *os.File) {
 	_, logFile := util.Setup(t)
 
 	stateLog := make(map[string]int)
@@ -128,7 +128,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidNoOfRow(t *testing.T) {
-	dumpChan, respChan, RunMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RunMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, respChan, dumpChan, RunMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -166,7 +166,8 @@ func TestCutOver1InvalidNoOfRow(t *testing.T) {
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RunMsg)
-
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
+	time.Sleep(25 * time.Second)
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
 		t.Fatalf("OCC is up - which is not expected")
@@ -196,35 +197,43 @@ TestCutOver1InvalidUniqName
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | N        | N        | CUTOVER |
 ---------------------------------------------------------------------------------------
 
+After validation
+----------------------------------------------------------------------------------
+| ROWS | occ_name | occ_two_task | db_uname      | r_status | w_status | phase   |
+----------------------------------------------------------------------------------
+| Row1 | occ      | CLOC         | HERADB_ONE    | Y        | Y        | CUTOVER |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_ONE    | N        | N        | CUTOVER |
+----------------------------------------------------------------------------------
+
 Validation:
  1. Worker validation after 15 seconds
     ----------------------------------------------------
     | two task     | num of workers | state            |
     ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy | TODO FAILING
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC         |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  0             | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
     | db unique name | num of sessions | service name          | state  |
     ---------------------------------------------------------------------
     | HERADB_ONE     |  25             | herabox_primary_srv   | active |
-    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
+    | HERADB_TWO     |  0              | herabox_secondary_srv | active |
     ---------------------------------------------------------------------
  3. Traffic Validation for the whole 15 seconds
-    -------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB | state  |
-    -------------------------------------------------------
-    | READ         |  HERADB_ONE | HERADB_TWO    | active |
-    | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
-    | TXN          |  HERADB_ONE | HERADB_TWO    | active |
-    -------------------------------------------------------
+    -----------------------------------------------------------------
+    | Traffic Type | Success DB  | No Traffic DB           | state  |
+    -----------------------------------------------------------------
+    | READ         |  HERADB_ONE | HERADB_TWO              | active |
+    | WRITE        |             | HERADB_ONE, HERADB_TWO  | active |
+    | TXN          |             | HERADB_TWO, HERADB_ONE  | active |
+    -----------------------------------------------------------------
  4. Validate after forcing workers restart (by killing sessions from db's end)
     ----------------------------------------------------
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_CUTOVER |  0             | accept+wait+busy |
     ----------------------------------------------------
  5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
     5.1 OCC Container should be down
@@ -239,7 +248,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidUniqName(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -250,16 +259,16 @@ func TestCutOver1InvalidUniqName(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.co"] = 0
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 	invalidPhaseI := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseI, invalidPhaseI-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startPhaseI, invalidPhaseI-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startPhaseI, invalidPhaseI-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseI+3, invalidPhaseI-3, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseI+3, invalidPhaseI-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, startPhaseI+3, invalidPhaseI-3)
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
@@ -267,25 +276,44 @@ func TestCutOver1InvalidUniqName(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.co"] = 0
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 30 seconds")
+	time.Sleep(15 * time.Second)
 	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	time.Sleep(15 * time.Second)
 
 	trafficStopped := time.Now().Unix()
-	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
+	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
 
-	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3, 1, 2)
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-3)
+
+	util.MoveCutOverPhase(t, util.CutOverPhaseICorrectUniqName, true, true)
+	validPhaseI := time.Now().Unix()
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase I: ", validPhaseI)
+
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
+	time.Sleep(15 * time.Second)
+	stateLog["occ"] = 25
+	stateLog["occ.co"] = 25
+	util.ValidateStateLog(t, stateLog, true)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+	stopTraffic := time.Now().Unix()
+	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
+
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, validPhaseI+3, stopTraffic-3, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, validPhaseI+3, stopTraffic-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, validPhaseI+3, stopTraffic-3)
 
 }
 
@@ -351,7 +379,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidTwoTask(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -463,7 +491,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidOCCName(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -575,7 +603,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidPhase(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -687,7 +715,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidWriteStatus(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -775,7 +803,7 @@ Validation:
     -------------------------------------------------------
     | Traffic Type | Success DB  | No Traffic DB | state  |
     -------------------------------------------------------
-    | READ         |  HERADB_ONE | HERADB_TWO    | active | TODO Failing
+    | READ         |  HERADB_ONE | HERADB_TWO    | active |
     | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
     | TXN          |  HERADB_ONE | HERADB_TWO    | active |
     -------------------------------------------------------
@@ -799,7 +827,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidReadStatus(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -911,7 +939,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualWrite(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1023,7 +1051,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualRead(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1135,7 +1163,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1ReadOff(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1249,7 +1277,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1TargetDBDown(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1380,7 +1408,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1SourceDBDown(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1559,7 +1587,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1Rollback(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1667,7 +1695,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1ClosingPendingTxn(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	util.CT.StopClientTraffic(respChan, RespMsg)

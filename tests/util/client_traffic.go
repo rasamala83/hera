@@ -458,13 +458,15 @@ func (ct ClientTraffic) LongTxnTraffic(wg *sync.WaitGroup,
 
 	logger.GetLogger().Log(logger.Alert, "Sending Txn Traffic")
 	n := time.Now().Unix()
+	ct.CreateCounter(n, TXN, CTS)
+	ct.CreateCounter(n, WRITE, CTS)
+	ct.CreateCounter(n, READ, CTS)
 	counter := 0
 	for {
-		counter += 1
 		if counter >= numOfTxn {
 			break
 		}
-		ct.slowReadTraffic(CTS, n, delay)
+		counter += 1
 		txn, err := writeBeginTxn()
 		if err != nil {
 			logger.GetLogger().Log(logger.Alert, "writeBeginTxn failure ", err)
@@ -483,8 +485,7 @@ func (ct ClientTraffic) LongTxnTraffic(wg *sync.WaitGroup,
 	RunMsg <- "Locked"
 	time.Sleep(time.Duration(delay) * time.Second)
 	for _, txn := range dbWriteTrans {
-
-		dbId, err := ct.identifyDBTxn(txn.DBTransaction, txn.DBConnection.context)
+		dbId, err := ct.slowIdentifyDB(txn.DBConnection.conn, txn.DBConnection.context, delay)
 		if err != nil {
 			logger.GetLogger().Log(logger.Alert, "Txn failure ", err)
 			ct.incrementFailure(TXN, dbId, CTS[n].stats, err)

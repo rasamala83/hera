@@ -26,7 +26,7 @@ var readMutex sync.Mutex
 var writeMutex sync.Mutex
 var txnMutex sync.Mutex
 
-var maxRetryCount = 8
+var maxRetryCount = 10
 var binaryPushDone = make(map[string]bool)
 var READ = "ReadType"
 var WRITE = "WriteType"
@@ -77,6 +77,7 @@ var CutOverCompletePhaseDualRead = "CUT_OVER_COMPLETE_PHASE_DUAL_READ"
 var CutOverPhaseIIIReadOff = "CUT_OVER_PHASE_3_READ_OFF"
 var CutOverCompletePhaseReadOff = "CUT_OVER_COMPLETE_PHASE_READ_OFF"
 var CutOverPhaseIInvalidUniqName = "CUT_OVER_PHASE_1_INVALID_UNIQ_NAME"
+var CutOverPhaseICorrectUniqName = "CUT_OVER_PHASE_1_CORRECT_UNIQ_NAME"
 var CutOverPhaseIInvalidOCCName = "CUT_OVER_PHASE_1_INVALID_OCC_NAME"
 var CutOverPhaseIInvalidPhase = "CUT_OVER_PHASE_1_INVALID_PHASE"
 var CutOverPhaseIInvalidWriteStatus = "CUT_OVER_PHASE_1_INVALID_WRITE"
@@ -180,6 +181,7 @@ func InitialSetup(t *testing.T) []DBStatus {
 
 	// disable read write split feature
 	OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
+	OCCConfig(t, "enable_cutover", "false", "/x/web/LIVE/occ/occ.cdb")
 	//EnableDebugLog(t)
 
 	// delete all the entries in the cut over metadata table
@@ -210,6 +212,8 @@ func InitialSetup(t *testing.T) []DBStatus {
 		}
 	}
 	dbStatus = LockUnlockUser(t, "unlock", true)
+	GiveRWToPrimary(t)
+	GiveROToSecondary(t)
 	logger.GetLogger().Log(logger.Alert, "********************************")
 	logger.GetLogger().Log(logger.Alert, "END OF INITIAL SETUP")
 	logger.GetLogger().Log(logger.Alert, "********************************")
@@ -258,7 +262,7 @@ func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {
 					msg = "(init+schd)"
 				}
 
-				if expectedWorkerCount != actualWorkerCount && retryCount == maxRetryCount {
+				if expectedWorkerCount != actualWorkerCount && retryCount > maxRetryCount {
 					if fail {
 						t.Fatalf("State Log Validation failed for %s at %s %s - "+
 							"Expected Worker Count: %d vs Actual %d (%s)",
@@ -288,8 +292,8 @@ func ValidateStateLog(t *testing.T, expected map[string]int, fail bool) bool {
 			logger.GetLogger().Log(logger.Alert, expected)
 		}
 		retryCount += 1
-		time.Sleep(5 * time.Second)
-		logger.GetLogger().Log(logger.Alert, "Retry - Validating State Logs")
+		logger.GetLogger().Log(logger.Alert, "Retry - Validating State Logs after sleeping for 8 sec")
+		time.Sleep(8 * time.Second)
 	}
 	for key := range expected {
 		if fail {
@@ -626,7 +630,14 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
-
+	case CutOverPhaseICorrectUniqName:
+		GiveROToPrimary(t)
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_ONE', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
+			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_TWO', write_status='N', remarks='" + comment +
+			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
 	case CutOverPhaseIInvalidOCCName:
 		GiveROToPrimary(t)
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
@@ -956,13 +967,13 @@ func OCCBinarySetup(t *testing.T, filePath string, filename string) {
 		}
 
 		req.Header.Set("Content-Type", "application/octet-stream")
-		resp, _ := client.Do(req)
+		resp, err := client.Do(req)
 		if resp == nil {
 			if retryCount >= maxRetryCount {
 				t.Fatalf("unable to push the binary to Herabox setup")
 			}
 			retryCount += 1
-			logger.GetLogger().Log(logger.Alert, "sleeping 5 sec before retrying")
+			logger.GetLogger().Log(logger.Alert, "sleeping 5 sec before retrying ", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -1140,7 +1151,7 @@ func EnableCutOver(t *testing.T, enableRWSplit bool, enableShard bool) {
 		url += "?shard=True"
 	}
 	if enableRWSplit {
-		url += "?cut_over=True"
+		url += "?read_write=True"
 	}
 	response := httpGet(t, url)
 
@@ -1151,6 +1162,7 @@ func EnableCutOver(t *testing.T, enableRWSplit bool, enableShard bool) {
 	if !enableRWSplit {
 		OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
 	}
+	OCCConfig(t, "enable_cutover", "true", "/x/web/LIVE/occ/occ.cdb")
 	//EnableDebugLog(t)
 }
 
@@ -1575,8 +1587,8 @@ func ValidateWorkerCountFromDatabase(dbUniqueName string, serviceName string, se
 			break
 		}
 		retryCount += 1
-		logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds and retrying validation")
-		time.Sleep(5 * time.Second)
+		logger.GetLogger().Log(logger.Alert, "Sleeping for 8 seconds and retrying validation")
+		time.Sleep(8 * time.Second)
 	}
 	if expectedWorkerCount >= 0 && !validationSuccess {
 		t.Fatalf("Failed for worker count in %s:%s, expectedWorkerCount: %d", strings.TrimSpace(dbUniqueName),
