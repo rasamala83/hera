@@ -28,11 +28,12 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-// name hera-winky-batch
+
+
+// name hera-winky-batch 
 // state log prefix hera
 func CfgFromTns(name string) {
 	if GetConfig().CfgFromTns == false {
-		logger.GetLogger().Log(logger.Alert, "shtien CfgFromTns disabled") 
 		return
 	}
 
@@ -40,7 +41,7 @@ func CfgFromTns(name string) {
 	rwSuffix := strings.ToUpper(stateLogPrefix)
 
 	baseName := strings.ToUpper(name[len(stateLogPrefix)+1:])
-	idx := strings.Index(baseName, "-")
+	idx := strings.Index(baseName,"-")
 	if idx > 0 {
 		baseName = baseName[0:idx]
 	}
@@ -57,77 +58,67 @@ func CfgFromTns(name string) {
 	tafShards := 0
 	rwShards := 0
 	for {
-		logger.GetLogger().Log(logger.Alert, "shtien FindTns, iterating") 
 		dbName := fmt.Sprintf("%s_SH%d%s", baseName, numShards, twoTaskSuffix)
-		_, ok = tnsEntries[dbName]
+		_,ok = tnsEntries[dbName]
 		if !ok {
 			break
 		}
-		os.Setenv(fmt.Sprintf("TWO_TASK_%d", numShards), dbName)
+		os.Setenv(fmt.Sprintf("TWO_TASK_%d",numShards), dbName)
 
 		dbName = fmt.Sprintf("%s2_SH%d%s", baseName[:len(baseName)-1], numShards, twoTaskSuffix)
-		_, ok = tnsEntries[dbName]
+		_,ok = tnsEntries[dbName]
 		if ok && baseName[len(baseName)-2] == 'R' {
 			tafShards++
-			os.Setenv(fmt.Sprintf("TWO_TASK_STANDBY0_%d", numShards), dbName)
+			os.Setenv(fmt.Sprintf("TWO_TASK_STANDBY0_%d",numShards), dbName)
 		}
 
 		dbName = fmt.Sprintf("%s_%s_SH%d%s", baseName, rwSuffix, numShards, twoTaskSuffix)
-		_, ok = tnsEntries[dbName]
+		_,ok = tnsEntries[dbName]
 		if ok {
 			rwShards++
-			os.Setenv(fmt.Sprintf("TWO_TASK_READ_%d", numShards), dbName)
+			os.Setenv(fmt.Sprintf("TWO_TASK_READ_%d",numShards), dbName)
 		}
 
 		numShards++
 	}
 	if numShards > 0 {
-		GetConfig().NumOfShards = numShards
+		GetConfig().NumOfShards=numShards
 		// shard key must be configured
-		logErr(fmt.Sprintf("numShards=%d taf:%d rw:%d", numShards, tafShards, rwShards))
+		logErr(fmt.Sprintf("numShards=%d taf:%d rw:%d",numShards,tafShards,rwShards))
 
 		if numShards == tafShards {
-			GetConfig().EnableTAF = true
+			GetConfig().EnableTAF=true
 			logErr("sh taf=true")
 		}
 		if numShards == rwShards {
-			GetConfig().ReadonlyPct = 50
+			GetConfig().ReadonlyPct=50
 			logErr("sh rw=true")
 		}
 
 	}
 
-	// rapid cutover doesn't support sharded database.
 	if numShards == 0 {
-		dbName := baseName[:len(baseName)-1] + "2" + twoTaskSuffix
-		_, ok = tnsEntries[dbName] // taf
+		dbName := baseName[:len(baseName)-1]+"2"+twoTaskSuffix
+		_,ok = tnsEntries[dbName] // taf
 		if ok && baseName[len(baseName)-2] == 'R' {
-			GetConfig().EnableTAF = true
+			GetConfig().EnableTAF=true
 			logErr("taf=true")
 			os.Setenv("TWO_TASK_STANDBY0", dbName)
 		}
 
-		dbName = baseName + "_" + rwSuffix + twoTaskSuffix
-		_, ok = tnsEntries[dbName]
+		dbName = baseName+"_"+rwSuffix+twoTaskSuffix
+		_,ok = tnsEntries[dbName]
 		if ok {
 			logErr("rw-split=true")
-			GetConfig().ReadonlyPct = 50
+			GetConfig().ReadonlyPct=50
 			os.Setenv("TWO_TASK_READ", dbName)
 		}
 
-		dbName = baseName + twoTaskSuffix
-		_, ok = tnsEntries[dbName]
+		dbName = baseName+twoTaskSuffix
+		_,ok = tnsEntries[dbName]
 		if ok || "" == os.Getenv("TWO_TASK") {
-			logErr("setting TWO_TASK " + dbName)
+			logErr("setting TWO_TASK "+dbName)
 			os.Setenv("TWO_TASK", dbName)
-		}
-
-		dbName = baseName + "_CUTOVER"
-		_, ok = tnsEntries[dbName]
-		if ok || "" == os.Getenv("TWO_TASK") {
-			GetConfig().EnableCutover = true
-			logErr("enable cutover. setting TWO_TASK_CUTOVER " + dbName)
-			os.Setenv("TWO_TASK_CUTOVER", dbName)
 		}
 	}
 
@@ -147,46 +138,42 @@ func CfgFromTns(name string) {
 
 func logErr(msg string) {
 	//fmt.Println(os.Getpid(), time.Now().Format("20060102-030405"), srcFileNameLine(3), srcFileNameLine(2), "cfgFromTns", msg)
-	if logger.GetLogger().V(logger.Warning) {
-		logger.GetLogger().Log(logger.Warning, "cfgFromTns", msg)
-	}
+        if logger.GetLogger().V(logger.Warning) {
+                logger.GetLogger().Log(logger.Warning, "cfgFromTns", msg)
+        }
 }
 
 func srcFileNameLine(skip int) string {
-	if skip < 0 {
-		var last int
-		for i := 0; i < 111222; i++ {
-			_, _, _, ok := runtime.Caller(i)
-			if !ok {
-				break
-			}
-			last = i
-		}
-		skip = last + skip
-	}
-	_, fn, line, _ := runtime.Caller(skip)
-	pathnames := strings.Split(fn, "/")
+    if skip < 0 {
+        var last int
+        for i:=0; i<111222; i++ {
+            _, _, _, ok := runtime.Caller(i)
+            if !ok { break }
+            last = i
+        }
+        skip = last + skip
+    }
+    _, fn, line, _ := runtime.Caller(skip)
+    pathnames := strings.Split(fn, "/")
 
-	return fmt.Sprintf("%s:%d", pathnames[len(pathnames)-1], line)
+    return fmt.Sprintf("%s:%d",pathnames[len(pathnames)-1],line)
 }
 
 var FindTnsCacheData map[string]string
 var FindTnsCacheTime *time.Time
-
 func FindTns() (map[string]string, error) {
 	now := time.Now()
 	if FindTnsCacheTime != nil && now.Sub(*FindTnsCacheTime) < 10*time.Second {
 		return FindTnsCacheData, nil
 	}
-	tnsEntries, err := loadTns(os.Getenv("TNS_ADMIN") + "/tnsnames.ora")
+	tnsEntries, err := loadTns(os.Getenv("TNS_ADMIN")+"/tnsnames.ora")
 	if err != nil {
 		logErr("now trying ORACLE_HOME tnsnames")
-		tnsEntries, err = loadTns(os.Getenv("ORACLE_HOME") + "/network/admin/tnsnames.ora")
+		tnsEntries, err = loadTns(os.Getenv("ORACLE_HOME")+"/network/admin/tnsnames.ora")
 		if err != nil {
 			logErr(err.Error())
 			return nil, err
 		}
-		logErr("checkpoint 1")
 		FindTnsCacheData = tnsEntries
 		FindTnsCacheTime = &now
 		return tnsEntries, err
@@ -200,7 +187,7 @@ func loadTns(tnsFname string) (map[string]string, error) {
 	out := make(map[string]string)
 	fh, err := os.Open(tnsFname)
 	if err != nil {
-		return nil, err
+		return nil,err
 	}
 	defer fh.Close()
 	scanner := bufio.NewScanner(fh)
@@ -210,20 +197,18 @@ func loadTns(tnsFname string) (map[string]string, error) {
 		line := scanner.Text()
 		if parenCnt == 0 {
 			// try to pick off name
-			idx := strings.Index(line, "=")
-			idx2 := strings.Index(line, "<") // substitution delimiter
+			idx  := strings.Index(line,"=")
+			idx2 := strings.Index(line,"<") // substitution delimiter
 			if idx2 > 0 && idx2 < idx {
 				idx = idx2
 			}
 			if idx > 0 {
-				for ; line[idx-1] == ' '; idx-- {
-				} // trim spaces before =
+				for ;line[idx-1] == ' ';idx-- {} // trim spaces before =
 				name := line[0:idx]
-				logger.GetLogger().Log(logger.Alert, "shtien loadTns", name) 
 				out[name] = line[idx+1:]
 			}
 		}
-		for i := 0; i < len(line); i++ {
+		for i:=0;i<len(line);i++ {
 			if line[i] == '(' {
 				parenCnt++
 			} else if line[i] == ')' {
@@ -235,7 +220,8 @@ func loadTns(tnsFname string) (map[string]string, error) {
 	err = scanner.Err()
 	if err != nil {
 		logErr(err.Error())
-		return nil, err
+		return nil,err
 	}
-	return out, nil
+	return out,nil
 }
+
