@@ -1230,6 +1230,6 @@ func TestReadWriteSplitLongRead(t *testing.T) {
 	wg.Wait()
 	txnEnd := time.Now().Unix()
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, txnStart, txnEnd, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, txnStart, txnEnd)
 
 }

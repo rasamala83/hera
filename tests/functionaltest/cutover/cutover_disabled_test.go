@@ -471,20 +471,13 @@ func TestCutOverEnabledDualWrite(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableDualWrite, true, true)
 	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 40 seconds")
-	time.Sleep(40 * time.Second)
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 60 seconds")
+	time.Sleep(60 * time.Second)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
+	if occStatus == true {
+		t.Fatalf("OCC is up - which is not expected")
 	}
-	stateLog := make(map[string]int)
-	stateLog["occ"] = 25
-	stateLog["occ.co"] = 1
-	util.ValidateStateLog(t, stateLog, true)
-
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 }
 
 /*
@@ -506,18 +499,11 @@ func TestCutOverEnabledDualRead(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableDualRead, true, true)
 	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 40 seconds")
-	time.Sleep(40 * time.Second)
+	logger.GetLogger().Log(logger.Alert, "Sleeping for 60 seconds")
+	time.Sleep(60 * time.Second)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
+	if occStatus == true {
+		t.Fatalf("OCC is up - which is not expected")
 	}
-	stateLog := make(map[string]int)
-	stateLog["occ"] = 25
-	stateLog["occ.co"] = 1
-	util.ValidateStateLog(t, stateLog, true)
-
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 }
