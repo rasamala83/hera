@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-// CacheRecord Cache config record to store the <ManagementTablePrefix>_sql_caching entries
+// CacheRecord represents the <ManagementTablePrefix>_sql_caching record
 type CacheRecord struct {
 	query_id           string
 	sqlHash            uint32
@@ -45,6 +45,7 @@ type CacheRecord struct {
 	module             string
 }
 
+// CacheCfg contains a map of CacheRecords and is used to determine whether a sql is enabled for caching
 type CacheCfg struct {
 	cacheCfgRecords map[uint32]*CacheRecord
 	lock            *sync.Mutex
@@ -53,10 +54,15 @@ type CacheCfg struct {
 var moduleName string
 var gCacheCfg atomic.Value
 
+// getCacheCfgSQL returns the query to load cache cfg.
 func getCacheCfgSQL() string {
-	return fmt.Sprintf("SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'", GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, moduleName)
+	return fmt.Sprintf(
+		"SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'",
+		GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, moduleName,
+	)
 }
 
+// getCacheCfg returns the cache cfg.
 func getCacheCfg() *CacheCfg {
 	cfg := gCacheCfg.Load()
 	if cfg == nil {
@@ -67,6 +73,7 @@ func getCacheCfg() *CacheCfg {
 	return cfg.(*CacheCfg) //Assertion to type case
 }
 
+// loadCacheCfg queries the <ManagementTablePrefix>_sql_caching table and populates the cache cfg.
 func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "Begin loading CacheCfg")
@@ -104,7 +111,10 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 		var rec CacheRecord
 		var bindVariables sql.NullString
 		var invalidationClause sql.NullString
-		err = rows.Scan(&(rec.query_id), &(rec.sqlHash), &(rec.sqlText), &bindVariables, &(rec.ttl), &(rec.enableShadowTest), &(rec.tableName), &invalidationClause, &(rec.cachingEnabled), &(rec.remarks), &(rec.module))
+		err = rows.Scan(
+			&(rec.query_id), &(rec.sqlHash), &(rec.sqlText), &bindVariables, &(rec.ttl), &(rec.enableShadowTest),
+			&(rec.tableName), &invalidationClause, &(rec.cachingEnabled), &(rec.remarks), &(rec.module),
+		)
 		if err != nil {
 			logger.GetLogger().Log(logger.Alert, "Error (rows scan) loading cache config", err)
 			return fmt.Errorf("Error (rows scan) loading cache config: %s", err.Error())
@@ -122,7 +132,13 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 		// To-Do: Any pre-validation checks if required
 		cfgLoad.cacheCfgRecords[rec.sqlHash] = &rec
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("cacheCfgRecords entry: queryId:%s, sqlHash:%d, sqlText:%s, Binds:%s, TTL: %d, enableShadowTest:%s, tableName:%s, invClause:%s, cachingEnabled:%s, remarks:%s, module:%s", rec.query_id, rec.sqlHash, rec.sqlText, rec.binds, rec.ttl, rec.enableShadowTest, rec.tableName, rec.invalidationClause, rec.cachingEnabled, rec.remarks, rec.module))
+			logger.GetLogger().Log(
+				logger.Verbose, fmt.Sprintf(
+					"cacheCfgRecords entry: queryId:%s, sqlHash:%d, sqlText:%s, Binds:%s, TTL: %d, enableShadowTest:%s, tableName:%s, invClause:%s, cachingEnabled:%s, remarks:%s, module:%s",
+					rec.query_id, rec.sqlHash, rec.sqlText, rec.binds, rec.ttl, rec.enableShadowTest, rec.tableName,
+					rec.invalidationClause, rec.cachingEnabled, rec.remarks, rec.module,
+				),
+			)
 		}
 	}
 	logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("Loaded %d sqlhashes, %d cacheCfg entries", len(cfgLoad.cacheCfgRecords), rowCount))
@@ -139,6 +155,8 @@ func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 	return err
 }
 
+// InitCachingCfg tries to load the cache cfg. If it fails after 3 attempts, it gives up. If the initial load is successful,
+// it tries to refresh the cache cfg every CachingCfgReloadInterval seconds.
 func InitCachingCfg(modName string) error {
 	logger.GetLogger().Log(logger.Verbose, "InitCachingCfg for module:", modName)
 	moduleName = modName

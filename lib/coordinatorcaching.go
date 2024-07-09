@@ -21,15 +21,16 @@ import (
 	// "time"
 	"context"
 	"fmt"
-	"strings"
-	"math/rand"
-	"strconv"
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
+	"math/rand"
+	"strconv"
+	"strings"
 )
 
+// getKey is a utility to construct the cache key based on a request
 func getKey(request *netstring.Netstring, corrId string, sqlHash int32) ([]byte, string, error) {
 	var key string
 	if GetConfig().CacheByCorrId {
@@ -71,6 +72,7 @@ func getKey(request *netstring.Netstring, corrId string, sqlHash int32) ([]byte,
 	return keyHash, key, nil
 }
 
+// setRecordToCache tries to write the data to cache
 func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint32, corrId string, sqlHash int32) {
 	cli, _ := GetJunoClient()
 	logger.GetLogger().Log(logger.Verbose, "SET junoClientReady:", cli.junoClientReady)
@@ -110,6 +112,7 @@ func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint
 	}
 }
 
+// getRecordFromCache tries to fetch data from cache. It responds to the client if the lookup is successful. If not, it returns the error.
 func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExit <-chan error, shadowTest bool) error {
 	cli, _ := GetJunoClient()
 	logger.GetLogger().Log(logger.Verbose, "GET junoClientReady:", cli.junoClientReady)
@@ -191,6 +194,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 	}
 }
 
+// doCacheRequest tries to fetch the data from cache. It also monitors the client channel for timeouts, request cancellations.
 func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.Netstring, enableShadowTest bool) error {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator doCacheRequest: starting")
@@ -279,6 +283,7 @@ func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.N
 
 }
 
+// DispatchCachingSession checks if a SQL is enabled for caching. If yes, it tries to GET the record from cache. If not, the request is sent to the database.
 func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, reqType string) (uint32, error) {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for", reqType, ": starting")

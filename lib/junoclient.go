@@ -53,7 +53,9 @@ func GetTLSConfig() *tls.Config {
 		return tlsConfig
 	}
 
-	cert, err := tls.LoadX509KeyPair(path.Join(GetConfig().CacheCertFilePath, "server.crt"), path.Join(GetConfig().CacheCertFilePath, "server.pem"))
+	cert, err := tls.LoadX509KeyPair(
+		path.Join(GetConfig().CacheCertFilePath, "server.crt"), path.Join(GetConfig().CacheCertFilePath, "server.pem"),
+	)
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error in junoclient::GetTLSConfig", err)
 		return nil
@@ -99,16 +101,18 @@ func GetJunoClient() (*JunoClient, error) {
 		mutex.Lock()
 		defer mutex.Unlock()
 		var err error
-		junoclientOnce.Do(func() {
-			gCacheInstance = &JunoClient{}
-			err = gCacheInstance.init() // 10.176.9.146:5080
-			// gCacheInstance, err = InitJunoClient(GetConfig().CacheEndPoint, GetTLSConfig) // 10.176.9.146:5080
-			if err != nil {
-				gCacheInstance = nil
-				logger.GetLogger().Log(logger.Alert, "GetJunoClient failed with error:", err)
-				err = fmt.Errorf("GetJunoClient failed with error: %s", err.Error())
-			}
-		})
+		junoclientOnce.Do(
+			func() {
+				gCacheInstance = &JunoClient{}
+				err = gCacheInstance.init() // 10.176.9.146:5080
+				// gCacheInstance, err = InitJunoClient(GetConfig().CacheEndPoint, GetTLSConfig) // 10.176.9.146:5080
+				if err != nil {
+					gCacheInstance = nil
+					logger.GetLogger().Log(logger.Alert, "GetJunoClient failed with error:", err)
+					err = fmt.Errorf("GetJunoClient failed with error: %s", err.Error())
+				}
+			},
+		)
 		return gCacheInstance, err
 	}
 	return gCacheInstance, nil
@@ -123,7 +127,7 @@ func (cli *JunoClient) init() error {
 		ConnPoolSize:      GetConfig().CacheConnectionPoolSize,
 		ConnectTimeout:    util.Duration{Duration: time.Duration(GetConfig().CacheConnectTimeoutMs) * time.Millisecond},
 		ResponseTimeout:   util.Duration{Duration: time.Duration(GetConfig().CacheResponseTimeoutMs) * time.Millisecond},
-		BypassLTM:   	   GetConfig().CacheBypassLTM,
+		BypassLTM:         GetConfig().CacheBypassLTM,
 		Cal: junocal.Config{
 			// To-do: Move this to config
 			Poolname:   cal.GetCalClientInstance().GetPoolName(),
