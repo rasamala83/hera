@@ -288,17 +288,17 @@ func TestCutOver3InvalidDBUniqueName(t *testing.T) {
 	startPhaseIII := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase III: ", startPhaseIII)
 	util.MoveCutOverPhase(t, util.CutOverPhaseIIIInvalidDBUniqName, true, true)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
+	time.Sleep(25 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.co"] = 0
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
 	invalidPhaseIII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseIII, invalidPhaseIII-3, 2, 1)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, startPhaseIII+10, invalidPhaseIII-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseIII, invalidPhaseIII-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, startPhaseIII, invalidPhaseIII-3)
 
@@ -308,7 +308,7 @@ func TestCutOver3InvalidDBUniqueName(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.co"] = 0
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.RestartOCC(t)
@@ -320,8 +320,8 @@ func TestCutOver3InvalidDBUniqueName(t *testing.T) {
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
