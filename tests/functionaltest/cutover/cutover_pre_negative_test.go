@@ -815,7 +815,7 @@ Validation:
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCutOver1ValidatingRORoleCheck(t *testing.T) {
+func TestCutOverPreValidatingRORoleCheck(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToEnableState(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 	util.MoveCutOverPhase(t, util.CutOverPreInCorrectRole, true, true)
@@ -833,7 +833,7 @@ func TestCutOver1ValidatingRORoleCheck(t *testing.T) {
 	trafficStats := util.CT.StopClientTraffic(respChan, RespMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRoleChange+3, stopTime-3, 1, 2)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRoleChange+3, stopTime-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRoleChange+3, stopTime-3)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterRoleChange+3, stopTime-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterRoleChange+3, stopTime-3, 1, 2)
 
 }
