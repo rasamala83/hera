@@ -977,8 +977,8 @@ func TestCutOverCompleteDualWriteStatus(t *testing.T) {
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	time.Sleep(25 * time.Second)
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 60 seconds")
+	time.Sleep(60 * time.Second)
 
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25

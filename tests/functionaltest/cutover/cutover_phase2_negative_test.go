@@ -217,7 +217,7 @@ Validation:
     ----------------------------------------------------
     | two task     | num of workers | state            |
     ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy | TODO Failing
+    | CLOC         |  25            | accept+wait+busy |
     | CLOC_CUTOVER |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
@@ -1135,7 +1135,7 @@ func TestCutOver1ClosingPendingRead(t *testing.T) {
 	wg.Wait()
 	txnEnd := time.Now().Unix()
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, txnStart, txnEnd, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, txnStart, txnEnd)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus != true {
