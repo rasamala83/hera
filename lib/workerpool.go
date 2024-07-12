@@ -136,8 +136,6 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 // spawnWorker starts a worker and spawn a routine waiting for the "ready" message
 func (pool *WorkerPool) spawnWorker(wid int) error {
 
-	//logger.GetLogger().Log(logger.Alert, "shtien spawnWorker [wid, cutovershardid, pooltype, poolinstId, shardID, pool.moduleName] [",
-	//	wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, "]")
 	worker := NewWorker(wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
 	worker.setState(wsSchd)
@@ -685,11 +683,12 @@ func (pool *WorkerPool) Resize(newSize int) {
 		pool.currentSize = pool.desiredSize
 	} else {
 		// remove the idle/free workers now. workers not free with ID > pool.desiredSize are terminated in ReturnWorker
-		logger.GetLogger().Log(logger.Alert, "shtien pool.desiredSize", pool.desiredSize, "pool shard id", pool.ShardID, "coshard id", pool.CoShardID)
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "pool.desiredSize", pool.desiredSize, "pool shard id", pool.ShardID, "coshard id", pool.CoShardID)
+		}
 		remove := func(item interface{}) bool {
 			worker := item.(*WorkerClient)
 			if worker.ID >= pool.desiredSize {
-				logger.GetLogger().Log(logger.Alert, "shtien pool.desiredSize worker.ID", worker.ID)
 				// run in go routine so it doesn't block
 				go func(w *WorkerClient) {
 					if logger.GetLogger().V(logger.Info) {
@@ -701,8 +700,7 @@ func (pool *WorkerPool) Resize(newSize int) {
 			}
 			return false
 		}
-		rc := pool.activeQ.ForEachRemove(remove)
-		logger.GetLogger().Log(logger.Info, "shtien rc from ForEachRemove()", rc)
+		pool.activeQ.ForEachRemove(remove)
 	}
 }
 
@@ -913,7 +911,6 @@ func (pool *WorkerPool) decBacklogCnt() {
 // COMPLETE phase: apply to only two_task shard
 // What kind of error should we return ?
 func (pool *WorkerPool) enforceIntegrity() {
-	logger.GetLogger().Log(logger.Verbose, "CP 21 invoked")
 	if pool == nil {
 		evt := cal.NewCalEvent(EvtTypeCutover, "wp_nil_dbun_skip", cal.TransOK, "")
 		evt.Completed()
@@ -932,21 +929,22 @@ func (pool *WorkerPool) enforceIntegrity() {
 	var workers []*WorkerClient
 	pool.poolCond.L.Lock()
 	for i := 0; i < pool.currentSize; i++ {
-		logger.GetLogger().Log(logger.Verbose, "CP 21 pool shid", pool.CoShardID, "current size", pool.currentSize)
-
 		if pool.workers[i] != nil {
 			if pool.workers[i].dbUname != pool.dbUname {
-				logger.GetLogger().Log(logger.Verbose, "CP 21 pool shid", pool.CoShardID, "worker id", i, "dbUname", pool.workers[i].dbUname, "not match cutovercfg dbUname", pool.dbUname)
-				//pool.workers[i].exitTime = now // should we set this ?
-				workers = append(workers, pool.workers[i])
-				cnt++
+				if pool.activeQ.Remove(pool.workers[i]) {
+					pool.activeQ.Remove(pool.workers[i])
+					workers = append(workers, pool.workers[i])
+					cnt++
+				}
 			}
 		}
 	}
 	pool.poolCond.L.Unlock()
 	for _, w := range workers {
-		logger.GetLogger().Log(logger.Alert, "CP 21 CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
-			w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
+				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
+		}
 		if warnOnly {
 			//add calevent
 			calname := fmt.Sprintf("warn_diff_dbun_%d_%d_%d", int(pool.CoShardID), int(w.Type), w.instID)
@@ -959,7 +957,9 @@ func (pool *WorkerPool) enforceIntegrity() {
 			w.Terminate()
 		}
 	}
-	logger.GetLogger().Log(logger.Verbose, "CP 21 enforceIntegrity done.", pool.phase, pool.dbUname)
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "enforceIntegrity done.", pool.phase, pool.dbUname)
+	}
 }
 
 // workerpool integrity ensured in ways

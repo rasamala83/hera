@@ -758,7 +758,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		}
 		needBlock, throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage)
-		logger.GetLogger().Log(logger.Verbose, crd.id, "checkpoint 19")
 		if needBlock {
 			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
 				throttleEntry.Name,
@@ -1119,7 +1118,6 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	now := time.Now().UnixNano()
 	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
 	// would this worker be possibly nil ?
-	logger.GetLogger().Log(logger.Verbose, crd.id, "shtien debug")
 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
 
 	if request != nil {

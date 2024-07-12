@@ -583,7 +583,6 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		worker.Terminate()
 		worker.Close()
 	}()
-	logger.GetLogger().Log(logger.Alert, "CP 11")
 
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "Waiting for control message from worker (", worker.ID, ", ", worker.pid, ")")
@@ -598,7 +597,10 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		return fmt.Errorf("Expected control message (%d) instead got (%d)", common.CmdControlMsg, ns.Cmd)
 	}
 	ln := len(ns.Payload)
-	logger.GetLogger().Log(logger.Verbose, "CP 11 attachToWorker worker returned payload", string(ns.Payload))
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "attachToWorker worker returned payload", string(ns.Payload))
+	}
+
 	if ln > 0 {
 		worker.racID = 0
 		// extract rac ID and db uname
