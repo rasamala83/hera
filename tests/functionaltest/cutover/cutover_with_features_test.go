@@ -18,10 +18,7 @@ func TestCutOverWithReadWriteSplit(t *testing.T) {
 	util.EnableCutOver(t, true, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 90)
 
 	// send client traffic
 	var wg sync.WaitGroup

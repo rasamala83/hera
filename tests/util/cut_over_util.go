@@ -189,7 +189,7 @@ func InitialSetup(t *testing.T) []DBStatus {
 	GiveRWToPrimary(t)
 	GiveROToSecondary(t)
 	// restart occ (without restarting docker) to pick the changes
-	RestartOCC(t)
+	RestartOCC(t, 0)
 
 	// prepare db to initial state
 	StartDBService("HERADB_ONE", "herabox_primary_srv", t)
@@ -1033,7 +1033,7 @@ func IsContainerUp(t *testing.T, name string) bool {
 	return false
 }
 
-func RestartOCC(t *testing.T) {
+func RestartOCC(t *testing.T, timeToSleep int) int64 {
 	logger.GetLogger().Log(logger.Alert, "restarting occ")
 	url := "http://" + heraBoxHost + ":8000/occ/restart_occ"
 	response := httpGet(t, url)
@@ -1042,6 +1042,10 @@ func RestartOCC(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
+	logger.GetLogger().Log(logger.Alert, "Sleeping for ", timeToSleep, " seconds")
+	afterRestart := time.Now().Unix()
+	time.Sleep(time.Duration(timeToSleep) * time.Second)
+	return afterRestart
 }
 
 func QueryOracle(t *testing.T, query string, cutOver string, dbaUser string) string {
