@@ -381,21 +381,27 @@ func InitConfig() error {
 	var numWorkers int
 	numWorkers = 6
 	//err = config.InitOpsConfigWithName("../opscfg/hera.txt")
-	logger.GetLogger().Log(logger.Alert, "shtien init opscfg")
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "init opscfg")
+	}
 	err = config.InitOpsConfig()
 	if err != nil {
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Alert, "Error initializing ops config:", err.Error())
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Error initializing ops config:", err.Error())
 		}
 	} else {
-		logger.GetLogger().Log(logger.Alert, "shtien init opscfg proceed")
 		cfg := config.GetOpsConfig()
 		numWorkersOpscfg, err := cfg.GetInt(ConfigMaxWorkers)
 		if err == nil {
 			numWorkers = numWorkersOpscfg
-			logger.GetLogger().Log(logger.Alert, "shtien OpsConfig GetInt(ConfigMaxWorkers)", numWorkersOpscfg)
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "OpsConfig GetInt(ConfigMaxWorkers)", numWorkersOpscfg)
+			}
 		} else {
-			logger.GetLogger().Log(logger.Alert, "shtien OpsConfig GetInt(ConfigMaxWorkers) error", err.Error())
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "OpsConfig GetInt(ConfigMaxWorkers) error", err.Error())
+				return errors.New("error load opscfg MaxWorker")
+			}
 		}
 		// continue on error
 		gOpsConfig = &OpsConfig{

@@ -181,6 +181,7 @@ func InitialSetup(t *testing.T) []DBStatus {
 
 	// disable read write split feature
 	OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
+	OCCConfig(t, "enable_cutover", "false", "/x/web/LIVE/occ/occ.cdb")
 	//EnableDebugLog(t)
 
 	// delete all the entries in the cut over metadata table
@@ -1161,6 +1162,7 @@ func EnableCutOver(t *testing.T, enableRWSplit bool, enableShard bool) {
 	if !enableRWSplit {
 		OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
 	}
+	OCCConfig(t, "enable_cutover", "true", "/x/web/LIVE/occ/occ.cdb")
 	//EnableDebugLog(t)
 }
 
