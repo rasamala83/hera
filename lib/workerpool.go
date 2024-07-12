@@ -700,7 +700,7 @@ func (pool *WorkerPool) Resize(newSize int) {
 			}
 			return false
 		}
-		rc := pool.activeQ.ForEachRemove(remove)
+		pool.activeQ.ForEachRemove(remove)
 	}
 }
 
