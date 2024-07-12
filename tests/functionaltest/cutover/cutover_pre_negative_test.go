@@ -17,10 +17,7 @@ func moveToEnableState(t *testing.T) (chan map[int64]util.ClientTrafficStats, ch
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 90)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
@@ -118,10 +115,7 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
@@ -174,9 +168,7 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterKill+3, afterSourceDBGoesDown-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterKill+3, afterSourceDBGoesDown-3)
 
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 25 seconds")
-	time.Sleep(25 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus = util.IsContainerUp(t, "occ")
 	if occStatus != true {
@@ -277,10 +269,7 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
@@ -441,10 +430,7 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
@@ -475,10 +461,9 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 
 	stateLog["occ"] = 25
 	stateLog["occ.co.not_connected"] = 25
-	util.RestartOCC(t)
+	util.RestartOCC(t, 90)
 	afterRestart := time.Now().Unix()
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 25 seconds")
-	time.Sleep(25 * time.Second)
+
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus != true {
 		t.Fatalf("OCC is down - which is not expected")
@@ -571,10 +556,7 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
@@ -711,10 +693,7 @@ func TestCutOverPreRollback(t *testing.T) {
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
@@ -756,9 +735,7 @@ func TestCutOverPreRollback(t *testing.T) {
 
 	util.ResetOCCDocker(t)
 	util.OCCConfig(t, "readonly_children_pct", "0", "/x/web/LIVE/occ/occ.cdb")
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 60)
 
 	stateLog = make(map[string]int)
 	stateLog["occ"] = 25
@@ -815,7 +792,7 @@ Validation:
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCutOver1ValidatingRORoleCheck(t *testing.T) {
+func TestCutOverPreValidatingRORoleCheck(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToEnableState(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 	util.MoveCutOverPhase(t, util.CutOverPreInCorrectRole, true, true)
@@ -833,7 +810,7 @@ func TestCutOver1ValidatingRORoleCheck(t *testing.T) {
 	trafficStats := util.CT.StopClientTraffic(respChan, RespMsg)
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRoleChange+3, stopTime-3, 1, 2)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRoleChange+3, stopTime-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRoleChange+3, stopTime-3)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterRoleChange+3, stopTime-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterRoleChange+3, stopTime-3, 1, 2)
 
 }

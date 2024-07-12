@@ -90,10 +90,7 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, -1, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 12, t)
@@ -135,9 +132,7 @@ func TestCutOverEnabledTableMissingPrimary(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
 	util.MoveCutOverPhase(t, util.DeleteCutOverTable, true, false)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 30 seconds")
-	time.Sleep(30 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
@@ -170,9 +165,7 @@ func TestCutOverEnabledInvalidNumOfRows(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableInvalidNumRows, true, false)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 30 seconds")
-	time.Sleep(30 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
@@ -204,9 +197,7 @@ func TestCutOverEnabledShardedDataBase(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
 	util.EnableSharding(t)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 30 seconds")
-	time.Sleep(30 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus != true {
@@ -241,9 +232,7 @@ func TestCutOverEnabledWrongOCCName(t *testing.T) {
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableWrongOCC, true, true)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 40 seconds")
-	time.Sleep(40 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
@@ -271,9 +260,7 @@ func TestCutOverEnabledInvalidUniqueID(t *testing.T) {
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableInvalidUniqueName, true, true)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 40 seconds")
-	time.Sleep(40 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus != true {
@@ -307,9 +294,7 @@ func TestCutOverEnabledInvalidTNS(t *testing.T) {
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableInvalidTNS, true, true)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 40 seconds")
-	time.Sleep(40 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
@@ -335,9 +320,7 @@ func TestCutOverEnabledInvalidPhase(t *testing.T) {
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableInvalidPhase, true, true)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 40 seconds")
-	time.Sleep(40 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
@@ -363,9 +346,7 @@ func TestCutOverEnabledInvalidRead(t *testing.T) {
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableInvalidRead, true, true)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 40 seconds")
-	time.Sleep(40 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
@@ -391,9 +372,7 @@ func TestCutOverEnabledInvalidWrite(t *testing.T) {
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableInvalidWrite, true, true)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 40 seconds")
-	time.Sleep(40 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
@@ -426,9 +405,8 @@ func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableWriteNoRead, true, true)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 20 seconds")
-	time.Sleep(20 * time.Second)
+	util.RestartOCC(t, 90)
+
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus != true {
 		t.Fatalf("OCC is Down - which is not expected")
@@ -470,9 +448,7 @@ func TestCutOverEnabledDualWrite(t *testing.T) {
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableDualWrite, true, true)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 60 seconds")
-	time.Sleep(60 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {
@@ -498,9 +474,7 @@ func TestCutOverEnabledDualRead(t *testing.T) {
 	util.EnableCutOver(t, false, true)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnableDualRead, true, true)
-	util.RestartOCC(t)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 60 seconds")
-	time.Sleep(60 * time.Second)
+	util.RestartOCC(t, 90)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus == true {

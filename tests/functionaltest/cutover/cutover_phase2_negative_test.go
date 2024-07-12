@@ -23,10 +23,7 @@ func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, 
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
@@ -175,7 +172,7 @@ func TestCutOver2InvalidNoOfRow(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
+	util.RestartOCC(t, 60)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	afterRestart := time.Now().Unix()
 	time.Sleep(25 * time.Second)
@@ -217,7 +214,7 @@ Validation:
     ----------------------------------------------------
     | two task     | num of workers | state            |
     ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy | TODO Failing
+    | CLOC         |  25            | accept+wait+busy |
     | CLOC_CUTOVER |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
@@ -286,7 +283,7 @@ func TestCutOver2InvalidDBUniqueName(t *testing.T) {
 	stateLog["occ.co"] = 0
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
+	util.RestartOCC(t, 60)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	afterRestart := time.Now().Unix()
 	time.Sleep(25 * time.Second)
@@ -397,7 +394,7 @@ func TestCutOver2InvalidOCCName(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
+	util.RestartOCC(t, 60)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	afterRestart := time.Now().Unix()
 	time.Sleep(25 * time.Second)
@@ -508,7 +505,7 @@ func TestCutOver2InvalidTwoTask(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
+	util.RestartOCC(t, 60)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	afterRestart := time.Now().Unix()
 	time.Sleep(25 * time.Second)
@@ -619,7 +616,7 @@ func TestCutOver2InvalidCutOverPhase(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
+	util.RestartOCC(t, 60)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	afterRestart := time.Now().Unix()
 	time.Sleep(25 * time.Second)
@@ -717,7 +714,7 @@ func TestCutOver2TargetDBDown(t *testing.T) {
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseII+3, invalidPhaseII-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, startPhaseII+3, invalidPhaseII-3)
 
-	util.RestartOCC(t)
+	util.RestartOCC(t, 60)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	afterRestart := time.Now().Unix()
 	time.Sleep(25 * time.Second)
@@ -833,7 +830,7 @@ func TestCutOver2SourceDBDown(t *testing.T) {
 	util.KillSessionAndValidate(t, stateLog, "herabox_primary_srv", false)
 
 	util.ValidateStateLog(t, stateLog, true)
-	util.RestartOCC(t)
+	util.RestartOCC(t, 60)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	afterRestart := time.Now().Unix()
 	time.Sleep(25 * time.Second)
@@ -1135,7 +1132,7 @@ func TestCutOver1ClosingPendingRead(t *testing.T) {
 	wg.Wait()
 	txnEnd := time.Now().Unix()
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, txnStart, txnEnd, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, txnStart, txnEnd)
 
 	occStatus := util.IsContainerUp(t, "occ")
 	if occStatus != true {
@@ -1151,10 +1148,7 @@ func TestReadWriteSplitLongRead(t *testing.T) {
 	util.EnableCutOver(t, true, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 90)
 
 	// send client traffic
 	var wg sync.WaitGroup

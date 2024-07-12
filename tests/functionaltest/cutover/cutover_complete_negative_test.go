@@ -23,10 +23,7 @@ func moveToCutOverPhaseIII(t *testing.T) (chan map[int64]util.ClientTrafficStats
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	util.RestartOCC(t)
-
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
+	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
@@ -205,10 +202,7 @@ func TestCutOverCompleteInvalidNoOfRow(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespChan)
@@ -317,10 +311,7 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -428,10 +419,7 @@ func TestCutOverCompleteInvalidOCCName(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -540,10 +528,7 @@ func TestCutOverCompleteInvalidTwoTask(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -651,10 +636,7 @@ func TestCutOverCompleteInvalidCutOverPhase(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -762,10 +744,7 @@ func TestCutOverCutOverInvalidReadStatus(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -873,10 +852,7 @@ func TestCutOverCompleteInvalidWriteStatus(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -977,17 +953,14 @@ func TestCutOverCompleteDualWriteStatus(t *testing.T) {
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	time.Sleep(25 * time.Second)
+	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 60 seconds")
+	time.Sleep(60 * time.Second)
 
 	stateLog["occ"] = 25
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -1095,10 +1068,7 @@ func TestCutOverCompleteDualReadStatus(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -1207,10 +1177,7 @@ func TestCutOverCompleteReadOffStatus(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -1314,10 +1281,7 @@ func TestCutOverCompleteSourceDBDown(t *testing.T) {
 	stateLog["occ.co"] = 25
 	util.KillSessionAndValidate(t, stateLog, "herabox_primary_srv", true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
@@ -1424,10 +1388,7 @@ func TestCutOverCompleteTargetDBDown(t *testing.T) {
 
 	util.KillSessionAndValidate(t, stateLog, "herabox_secondary_srv", true)
 
-	util.RestartOCC(t)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
-	afterRestart := time.Now().Unix()
-	time.Sleep(25 * time.Second)
+	afterRestart := util.RestartOCC(t, 90)
 
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)

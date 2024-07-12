@@ -186,9 +186,10 @@ func InitialSetup(t *testing.T) []DBStatus {
 
 	// delete all the entries in the cut over metadata table
 	MoveCutOverPhase(t, DeleteCutOverTable, true, true)
-
+	GiveRWToPrimary(t)
+	GiveROToSecondary(t)
 	// restart occ (without restarting docker) to pick the changes
-	RestartOCC(t)
+	RestartOCC(t, 0)
 
 	// prepare db to initial state
 	StartDBService("HERADB_ONE", "herabox_primary_srv", t)
@@ -212,8 +213,10 @@ func InitialSetup(t *testing.T) []DBStatus {
 		}
 	}
 	dbStatus = LockUnlockUser(t, "unlock", true)
-	GiveRWToPrimary(t)
-	GiveROToSecondary(t)
+
+	ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
+	ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
+
 	logger.GetLogger().Log(logger.Alert, "********************************")
 	logger.GetLogger().Log(logger.Alert, "END OF INITIAL SETUP")
 	logger.GetLogger().Log(logger.Alert, "********************************")
@@ -778,7 +781,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		GiveRWToSecondary(t)
 		query := "update pypl_occ_cutover set read_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set read_status='N', wisb_roles='CLOC_RW',, remarks='" + comment +
+			"update pypl_occ_cutover set read_status='N', wisb_roles='CLOC_RW', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -787,7 +790,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		GiveRWToSecondary(t)
 		query := "update pypl_occ_cutover set read_status='Y', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set read_status='Y', wisb_roles='CLOC_RW',, remarks='" + comment +
+			"update pypl_occ_cutover set read_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -796,7 +799,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		GiveRWToSecondary(t)
 		query := "update pypl_occ_cutover set write_status='Y', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set write_status='Y', wisb_roles='CLOC_RW',, remarks='" + comment +
+			"update pypl_occ_cutover set write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -1030,7 +1033,7 @@ func IsContainerUp(t *testing.T, name string) bool {
 	return false
 }
 
-func RestartOCC(t *testing.T) {
+func RestartOCC(t *testing.T, timeToSleep int) int64 {
 	logger.GetLogger().Log(logger.Alert, "restarting occ")
 	url := "http://" + heraBoxHost + ":8000/occ/restart_occ"
 	response := httpGet(t, url)
@@ -1039,6 +1042,10 @@ func RestartOCC(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
+	logger.GetLogger().Log(logger.Alert, "Sleeping for ", timeToSleep, " seconds")
+	afterRestart := time.Now().Unix()
+	time.Sleep(time.Duration(timeToSleep) * time.Second)
+	return afterRestart
 }
 
 func QueryOracle(t *testing.T, query string, cutOver string, dbaUser string) string {
