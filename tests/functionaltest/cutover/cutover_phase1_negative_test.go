@@ -1697,6 +1697,7 @@ func TestCutOver1ClosingPendingTxn(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go util.CT.LongTxnTraffic(&wg, respChan, RespMsg, 10, 15, t)
+	logger2.GetLogger().Log(logger2.Alert, "Main Waiting for Lock ")
 	<-RespMsg
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase I: ", txnStart)
 	util.MoveCutOverPhase(t, util.CutOverPhaseI, true, true)

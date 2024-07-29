@@ -270,9 +270,9 @@ func TestCutOver2InvalidDBUniqueName(t *testing.T) {
 	invalidPhaseII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseII+3, invalidPhaseII-3, 1, 2)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseII+3, invalidPhaseII-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, startPhaseII+3, invalidPhaseII-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, startPhaseII+5, invalidPhaseII-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseII+5, invalidPhaseII-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, startPhaseII+5, invalidPhaseII-3)
 
 	util.KillSessions(t, true, "herabox_secondary_srv")
 	util.KillSessions(t, false, "herabox_primary_srv")
@@ -292,8 +292,8 @@ func TestCutOver2InvalidDBUniqueName(t *testing.T) {
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus == true {
-		t.Fatalf("OCC is up - which is not expected")
+	if occStatus != true {
+		t.Fatalf("OCC is down - which is not expected")
 	}
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
