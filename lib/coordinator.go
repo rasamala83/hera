@@ -1461,7 +1461,8 @@ func (crd *Coordinator) processError(err error) {
 		(err == ErrSaturationKill) ||
 		(err == ErrSaturationSoftSQLEviction) ||
 		(err == ErrCutoverReadNotAllowed) ||
-		(err == ErrCutoverWriteNotAllowed) {
+		(err == ErrCutoverWriteNotAllowed) ||
+		(err == ErrCutoverKill) {
 		ns := netstring.NewNetstringFrom(common.RcError, []byte(err.Error()))
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, crd.id, "error to client", string(ns.Serialized))
