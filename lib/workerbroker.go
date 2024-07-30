@@ -126,7 +126,7 @@ func (broker *WorkerBroker) init() error {
 	MaxWorkerSize, err := config.GetOpsConfig().GetInt(ConfigMaxWorkers)
 	//MaxWorkerSize := 10
 	//var err error = nil
-	
+
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "error loading max_connections from opscfg", err.Error())
 		// continue on error
@@ -468,10 +468,14 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	wW := GetNumWWorkers(0)
 	rW := GetNumRWorkers(0)
 	minSize := 1
-	logger.GetLogger().Log(logger.Verbose, "CP 1 changeMaxWorkers GetNumRWorkers(0) =", rW, "GetNumWWorkers(0)", wW)
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "changeMaxWorkers GetNumRWorkers(0) =", rW, "GetNumWWorkers(0)", wW)
+	}
 
 	if phase == EnablePhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Enable phase")
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Enable phase")
+		}
 		broker.resizePool(wtypeRW, wW, 0)
 		broker.resizePool(wtypeRW, minSize, 1)
 		if rW != 0 {
@@ -482,7 +486,9 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	}
 
 	if phase == PrePhId || phase == CutoverPhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Pre/Cutover")
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Pre/Cutover")
+		}
 		broker.resizePool(wtypeRW, wW, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {
@@ -493,7 +499,9 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	}
 
 	if phase == CompletePhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Complete/Broom phase")
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Complete/Broom phase")
+		}
 		broker.resizePool(wtypeRW, minSize, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {

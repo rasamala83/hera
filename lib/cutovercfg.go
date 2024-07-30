@@ -510,7 +510,7 @@ func loadCutoverCfg(db *sql.DB) error {
 		cfgwkrchange := GetConfig().NumWorkersChW()
 		cfgwkrchange <- validatePhase(newcfg.Phase)
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Verbose, "CP 14 cutovercfg change is processed and updated.")
+			logger.GetLogger().Log(logger.Debug, "cutovercfg change is processed and updated.")
 		}
 	}
 
