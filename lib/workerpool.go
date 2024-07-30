@@ -997,47 +997,63 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 		return
 	}
 
-	logger.GetLogger().Log(logger.Verbose, "CP 29 StopWorker invoked")
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "StopWorker invoked")
+	}
 	cnt := 0
-	var workers []*WorkerClient
-	pool.poolCond.L.Lock()
+	//	var workers []*WorkerClient
+	//	pool.poolCond.L.Lock()
+	stopSql := false
 	for i := 0; i < pool.currentSize; i++ {
-		logger.GetLogger().Log(logger.Verbose, "CP 29 pool shid", pool.CoShardID, "current size", pool.currentSize)
-
+		stopSql = false
 		if pool.workers[i] != nil {
 			if pool.workers[i].Status == wsBusy || pool.workers[i].Status == wsWait {
 				if stopR && stopW {
-					workers = append(workers, pool.workers[i])
-
+					stopSql = true
+					//workers = append(workers, pool.workers[i])
 				} else if stopR && (pool.workers[i].crdIsRead) {
-					workers = append(workers, pool.workers[i])
-
+					stopSql = true
+					//workers = append(workers, pool.workers[i])
 				} else if stopW && (!pool.workers[i].crdIsRead) {
-					workers = append(workers, pool.workers[i])
+					stopSql = true
+					//workers = append(workers, pool.workers[i])
+				}
+
+				if stopSql {
+					select {
+					case pool.workers[i].ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false, cutoverStop: true}:
+					default:
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, "stopR ", stopR, ", stopW", stopW, "w.pid =", pool.workers[i].pid,
+								", worker type =", pool.workers[i].Type, ", inst =", pool.workers[i].instID,
+								"HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
+							logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", pool.workers[i].pid)
+						}
+					}
 				}
 			}
 			cnt++
 		}
 	}
-	pool.poolCond.L.Unlock()
-
-	for _, w := range workers {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "CP 29 stop worker by stopR ", stopR, ", stopW", stopW, "w.pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
-		}
-
-		select {
-		case w.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false, cutoverStop: true}:
-		default:
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", w.pid)
-			}
-		}
+	//pool.poolCond.L.Unlock()
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "cutover stop on-going sql count", cnt)
 	}
 
-	logger.GetLogger().Log(logger.Verbose, "CP 29 end of StopWorker", pool.phase, pool.dbUname)
+	// for _, w := range workers {
+	// 	if logger.GetLogger().V(logger.Alert) {
+	// 		logger.GetLogger().Log(logger.Alert, "stop worker by stopR ", stopR, ", stopW", stopW, "w.pid =",
+	// 			w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
+	// 	}
 
+	// 	select {
+	// 	case w.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false, cutoverStop: true}:
+	// 	default:
+	// 		if logger.GetLogger().V(logger.Warning) {
+	// 			logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", w.pid)
+	// 		}
+	// 	}
+	// }
 }
 
 // cutovercfg calls this function. 0 is disabled, > 1 is enabled

@@ -290,6 +290,11 @@ func (crd *Coordinator) Run() {
 					if logger.GetLogger().V(logger.Verbose) {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "Coordinator sending bind evict err")
 					}
+				} else if msg.cutoverStop {
+					crd.processError(ErrCutoverKill)
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, crd.id, "Coordinator sending cutover stop on-going request err")
+					}
 				} else {
 					crd.processError(ErrSaturationKill)
 				}
@@ -707,9 +712,13 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	ok := false
 	if GetConfig().EnableCutover {
 		if crd.curActDb == nil {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15 cutover may be at init, continue but disable bind eviction")
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, crd.id, "may be at init, cutover is enabled, continue but disable bind eviction")
+			}
 		} else if crd.curActDb.Phase == CutoverPhStr { // diable throttle during cutover
-			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 15 in cutover phase, skip bind eviction")
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, crd.id, "active cutover phase, skip bind eviction")
+			}
 			// TODO: we should also empty the bindevict map
 		} else {
 			// check bind throttle
@@ -827,7 +836,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		} else {
 			// worker nil, sql is write, or is read with disabled rw split
-			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1")
 			if !GetConfig().EnableCutover {
 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
 				if err != nil {
@@ -845,13 +853,19 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					return err
 				}
 			} else {
-				logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 cutover - process write sql, or read without RW split. isRead", crd.isRead)
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, crd.id, "cutover process write sql or read without RW split. isRead", crd.isRead)
+				}
 				var tgtshard ShardByTwoTask
 				if crd.isInternal {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 cutover runs internal query. isRead", crd.isRead)
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover runs internal query. isRead", crd.isRead)
+					}
 					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, ShId2Task, false)
 					if err != nil {
-						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.1 error", err)
+						if logger.GetLogger().V(logger.Info) {
+							logger.GetLogger().Log(logger.Info, crd.id, "cutover getWorkerHelper error", err)
+						}
 						return err
 					}
 
@@ -978,9 +992,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		}
 	}
-	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 19")
 	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
-	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 19 done doRequest")
 
 	if !xShardRead {
 		if wait {
@@ -1413,6 +1425,9 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 					}
 					return false, ErrBindEviction
 				} else if msg.cutoverStop {
+					if logger.GetLogger().V(logger.Debug) {
+						logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker cutover on-going reqeust kill")
+					}
 					return false, ErrCutoverKill
 				} else {
 					return false, ErrSaturationKill
