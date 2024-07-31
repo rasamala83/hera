@@ -136,8 +136,6 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 // spawnWorker starts a worker and spawn a routine waiting for the "ready" message
 func (pool *WorkerPool) spawnWorker(wid int) error {
 
-	//logger.GetLogger().Log(logger.Alert, "shtien spawnWorker [wid, cutovershardid, pooltype, poolinstId, shardID, pool.moduleName] [",
-	//	wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, "]")
 	worker := NewWorker(wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
 	worker.setState(wsSchd)
@@ -685,11 +683,12 @@ func (pool *WorkerPool) Resize(newSize int) {
 		pool.currentSize = pool.desiredSize
 	} else {
 		// remove the idle/free workers now. workers not free with ID > pool.desiredSize are terminated in ReturnWorker
-		logger.GetLogger().Log(logger.Alert, "shtien pool.desiredSize", pool.desiredSize, "pool shard id", pool.ShardID, "coshard id", pool.CoShardID)
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "pool.desiredSize", pool.desiredSize, "pool shard id", pool.ShardID, "coshard id", pool.CoShardID)
+		}
 		remove := func(item interface{}) bool {
 			worker := item.(*WorkerClient)
 			if worker.ID >= pool.desiredSize {
-				logger.GetLogger().Log(logger.Alert, "shtien pool.desiredSize worker.ID", worker.ID)
 				// run in go routine so it doesn't block
 				go func(w *WorkerClient) {
 					if logger.GetLogger().V(logger.Info) {
@@ -701,8 +700,7 @@ func (pool *WorkerPool) Resize(newSize int) {
 			}
 			return false
 		}
-		rc := pool.activeQ.ForEachRemove(remove)
-		logger.GetLogger().Log(logger.Info, "shtien rc from ForEachRemove()", rc)
+		pool.activeQ.ForEachRemove(remove)
 	}
 }
 
@@ -913,7 +911,6 @@ func (pool *WorkerPool) decBacklogCnt() {
 // COMPLETE phase: apply to only two_task shard
 // What kind of error should we return ?
 func (pool *WorkerPool) enforceIntegrity() {
-	logger.GetLogger().Log(logger.Verbose, "CP 21 invoked")
 	if pool == nil {
 		evt := cal.NewCalEvent(EvtTypeCutover, "wp_nil_dbun_skip", cal.TransOK, "")
 		evt.Completed()
@@ -932,21 +929,22 @@ func (pool *WorkerPool) enforceIntegrity() {
 	var workers []*WorkerClient
 	pool.poolCond.L.Lock()
 	for i := 0; i < pool.currentSize; i++ {
-		logger.GetLogger().Log(logger.Verbose, "CP 21 pool shid", pool.CoShardID, "current size", pool.currentSize)
-
 		if pool.workers[i] != nil {
 			if pool.workers[i].dbUname != pool.dbUname {
-				logger.GetLogger().Log(logger.Verbose, "CP 21 pool shid", pool.CoShardID, "worker id", i, "dbUname", pool.workers[i].dbUname, "not match cutovercfg dbUname", pool.dbUname)
-				//pool.workers[i].exitTime = now // should we set this ?
-				workers = append(workers, pool.workers[i])
-				cnt++
+				if pool.activeQ.Remove(pool.workers[i]) {
+					pool.activeQ.Remove(pool.workers[i])
+					workers = append(workers, pool.workers[i])
+					cnt++
+				}
 			}
 		}
 	}
 	pool.poolCond.L.Unlock()
 	for _, w := range workers {
-		logger.GetLogger().Log(logger.Alert, "CP 21 CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
-			w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
+				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
+		}
 		if warnOnly {
 			//add calevent
 			calname := fmt.Sprintf("warn_diff_dbun_%d_%d_%d", int(pool.CoShardID), int(w.Type), w.instID)
@@ -959,7 +957,9 @@ func (pool *WorkerPool) enforceIntegrity() {
 			w.Terminate()
 		}
 	}
-	logger.GetLogger().Log(logger.Verbose, "CP 21 enforceIntegrity done.", pool.phase, pool.dbUname)
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "enforceIntegrity done.", pool.phase, pool.dbUname)
+	}
 }
 
 // workerpool integrity ensured in ways
@@ -997,78 +997,98 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 		return
 	}
 
-	logger.GetLogger().Log(logger.Verbose, "CP 29 StopWorker invoked")
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "StopWorker invoked")
+	}
 	cnt := 0
-	var workers []*WorkerClient
-	pool.poolCond.L.Lock()
+	//	var workers []*WorkerClient
+	//	pool.poolCond.L.Lock()
+	stopSql := false
 	for i := 0; i < pool.currentSize; i++ {
-		logger.GetLogger().Log(logger.Verbose, "CP 29 pool shid", pool.CoShardID, "current size", pool.currentSize)
-
+		stopSql = false
 		if pool.workers[i] != nil {
 			if pool.workers[i].Status == wsBusy || pool.workers[i].Status == wsWait {
 				if stopR && stopW {
-					workers = append(workers, pool.workers[i])
-
+					stopSql = true
+					//workers = append(workers, pool.workers[i])
 				} else if stopR && (pool.workers[i].crdIsRead) {
-					workers = append(workers, pool.workers[i])
-
+					stopSql = true
+					//workers = append(workers, pool.workers[i])
 				} else if stopW && (!pool.workers[i].crdIsRead) {
-					workers = append(workers, pool.workers[i])
+					stopSql = true
+					//workers = append(workers, pool.workers[i])
+				}
+
+				if stopSql {
+					select {
+					case pool.workers[i].ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false, cutoverStop: true}:
+					default:
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, "stopR ", stopR, ", stopW", stopW, "w.pid =", pool.workers[i].pid,
+								", worker type =", pool.workers[i].Type, ", inst =", pool.workers[i].instID,
+								"HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
+							logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", pool.workers[i].pid)
+						}
+					}
 				}
 			}
 			cnt++
 		}
 	}
-	pool.poolCond.L.Unlock()
-
-	for _, w := range workers {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "CP 29 stop worker by stopR ", stopR, ", stopW", stopW, "w.pid =",
-				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
-		}
-
-		select {
-		case w.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false, cutoverStop: true}:
-		default:
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", w.pid)
-			}
-		}
+	//pool.poolCond.L.Unlock()
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "cutover stop on-going sql count", cnt)
 	}
 
-	logger.GetLogger().Log(logger.Verbose, "CP 29 end of StopWorker", pool.phase, pool.dbUname)
+	// for _, w := range workers {
+	// 	if logger.GetLogger().V(logger.Alert) {
+	// 		logger.GetLogger().Log(logger.Alert, "stop worker by stopR ", stopR, ", stopW", stopW, "w.pid =",
+	// 			w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
+	// 	}
 
+	// 	select {
+	// 	case w.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false, cutoverStop: true}:
+	// 	default:
+	// 		if logger.GetLogger().V(logger.Warning) {
+	// 			logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", w.pid)
+	// 		}
+	// 	}
+	// }
 }
 
-// Set checkSetUserRole accordingly.
-// if checkSetUserRole is changed, false->true or true->false, it sends a ctrl msg to all workers
-// the flag will also be passed to future new workers as env variable.
+// cutovercfg calls this function. 0 is disabled, > 1 is enabled
+// if the new enable flag value is different from what workerpool currently has, it sends a ctrl msg to all existing workers
+// The flag will be passed to future new workers as env variable
+// Worker init in progress
 func (pool *WorkerPool) CheckSetUserRole(_enable uint) {
-	if pool.checkSetUserRole != _enable {
-		pool.checkSetUserRole = _enable
-		//notify all workers of this pool;
-		logger.GetLogger().Log(logger.Verbose, "CP 50 CheckSetUserRole", _enable, "pool shid", pool.CoShardID, "current size", pool.currentSize)
-		cnt := 0
-		var workers []*WorkerClient
-		caltxn := cal.NewCalTransaction("CUTOVER", "workerpoolSetRole", cal.TransOK, "", cal.DefaultTGName)
-		pool.poolCond.L.Lock() // do we need lock? what if a new client pick up a worker
-		for i := 0; i < pool.currentSize; i++ {
-			if pool.workers[i] != nil {
-				workers = append(workers, pool.workers[i])
-				cnt++
-			}
+	if pool.checkSetUserRole == _enable {
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "wpool CheckSetUserRole flag unchanged", pool.phase, pool.dbUname, pool.checkSetUserRole)
 		}
-		pool.poolCond.L.Unlock()
-		setflag := pool.checkSetUserRole
-		for _, w := range workers {
-			if w != nil { // do we need to check this ?
-				logger.GetLogger().Log(logger.Verbose, "CP 50 CheckSetUserRole, pool shid", pool.CoShardID, "worker id", w.ID)
-				w.sendUserRoleMsg(setflag)
-			}
-		}
-		caltxn.Completed()
-		logger.GetLogger().Log(logger.Verbose, "CP 50 end of CheckSetUserRole", pool.phase, pool.dbUname, pool.checkSetUserRole)
-	} else {
-		logger.GetLogger().Log(logger.Warning, "CP 50 CheckSetUserRole unchanged", pool.phase, pool.dbUname, pool.checkSetUserRole)
+		return
 	}
+	pool.checkSetUserRole = _enable
+	setflag := pool.checkSetUserRole
+	var workers []*WorkerClient
+	caltxn := cal.NewCalTransaction(EvtTypeCutover, "wpool_set_role", cal.TransOK, "", cal.DefaultTGName)
+	cnt := 0
+	pool.poolCond.L.Lock() // do we need lock? what if a new client pick up a worker
+	for i := 0; i < pool.currentSize; i++ {
+		if pool.workers[i] != nil {
+			workers = append(workers, pool.workers[i])
+			cnt++
+		}
+	}
+	caltxn.Completed()
+	for _, w := range workers {
+		if w == nil {
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "wpool set user role flag nil worker | shid, co-shid", pool.ShardID, pool.CoShardID, " | worker id", w.ID)
+			}
+			continue
+		}
+		w.sendUserRoleMsg(setflag)
+
+	}
+	pool.poolCond.L.Unlock()
 }

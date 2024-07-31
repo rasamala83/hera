@@ -119,7 +119,6 @@ func (broker *WorkerBroker) init() error {
 	/* comment this out as we don't send data during config init for max_connections
 	MaxWorkerSize := <-GetConfig().NumWorkersCh()
 	*/
-	logger.GetLogger().Log(logger.Alert, "checkpoint 4")
 	cfg := config.GetOpsConfig()
 	if cfg == nil {
 		logger.GetLogger().Log(logger.Alert, "GetOpsConfig return nil")
@@ -127,7 +126,7 @@ func (broker *WorkerBroker) init() error {
 	MaxWorkerSize, err := config.GetOpsConfig().GetInt(ConfigMaxWorkers)
 	//MaxWorkerSize := 10
 	//var err error = nil
-	logger.GetLogger().Log(logger.Alert, "checkpoint 5")
+
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "error loading max_connections from opscfg", err.Error())
 		// continue on error
@@ -151,7 +150,9 @@ func (broker *WorkerBroker) init() error {
 	broker.poolCfgs = make([](map[HeraWorkerType]*WorkerPoolCfg), broker.maxShardSize)
 	var workercnt int
 
-	logger.GetLogger().Log(logger.Alert, "shtien MaxShardSize", broker.maxShardSize)
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "MaxShardSize", broker.maxShardSize)
+	}
 	for s := 0; s < broker.maxShardSize; s++ {
 		//
 		// setup broker configuration, inst and worker size can be loaded from cdb
@@ -181,14 +182,17 @@ func (broker *WorkerBroker) init() error {
 				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset // ??
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
-			logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRO].maxWorkerCnt=", broker.poolCfgs[s][wtypeRO].maxWorkerCnt, " s=", s)
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "broker.poolCfgs[s][wtypeRO].maxWorkerCnt=", broker.poolCfgs[s][wtypeRO].maxWorkerCnt, " s=", s)
+			}
 		}
 
 		broker.poolCfgs[s][wtypeRW] = new(WorkerPoolCfg)
 		broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s)
 		broker.poolCfgs[s][wtypeRW].instCnt = 1
-		logger.GetLogger().Log(logger.Info, "shtien RW MaxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt, "sh=", s)
-
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "RW MaxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt, "sh=", s)
+		}
 		if GetConfig().EnableCutover {
 			workercnt := GetNumWWorkers(s)
 			if workercnt == 1 {
@@ -205,8 +209,9 @@ func (broker *WorkerBroker) init() error {
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
 		}
-		logger.GetLogger().Log(logger.Alert, "shtien broker.poolCfgs[s][wtypeRW].maxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt, " s=", s)
-
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "broker.poolCfgs[s][wtypeRW].maxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt, " s=", s)
+		}
 		broker.poolCfgs[s][wtypeStdBy] = new(WorkerPoolCfg)
 		if GetConfig().EnableTAF {
 			broker.poolCfgs[s][wtypeStdBy].maxWorkerCnt = GetNumWWorkers(s)
@@ -222,8 +227,8 @@ func (broker *WorkerBroker) init() error {
 		broker.workerpools[s] = make(map[HeraWorkerType][]*WorkerPool, wtypeTotalCount)
 		for t := 0; t < int(wtypeTotalCount); t++ {
 			poolcfg := broker.poolCfgs[s][HeraWorkerType(t)]
-			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "init pool [sh:", s, "][workercnt", poolcfg.maxWorkerCnt, "][instCnt", poolcfg.instCnt, "][p2t", poolcfg.p2t, "]")
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "init pool [sh:", s, "][workercnt", poolcfg.maxWorkerCnt, "][instCnt", poolcfg.instCnt, "][p2t", poolcfg.p2t, "]")
 			}
 			workercnt += (poolcfg.instCnt * poolcfg.maxWorkerCnt)
 			broker.workerpools[s][HeraWorkerType(t)] = make([]*WorkerPool, poolcfg.instCnt)
@@ -463,10 +468,14 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	wW := GetNumWWorkers(0)
 	rW := GetNumRWorkers(0)
 	minSize := 1
-	logger.GetLogger().Log(logger.Verbose, "CP 1 changeMaxWorkers GetNumRWorkers(0) =", rW, "GetNumWWorkers(0)", wW)
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "changeMaxWorkers GetNumRWorkers(0) =", rW, "GetNumWWorkers(0)", wW)
+	}
 
 	if phase == EnablePhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Enable phase")
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Enable phase")
+		}
 		broker.resizePool(wtypeRW, wW, 0)
 		broker.resizePool(wtypeRW, minSize, 1)
 		if rW != 0 {
@@ -477,7 +486,9 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	}
 
 	if phase == PrePhId || phase == CutoverPhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Pre/Cutover")
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Pre/Cutover")
+		}
 		broker.resizePool(wtypeRW, wW, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {
@@ -488,7 +499,9 @@ func (broker *WorkerBroker) changeMaxWorkers(phase int) {
 	}
 
 	if phase == CompletePhId {
-		logger.GetLogger().Log(logger.Debug, "CP 1 changeMaxWorkers for Complete/Broom phase")
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Complete/Broom phase")
+		}
 		broker.resizePool(wtypeRW, minSize, 0)
 		broker.resizePool(wtypeRW, wW, 1)
 		if rW != 0 {
