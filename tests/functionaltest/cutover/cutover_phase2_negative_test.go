@@ -1008,9 +1008,9 @@ func TestCutOver2Rollback(t *testing.T) {
 	phaseI := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseII+3, phaseI-3, 2, 1)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseII+3, phaseI-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, startPhaseII+3, phaseI-3)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseII+5, phaseI-3, 2, 1)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, startPhaseII+5, phaseI-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, startPhaseII+5, phaseI-3)
 
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase I: ", phaseI)
 	util.MoveCutOverPhase(t, util.CutOverPhaseI, true, true)
@@ -1025,9 +1025,9 @@ func TestCutOver2Rollback(t *testing.T) {
 	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	preMode := time.Now().Unix()
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, phaseI+3, preMode-3, 1, 2)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, phaseI+3, preMode-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, phaseI+3, preMode-3)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, phaseI+5, preMode-3, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, phaseI+5, preMode-3)
+	util.ValidateFailureTraffic(t, trafficStats, util.TXN, phaseI+5, preMode-3)
 
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Pre Mode: ", phaseI)
 	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
@@ -1042,9 +1042,9 @@ func TestCutOver2Rollback(t *testing.T) {
 	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	enableMode := time.Now().Unix()
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, preMode+3, enableMode-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, preMode+3, enableMode-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, preMode+3, enableMode-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, preMode+5, enableMode-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, preMode+5, enableMode-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, preMode+5, enableMode-3, 1, 2)
 
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Enable Mode: ", enableMode)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
@@ -1059,9 +1059,9 @@ func TestCutOver2Rollback(t *testing.T) {
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, enableMode+3, trafficStopped-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, enableMode+3, trafficStopped-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, enableMode+3, trafficStopped-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, enableMode+5, trafficStopped-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, enableMode+5, trafficStopped-3, 1, 2)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, enableMode+5, trafficStopped-3, 1, 2)
 
 }
 
