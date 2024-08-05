@@ -150,7 +150,9 @@ func InitCutoverCfg(modulename string) error {
 						logger.GetLogger().Log(logger.Warning, "error: reload loadCutoverCfg()", err.Error())
 					}
 				} else {
-					logger.GetLogger().Log(logger.Info, "successful reload loadCutoverCfg()", "")
+					if logger.GetLogger().V(logger.Info) {
+						logger.GetLogger().Log(logger.Info, "successful reload cutovercfg")
+					}
 				}
 			}
 		}
@@ -759,6 +761,11 @@ func isCfgSame(s1 string, s2 string) bool {
 	return same
 }
 
+// Precedence: 1st -> 2nd
+// TWO_TASK_0 -> TWO_TASK
+// TWO_TASK_CUTOVER_0 -> TWO_TASK_CUTOVER
+// TWO_TASK_READ_0 -> TWO_TASK_READ
+// TWO_TASK_READ_CUTOVER_0 -> TWO_TASK_READ_CUTOVER
 func setPermTwoTaskName() error {
 	g2TaskName = strings.ToUpper(os.Getenv("TWO_TASK_0"))
 	if g2TaskName == "" {
@@ -770,7 +777,7 @@ func setPermTwoTaskName() error {
 	}
 
 	if g2TaskName == "" || g2TaskCutoverName == "" {
-		return fmt.Errorf("error incomplete cutover env setup [%s] [%s]", g2TaskName, g2TaskRCutoverName)
+		return fmt.Errorf("error incomplete cutover env setup [%s] [%s]", g2TaskName, g2TaskCutoverName)
 	}
 
 	if GetConfig().ReadonlyPct > 0 {
@@ -784,7 +791,7 @@ func setPermTwoTaskName() error {
 		}
 		if g2TaskRCutoverName == "" || g2TaskCutoverName == "" {
 			// can't proceed
-			return fmt.Errorf("error incomplete cutover env setup [%s] [%s]", g2TaskRName, g2TaskRCutoverName)
+			return fmt.Errorf("error incomplete read-only utover env setup [%s] [%s]", g2TaskRName, g2TaskRCutoverName)
 		}
 	}
 	return nil
