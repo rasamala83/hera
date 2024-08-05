@@ -430,13 +430,20 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 					}
 				} else if GetConfig().EnableCutover {
 					hangup, err := crd.PreprocessCutover(nss) // to populate the cutover needed info, cutovershard and dbuname. dbuname checked each txn
-					if crd.curActDb != nil {
-						logger.GetLogger().Log(logger.Alert, "PreprocessCutover done active (ShId, dbUname, phase, rwstatus)=(",
-							crd.curActDb.ShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, ")")
-					} else {
+					if crd.curActDb == nil {
 						//this is wrong - why ? how it got nothing , only happen during init? and what to proceed.
-						logger.GetLogger().Log(logger.Alert, "crd.curActInfo is nil! This shoudn't happen, hang up on client")
-						hangup = true
+						if !crd.isInternal {
+							if logger.GetLogger().V(logger.Debug) {
+								logger.GetLogger().Log(logger.Debug, "crd.curActInfo is nil! This shoudn't happen, hang up on client")
+							}
+							hangup = true
+							handled = true
+							crd.conn.Close()
+						} else {
+							if logger.GetLogger().V(logger.Info) {
+								logger.GetLogger().Log(logger.Info, "internal query has default target but crd.curActInfo is nil")
+							}
+						}
 					}
 					if err != nil {
 						handled = true

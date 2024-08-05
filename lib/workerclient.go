@@ -532,8 +532,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	evt := cal.NewCalEvent(EvtTypeMux, buf.String(), cal.TransOK, "")
 	evt.Completed()
 
-	logger.GetLogger().Log(logger.Alert, "CP 12")
-
 	// TODO: change to use "exec"
 	pid, er := syscall.ForkExec(workerPath, argv, &attr)
 	syscall.Close(socketPair[1])

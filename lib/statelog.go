@@ -659,7 +659,7 @@ func (sl *StateLog) init() error {
 			var suffix string
 			if GetConfig().EnableCutover {
 				if s == int(ShId2TaskCutover) {
-					suffix = ".co"
+					suffix = ".live1"
 				}
 			} else {
 				suffix = ".sh" + strconv.Itoa(s)
