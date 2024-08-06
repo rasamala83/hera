@@ -1004,6 +1004,7 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 	//	var workers []*WorkerClient
 	//	pool.poolCond.L.Lock()
 	stopSql := false
+	stopCnt := 0
 	for i := 0; i < pool.currentSize; i++ {
 		stopSql = false
 		if pool.workers[i] != nil {
@@ -1030,6 +1031,7 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 							logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", pool.workers[i].pid)
 						}
 					}
+					stopCnt++
 				}
 			}
 			cnt++
@@ -1037,7 +1039,7 @@ func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
 	}
 	//pool.poolCond.L.Unlock()
 	if logger.GetLogger().V(logger.Info) {
-		logger.GetLogger().Log(logger.Info, "cutover stop on-going sql count", cnt)
+		logger.GetLogger().Log(logger.Info, "cutover stop on-going sql stopped, total count", stopCnt, cnt)
 	}
 
 	// for _, w := range workers {

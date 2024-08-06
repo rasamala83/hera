@@ -111,18 +111,31 @@ hang up conditions
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
 
 	if GetCutoverCfg() == nil {
-		logger.GetLogger().Log(logger.Alert, crd.id, "PreprocessCutover at init")
-		return true, nil
+		if !crd.isInternal {
+			evt := cal.NewCalEvent(EvtTypeCutover, "preproc_cfg_nil_startup", cal.TransOK, "")
+			evt.Completed()
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, crd.id, "cutovercfg is nil, likely at server start up")
+			}
+			return true, nil
+		}
+		// ok for internal queries all go to two_task pool. would this a problem to sql blocker, racmaint?
+		return false, nil // return true for debug, set to false afterward. 
 	}
 
 	if crd.curActDb == nil {
-		logger.GetLogger().Log(logger.Alert, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
+		}
 	}
 
 	interrupt := false // if txn should be disrupted
 	newActInfo := cvtActiveInfo(GetCutoverCfg())
 	if newActInfo == nil {
-		logger.GetLogger().Log(logger.Alert, crd.id, "shtien PreprocessCutover no new activeInfo, treat as no diff")
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "PreprocessCutover no new activeInfo, no change. Active [ShId, dbUname, phase, rwstatus]=[",
+				crd.curActDb.ShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
+		}
 		return interrupt, nil
 	}
 
