@@ -162,7 +162,7 @@ func InitCutoverCfg(modulename string) error {
 
 // Get the SQL used to read the cutover configuration.
 func getCutoverSQL() string {
-	sqltxt := fmt.Sprintf("select occ_name, dbuname, occ_two_task, cutover_phase, write_status, read_status, wisb_roles from %s_cutover where occ_name = '%s' and occ_two_task IN ('%s', '%s')",
+	sqltxt := fmt.Sprintf("select occ_name, db_unique_name, occ_two_task, cutover_phase, write_status, read_status, wisb_roles from %s_cutover where occ_name = '%s' and occ_two_task IN ('%s', '%s')",
 		GetConfig().ManagementTablePrefix,
 		//GetConfig().CutoverPostfix, // why do we need postfix for table name ?
 		gModuleName,
