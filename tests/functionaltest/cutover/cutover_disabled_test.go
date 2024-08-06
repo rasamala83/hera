@@ -97,7 +97,7 @@ func TestCutOverEnabledPrimaryDBDown(t *testing.T) {
 
 	// TODO validate main DB failure ORA error
 	// TODO validate listener is not enabled for traffic
-	stateLog["occ.co"] = 12
+	stateLog["occ.live1"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 
 	occStatus := util.IsContainerUp(t, "occ")
@@ -268,7 +268,7 @@ func TestCutOverEnabledInvalidUniqueID(t *testing.T) {
 	}
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 1
+	stateLog["occ.live1"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
@@ -423,7 +423,7 @@ func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 1
+	stateLog["occ.live1"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
