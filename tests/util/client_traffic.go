@@ -463,6 +463,7 @@ func (ct ClientTraffic) LongTxnTraffic(wg *sync.WaitGroup,
 	ct.CreateCounter(n, READ, CTS)
 	counter := 0
 	for {
+		logger.GetLogger().Log(logger.Alert, "counter ", counter)
 		if counter >= numOfTxn {
 			break
 		}
@@ -484,21 +485,31 @@ func (ct ClientTraffic) LongTxnTraffic(wg *sync.WaitGroup,
 	logger.GetLogger().Log(logger.Alert, "locked ", delay)
 	RunMsg <- "Locked"
 	time.Sleep(time.Duration(delay) * time.Second)
+	logger.GetLogger().Log(logger.Alert, "Running Slow Query with delay ", delay)
+	var wg1 sync.WaitGroup
 	for _, txn := range dbWriteTrans {
-		dbId, err := ct.slowIdentifyDB(txn.DBConnection.conn, txn.DBConnection.context, delay)
-		if err != nil {
-			logger.GetLogger().Log(logger.Alert, "Txn failure ", err)
-			ct.incrementFailure(TXN, dbId, CTS[n].stats, err)
-		} else {
-			ct.incrementSuccess(TXN, dbId, CTS[n].stats)
-		}
-		rollbackTxn(txn)
+
+		wg1.Add(1)
+		txn := txn
+		go func() {
+			defer wg1.Done()
+			logger.GetLogger().Log(logger.Alert, "slow query")
+			dbId, err := ct.slowIdentifyDB(txn.DBConnection.conn, txn.DBConnection.context, delay)
+			if err != nil {
+				logger.GetLogger().Log(logger.Alert, "Txn failure ", err)
+				ct.incrementFailure(TXN, dbId, CTS[n].stats, err)
+			} else {
+				ct.incrementSuccess(TXN, dbId, CTS[n].stats)
+			}
+		}()
 	}
+
+	logger.GetLogger().Log(logger.Alert, "waiting to finish the job")
+	wg1.Wait()
 
 	for _, dbTxn := range dbWriteTrans {
 		rollbackTxn(dbTxn)
 	}
-
 	CTChan <- CTS
 }
 
