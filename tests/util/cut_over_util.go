@@ -357,7 +357,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 	case CreateTable:
 		query := "create table pypl_occ_cutover" +
-			"(  dbuname varchar2(50) not null," +
+			"(  db_unique_name varchar2(50) not null," +
 			"   occ_name varchar2(50) not null," +
 			"   occ_two_task varchar2(30) not null," +
 			"   read_status char(1) not null," +
@@ -371,10 +371,10 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 			")"
 		execute(t, query, primary, secondary, false, "True")
 
-		query = "create unique index pypl_occ_cutover_pk on pypl_occ_cutover(dbuname,occ_name,occ_two_task)"
+		query = "create unique index pypl_occ_cutover_pk on pypl_occ_cutover(db_unique_name,occ_name,occ_two_task)"
 		execute(t, query, primary, secondary, false, "True")
 
-		query = "create index pypl_occ_cutover_dbun_idx on pypl_occ_cutover(dbuname)"
+		query = "create index pypl_occ_cutover_dbun_idx on pypl_occ_cutover(db_unique_name)"
 		execute(t, query, primary, secondary, false, "True")
 
 		query = "create index pypl_occ_cutover_occname_idx on pypl_occ_cutover(occ_name)"
@@ -407,9 +407,9 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 	case CutOverPre:
 		GiveRWToPrimary(t)
 		query := "update pypl_occ_cutover set cutover_phase='PRE', remarks='" + comment +
-			"', wisb_roles='CLOC_RW' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
+			"', wisb_roles='CLOC_RW' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='PRE', remarks='" + comment +
-			"' where dbuname='HERADB_TWO' and occ_name='occ'\\n"
+			"' where db_unique_name='HERADB_TWO' and occ_name='occ'\\n"
 		execute(t, query, primary, secondary, false, "False")
 
 		break
@@ -417,27 +417,27 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 	case CutOverPhaseI:
 		GiveROToPrimary(t)
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='Y', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
-			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
+			"' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='N', write_status='N', remarks='" + comment +
-			"' where dbuname='HERADB_TWO' and occ_name='occ'"
+			"' where db_unique_name='HERADB_TWO' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPhaseII:
 		GiveROToSecondary(t)
 		query := "update pypl_occ_cutover set write_status='N', read_status='N', remarks='" + comment +
-			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
+			"' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set write_status='N', read_status='Y', wisb_roles='CLOC_RO', remarks='" + comment +
-			"' where dbuname='HERADB_TWO' and occ_name='occ'"
+			"' where db_unique_name='HERADB_TWO' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPhaseIII:
 		GiveRWToSecondary(t)
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where dbuname='HERADB_TWO' and occ_name='occ';\\n" +
+			"' where db_unique_name='HERADB_TWO' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
-			"' where dbuname='HERADB_ONE' and occ_name='occ'"
+			"' where db_unique_name='HERADB_ONE' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -455,9 +455,9 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 	case CutOverPhaseIIIWithoutRole:
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where dbuname='HERADB_TWO' and occ_name='occ';\\n" +
+			"' where db_unique_name='HERADB_TWO' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', remarks='" + comment +
-			"' where dbuname='HERADB_ONE' and occ_name='occ'"
+			"' where db_unique_name='HERADB_ONE' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -620,24 +620,24 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 	case CutOverPhaseIInvalidRowCount:
 		GiveROToPrimary(t)
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
-			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
-			"delete from pypl_occ_cutover where dbuname='HERADB_TWO' and occ_name='occ'"
+			"' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
+			"delete from pypl_occ_cutover where db_unique_name='HERADB_TWO' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPhaseIInvalidUniqName:
 		GiveROToPrimary(t)
-		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_ONE_INVALID', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_ONE_INVALID', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_TWO_INVALID', write_status='N', remarks='" + comment +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_TWO_INVALID', write_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 	case CutOverPhaseICorrectUniqName:
 		GiveROToPrimary(t)
-		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_ONE', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_ONE', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_TWO', write_status='N', remarks='" + comment +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_TWO', write_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -714,15 +714,15 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 	case CutOverPhaseIIInvalidRowCount:
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='N', remarks='" + comment +
-			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
-			"delete from pypl_occ_cutover where dbuname='HERADB_TWO' and occ_name='occ'"
+			"' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
+			"delete from pypl_occ_cutover where db_unique_name='HERADB_TWO' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPhaseIIInvalidDBUniqName:
-		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_ONE_INVALID', read_status='N', remarks='" + comment +
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_ONE_INVALID', read_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_TWO_INVALID', read_status='Y', remarks='" + comment +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_TWO_INVALID', read_status='Y', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -754,16 +754,16 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 	case CutOverPhaseIIIInvalidRowCount:
 		GiveRWToSecondary(t)
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where dbuname='HERADB_TWO' and occ_name='occ';\\n" +
-			"delete from pypl_occ_cutover where dbuname='HERADB_ONE' and occ_name='occ'"
+			"' where db_unique_name='HERADB_TWO' and occ_name='occ';\\n" +
+			"delete from pypl_occ_cutover where db_unique_name='HERADB_ONE' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverPhaseIIIInvalidDBUniqName:
 		GiveRWToSecondary(t)
-		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_ONE_INVALID', write_status='N', remarks='" + comment +
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_ONE_INVALID', write_status='N', remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set cutover_phase='CUTOVER', dbuname='HERADB_TWO_INVALID', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_TWO_INVALID', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -842,15 +842,15 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 	case CutOverCompletePhaseInvalidRowCount:
 		query := "update pypl_occ_cutover set cutover_phase='COMPLETE', remarks='" + comment +
-			"' where dbuname='HERADB_TWO' and occ_name='occ';\\n" +
-			"delete from pypl_occ_cutover where dbuname='HERADB_ONE' and occ_name='occ'"
+			"' where db_unique_name='HERADB_TWO' and occ_name='occ';\\n" +
+			"delete from pypl_occ_cutover where db_unique_name='HERADB_ONE' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
 	case CutOverCompletePhaseInvalidDBUniqName:
-		query := "update pypl_occ_cutover set cutover_phase='COMPLETE', dbuname='HERADB_ONE_INVALID',  remarks='" + comment +
+		query := "update pypl_occ_cutover set cutover_phase='COMPLETE', db_unique_name='HERADB_ONE_INVALID',  remarks='" + comment +
 			"' where occ_two_task='CLOC' and occ_name='occ';\\n" +
-			"update pypl_occ_cutover set cutover_phase='COMPLETE', dbuname='HERADB_TWO_INVALID',  remarks='" + comment +
+			"update pypl_occ_cutover set cutover_phase='COMPLETE', db_unique_name='HERADB_TWO_INVALID',  remarks='" + comment +
 			"' where occ_two_task='CLOC_CUTOVER' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -922,9 +922,9 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 	case CutOverPreInCorrectRole:
 		GiveROToPrimary(t)
 		query := "update pypl_occ_cutover set cutover_phase='PRE', read_status='Y', write_status='Y', wisb_roles='CLOC_RO', remarks='" + comment +
-			"' where dbuname='HERADB_ONE' and occ_name='occ';\\n" +
+			"' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='PRE', read_status='N', write_status='N', remarks='" + comment +
-			"' where dbuname='HERADB_TWO' and occ_name='occ'"
+			"' where db_unique_name='HERADB_TWO' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
