@@ -29,7 +29,7 @@ func moveToCutOverPhaseII(t *testing.T) (chan map[int64]util.ClientTrafficStats,
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 1
+	stateLog["occ.live1"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 
 	var wg sync.WaitGroup
@@ -51,7 +51,7 @@ func moveToCutOverPhaseII(t *testing.T) (chan map[int64]util.ClientTrafficStats,
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -67,7 +67,7 @@ func moveToCutOverPhaseII(t *testing.T) (chan map[int64]util.ClientTrafficStats,
 	cutOverPhase1State := time.Now().Unix()
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -83,7 +83,7 @@ func moveToCutOverPhaseII(t *testing.T) (chan map[int64]util.ClientTrafficStats,
 	cutOverPhase2State := time.Now().Unix()
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -173,7 +173,7 @@ func TestCutOver3InvalidNoOfRow(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -190,7 +190,7 @@ func TestCutOver3InvalidNoOfRow(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -285,7 +285,7 @@ func TestCutOver3InvalidDBUniqueName(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 30 seconds")
 	time.Sleep(30 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 0
+	stateLog["occ.live1"] = 0
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 0, t)
@@ -302,7 +302,7 @@ func TestCutOver3InvalidDBUniqueName(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 0
+	stateLog["occ.live1"] = 0
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -397,7 +397,7 @@ func TestCutOver3InvalidOCCName(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -414,7 +414,7 @@ func TestCutOver3InvalidOCCName(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -509,7 +509,7 @@ func TestCutOver3InvalidTwoTask(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -526,7 +526,7 @@ func TestCutOver3InvalidTwoTask(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -621,7 +621,7 @@ func TestCutOver3InvalidCutOverPhase(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -638,7 +638,7 @@ func TestCutOver3InvalidCutOverPhase(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -733,7 +733,7 @@ func TestCutOver3InvalidReadStatus(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -750,7 +750,7 @@ func TestCutOver3InvalidReadStatus(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -845,7 +845,7 @@ func TestCutOver3InvalidWriteStatus(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -862,7 +862,7 @@ func TestCutOver3InvalidWriteStatus(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -957,7 +957,7 @@ func TestCutOver3DualWriteStatus(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -974,7 +974,7 @@ func TestCutOver3DualWriteStatus(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -1069,7 +1069,7 @@ func TestCutOver3DualReadStatus(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -1086,7 +1086,7 @@ func TestCutOver3DualReadStatus(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -1181,7 +1181,7 @@ func TestCutOver3ReadOffStatus(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -1198,7 +1198,7 @@ func TestCutOver3ReadOffStatus(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -1294,7 +1294,7 @@ func TestCutOver3SourceDBDown(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", false, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -1310,7 +1310,7 @@ func TestCutOver3SourceDBDown(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	time.Sleep(25 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
 	afterRestart := util.RestartOCC(t, 90)
@@ -1406,7 +1406,7 @@ func TestCutOver3TargetDBDown(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", false, 25, t)
@@ -1418,7 +1418,7 @@ func TestCutOver3TargetDBDown(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startPhaseIII+3, invalidPhaseII-3, 2, 1)
 
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 0
+	stateLog["occ.live1"] = 0
 
 	util.KillSessionAndValidate(t, stateLog, "herabox_secondary_srv", true)
 
@@ -1627,7 +1627,7 @@ func TestCutOver3Rollback(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -1644,7 +1644,7 @@ func TestCutOver3Rollback(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -1661,7 +1661,7 @@ func TestCutOver3Rollback(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -1678,7 +1678,7 @@ func TestCutOver3Rollback(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -1695,7 +1695,7 @@ func TestCutOver3Rollback(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 1
+	stateLog["occ.live1"] = 1
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
@@ -1771,7 +1771,7 @@ func TestCutOver3RoleOrderChange(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.co"] = 25
+	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
