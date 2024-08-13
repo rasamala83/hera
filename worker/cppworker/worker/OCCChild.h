@@ -537,7 +537,7 @@ private:
 
 	int set_role_for_the_session ();
 
-	int verify_session_role();
+	//int verify_session_role();
 };
 
 #endif

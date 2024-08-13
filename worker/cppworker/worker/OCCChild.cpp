@@ -291,9 +291,9 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	const char* tns_for_cutover  = getenv("cutover_two_task_key");
 	if (tns_for_cutover) {
 		m_cutovercfg_tns = tns_for_cutover;
-		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "CP 60 cutover_two_task_key set %s", m_cutovercfg_tns.c_str());
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "cutover_two_task_key set %s", m_cutovercfg_tns.c_str());
 	} else {
-		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "CP 60 cutover_two_task_key is null");
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "cutover_two_task_key is null");
 	}
 
 	// initialize markdown system
@@ -5811,123 +5811,114 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 3. We will need to enable heartbeat to make sure stop runaway txn
 */
 
-int OCCChild::verify_session_role() {
-	// fetch enabled role from pypl_occ_cutover, expect 1 row to return.
-	if (m_cutovercfg_tns.empty()) {
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "TWO_TASK is NULL");
-		return -1;
-	}
-	char roleSQL[256] = {'\0'};
-	sprintf(roleSQL, "SELECT wisb_roles FROM pypl_occ_cutover WHERE occ_two_task = '%s' AND occ_name = '%s' AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles)", 
-			m_cutovercfg_tns.c_str(), m_module_info.c_str());
-	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, roleSQL);
-
-	OCIStmt *stmthp = NULL;
-	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
-	if (rc != OCI_SUCCESS) {
-		return -1;
-	}
-
-	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(roleSQL), strlen(roleSQL), OCI_NTV_SYNTAX, OCI_DEFAULT);
-	if (rc != OCI_SUCCESS) {
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
-		log_oracle_error(rc, "fetch_role failed to prepare statement.", LOG_INFO);
-		return -1;
-	}
-	CalTransaction cal_trans("CUTOVER");
-	cal_trans.SetName("verify_session_role");
-
-	char role[256] = {'\0'};
-	OCIDefine *defnp = NULL;
-	rc = OCIDefineByPos(
-			stmthp, &defnp, errhp,
-			1, (dvoid *) role, sizeof(role), SQLT_STR,
-			NULL, NULL, NULL, OCI_DEFAULT
-		);
-	if (rc != OCI_SUCCESS) {
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
-		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "verify_session_role failed to define output parameter 1.", LOG_INFO);
-		return -1;
-	}
-
-	rc = OCIStmtExecute(svchp, stmthp, errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
-	if (rc != OCI_NO_DATA && rc != OCI_SUCCESS) {
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
-		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "verify_session_role failed to execute statement", LOG_INFO);
-		return -1;
-	}
-
-	int row = 0;
-	do {
-		rc = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
-
-		int fetched;
-		OCIAttrGet(stmthp, OCI_HTYPE_STMT, (void*)&fetched, NULL, OCI_ATTR_ROWS_FETCHED, errhp);
-			
-		row += fetched;
-		if(row > 1)
-			break;
-	
-	} while(rc != OCI_NO_DATA);
-	
-	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
-		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "CP 50 error: verify_session_role failed to free statement handle.");
-		return -1;
-	}
-	if(rc < 0) {
-		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "CP 50 error: verify_session_role failed", LOG_INFO);
-		return rc;
-	}
-	
-	cal_trans.Completed(CAL::TRANS_OK);
-	
-	if (row > 1) {
-		WRITE_LOG_ENTRY(logfile, LOG_INFO, "CP 50 error: verify_session_role fetched more than 1 row!");
-		return -1;
-	}
-
-	if (row == 0) {
-		WRITE_LOG_ENTRY(logfile, LOG_INFO, "user current roles mismatch wisb roles");
-		return 0;
-	}
-
-	return 1; 
-}
+//int OCCChild::verify_session_role() {
+//	// fetch enabled role from pypl_occ_cutover, expect 1 row to return.
+//	if (m_cutovercfg_tns.empty()) {
+//		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "TWO_TASK is NULL");
+//		return -1;
+//	}
+//	char roleSQL[256] = {'\0'};
+//	sprintf(roleSQL, "SELECT wisb_roles FROM pypl_occ_cutover WHERE occ_two_task = '%s' AND occ_name = '%s' AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles)", 
+//			m_cutovercfg_tns.c_str(), m_module_info.c_str());
+//	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, roleSQL);
+//
+//	OCIStmt *stmthp = NULL;
+//	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+//	if (rc != OCI_SUCCESS) {
+//		return -1;
+//	}
+//
+//	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(roleSQL), strlen(roleSQL), OCI_NTV_SYNTAX, OCI_DEFAULT);
+//	if (rc != OCI_SUCCESS) {
+//		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+//		log_oracle_error(rc, "fetch_role failed to prepare statement.", LOG_INFO);
+//		return -1;
+//	}
+//	CalTransaction cal_trans("CUTOVER");
+//	cal_trans.SetName("verify_session_role");
+//
+//	char role[256] = {'\0'};
+//	OCIDefine *defnp = NULL;
+//	rc = OCIDefineByPos(
+//			stmthp, &defnp, errhp,
+//			1, (dvoid *) role, sizeof(role), SQLT_STR,
+//			NULL, NULL, NULL, OCI_DEFAULT
+//		);
+//	if (rc != OCI_SUCCESS) {
+//		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+//		cal_trans.Completed(CAL::TRANS_OK);
+//		log_oracle_error(rc, "verify_session_role failed to define output parameter 1.", LOG_INFO);
+//		return -1;
+//	}
+//
+//	rc = OCIStmtExecute(svchp, stmthp, errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
+//	if (rc != OCI_NO_DATA && rc != OCI_SUCCESS) {
+//		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+//		cal_trans.Completed(CAL::TRANS_OK);
+//		log_oracle_error(rc, "verify_session_role failed to execute statement", LOG_INFO);
+//		return -1;
+//	}
+//
+//	int row = 0;
+//	do {
+//		rc = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
+//
+//		int fetched;
+//		OCIAttrGet(stmthp, OCI_HTYPE_STMT, (void*)&fetched, NULL, OCI_ATTR_ROWS_FETCHED, errhp);
+//			
+//		row += fetched;
+//		if(row > 1)
+//			break;
+//	
+//	} while(rc != OCI_NO_DATA);
+//	
+//	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
+//		cal_trans.Completed(CAL::TRANS_OK);
+//		log_oracle_error(rc, "CP 50 error: verify_session_role failed to free statement handle.");
+//		return -1;
+//	}
+//	if(rc < 0) {
+//		cal_trans.Completed(CAL::TRANS_OK);
+//		log_oracle_error(rc, "CP 50 error: verify_session_role failed", LOG_INFO);
+//		return rc;
+//	}
+//	
+//	cal_trans.Completed(CAL::TRANS_OK);
+//	
+//	if (row > 1) {
+//		WRITE_LOG_ENTRY(logfile, LOG_INFO, "CP 50 error: verify_session_role fetched more than 1 row!");
+//		return -1;
+//	}
+//
+//	if (row == 0) {
+//		WRITE_LOG_ENTRY(logfile, LOG_INFO, "user current roles mismatch wisb roles");
+//		return 0;
+//	}
+//
+//	return 1; 
+//}
 
 
 int OCCChild::set_role_for_the_session (){
 	std::string my_role;
-	int rc = verify_session_role();
-	if (rc < 0) { // we need to exit. Do we need to further define error? 
-        	WRITE_LOG_ENTRY(logfile, LOG_ALERT, "verify_session_role failed, exiting");
-		exit(0);
-	}
-	if (rc == 1) { // role_enabled matches current session's role
-		WRITE_LOG_ENTRY(logfile, LOG_INFO, "user current roles match wisb roles");
-		return rc;
-	}
-
 	// now handle role mismatch, set the role
 	if (m_cutovercfg_tns.empty()) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "set_role_for_the_session() TWO_TASK is NULL");
 		return -1;
 	}
 	
-	char set_role_SQL[256] = {'\0'};
-       	sprintf(set_role_SQL, "BEGIN FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE occ_two_task = '%s' AND occ_name = '%s' AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP; END;", 
-			m_cutovercfg_tns.c_str(), m_module_info.c_str());
-	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set_role SQL:", set_role_SQL);
+	char set_role_SQL[1024] = {'\0'};
+	sprintf(set_role_SQL, 
+"DECLARE cursor c1 is SELECT wisb_roles FROM pypl_occ_cutover WHERE upper(occ_two_task) = upper('%s') AND upper(occ_name) = upper('%s') AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles);cnt integer := 0;wiri_roles pypl_occ_cutover.wisb_roles%%type;final_wiri pypl_occ_cutover.wisb_roles%%type;BEGIN FOR i in c1 LOOP cnt := cnt + 1;wiri_roles := i.wisb_roles;END LOOP;IF cnt = 1 THEN dbms_application_info.set_client_info(wiri_roles);ELSE FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE upper(occ_two_task) = upper('%s') AND upper(occ_name) = upper('%s') AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP;select listagg(role,',') within group ( order by role asc) into final_wiri from session_roles;dbms_application_info.set_client_info(final_wiri);END IF;END;", m_cutovercfg_tns.c_str(), m_module_info.c_str(), m_cutovercfg_tns.c_str(), m_module_info.c_str());
+
+	//WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set_role SQL:", set_role_SQL);
 	
 
 
 	CalTransaction cal_trans("CUTOVER");
-	cal_trans.SetName("set_role");
+	cal_trans.SetName("role_op");
 	OCIStmt *stmthp = NULL;
-	rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
 	if (rc != OCI_SUCCESS) {
 		return -1;
 	}
@@ -5936,7 +5927,7 @@ int OCCChild::set_role_for_the_session (){
 	if (rc != OCI_SUCCESS) {
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
 		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "fetch_role failed to prepare statement.", LOG_INFO);
+		log_oracle_error(rc, "set_role failed to prepare statement.", LOG_INFO);
 		return -1;
 	}
 
@@ -5945,7 +5936,7 @@ int OCCChild::set_role_for_the_session (){
 	if (rc != OCI_SUCCESS) {
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
 		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "fetch_role failed to prepare statement.", LOG_INFO);
+		log_oracle_error(rc, "set_role failed to prepare statement.", LOG_INFO);
 		return -1;
 	}
 
@@ -5953,17 +5944,6 @@ int OCCChild::set_role_for_the_session (){
 		cal_trans.Completed(CAL::TRANS_OK);
 		log_oracle_error(rc, "Failed to free (maint)statement handle.");
 		return -1;
-	}
-
-	// at last, we validate if the set actually succeed.
-	rc = verify_session_role();
-	if (rc < 0) { // we need to exit. Do we need to further define error? 
-		cal_trans.Completed(CAL::TRANS_OK);
-		exit(0);
-	}
-	if (rc == 1) { // role_enabled matches current session's role
-		cal_trans.Completed(CAL::TRANS_OK);
-		return rc;
 	}
 
 	cal_trans.Completed(CAL::TRANS_OK);

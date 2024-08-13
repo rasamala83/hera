@@ -146,7 +146,7 @@ bool HBSender::handle_ctrl()
 	std::string payload;
 	int code = m_reader->read(&payload);
 	if (code != CMD_INTERRUPT_MSG &&  code != CMD_UPDATE_MSG) {
-			WRITE_LOG_ENTRY(logfile, LOG_ALERT, "CP 50 New Invalid control command: %d. Exiting", code);
+			WRITE_LOG_ENTRY(logfile, LOG_INFO, "New Invalid control command: %d. Exiting", code);
 
 			// we're in really bad state
 			_exit(0);
@@ -154,12 +154,12 @@ bool HBSender::handle_ctrl()
 	
 	if (code == CMD_UPDATE_MSG) {
 		if (payload.length() != 1) {
-			WRITE_LOG_ENTRY(logfile, LOG_ALERT, "CP 50 New Invalid ctrl update msg length %d. Exiting", payload.length());
+			WRITE_LOG_ENTRY(logfile, LOG_INFO, "New Invalid ctrl update msg length %d. Exiting", payload.length());
 			_exit(0);
 		}
 		const char* flag = payload.c_str();
 		uint8_t user_role = uint8_t(flag[0]);
-		// WRITE_LOG_ENTRY(logfile, LOG_ALERT, "CP 50 New ctrl update msg %s", payload.c_str());
+		// WRITE_LOG_ENTRY(logfile, LOG_ALERT, "New ctrl update msg %s", payload.c_str());
 		m_occ_child->enable_set_user_role(user_role);	
 		return true;
 	}

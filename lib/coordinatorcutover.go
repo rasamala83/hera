@@ -140,14 +140,17 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	}
 
 	if crd.curActDb == nil {
-		// TODO. are we doing the right thing? need to check if we have missed some init case.
-		logger.GetLogger().Log(logger.Alert, "crd.curActInfo is nil")
-		crd.curActDb = newActInfo
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "crd.curActInfo is nil")
+			crd.curActDb = newActInfo
+		}
 	}
 	diff := compActiveInfo(*crd.curActDb, *newActInfo)
 	if diff == 0 {
-		logger.GetLogger().Log(logger.Alert, "crd.curActInfo and newActInfo is the same")
-		return interrupt, nil // same cutover config
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "crd.curActInfo and newActInfo is the same")
+			return interrupt, nil // same cutover config
+		}
 	} else {
 		logger.GetLogger().Log(logger.Alert, "crd.curActInfo and newActInfo is different", diff)
 	}
