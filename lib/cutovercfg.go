@@ -483,17 +483,17 @@ func loadCutoverCfg(db *sql.DB) error {
 				wpool = nil
 				wpool, err = GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 				if err != nil {
+					evtn := fmt.Sprint("err_get_wpool_", shid, "_", t)
+					evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, err.Error())
+					evt.Completed()
 					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, "CP 14 error cutovercfg failed to udpate workerpool ", shid, t)
+						logger.GetLogger().Log(logger.Warning, "error cutovercfg failed to udpate workerpool ", shid, t)
 					}
 				} else {
 					// workerpool tracks phase, dbuname and enforce integrity at Pre, Cutover
 					if wpool != nil {
-						evtn := fmt.Sprint("err_wpool_", shid, "_", t)
-						evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, "")
-						evt.Completed()
-						if logger.GetLogger().V(logger.Warning) {
-							logger.GetLogger().Log(logger.Warning, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]")
+						if logger.GetLogger().V(logger.Info) {
+							logger.GetLogger().Log(logger.Info, "loadCutoverCfg() [shid, wtype] [", shid, ",", t, "]")
 						}
 						tname := g2TaskName
 						if shid == int(ShId2TaskCutover) {
@@ -501,8 +501,11 @@ func loadCutoverCfg(db *sql.DB) error {
 						}
 						wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbBy2task[tname])
 					} else {
+						evtn := fmt.Sprint("err_wpool_", shid, "_", t)
+						evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, "can't get workerpool")
+						evt.Completed()
 						if logger.GetLogger().V(logger.Warning) {
-							logger.GetLogger().Log(logger.Warning, "CP 14 can't get workerpool [shid, type] [", shid, ",", t, "]")
+							logger.GetLogger().Log(logger.Warning, "can't get workerpool [shid, type] [", shid, ",", t, "]")
 						}
 					}
 				}
@@ -818,20 +821,22 @@ func setCheckUserRoleFlag(nextcfg *CutoverCfg) {
 		for t := 0; t <= maxtype; t++ {
 			wpool, err := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 			if err != nil {
-				evt := cal.NewCalEvent(EvtTypeCutover, "err_wpool_user_flag", cal.TransOK, err.Error())
+				evtn := fmt.Sprint("err_wpool_user_flag", shid, "_", t)
+				evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, err.Error())
 				evt.Completed()
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "error cutover set_user_role_flag[", shid, ",", t, "]", err.Error())
 				}
 			} else {
 				if wpool != nil {
-					evt := cal.NewCalEvent(EvtTypeCutover, "set_role_flag", cal.TransOK, "")
-					evt.Completed()
 					if logger.GetLogger().V(logger.Info) {
 						logger.GetLogger().Log(logger.Info, "cutover set_user_role_flag [", shid, ",", t, "] to ", execSetUserRole)
 					}
 					wpool.CheckSetUserRole(execSetUserRole)
 				} else {
+					evtn := fmt.Sprint("err_wpool_user_flag", shid, "_", t)
+					evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, "wpool nil")
+					evt.Completed()
 					if logger.GetLogger().V(logger.Warning) {
 						logger.GetLogger().Log(logger.Warning, "error cutover set_user_role_flag nil wpool [", shid, ",", t, "]")
 					}
