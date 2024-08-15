@@ -20,7 +20,10 @@ type ActiveDbInfo struct {
 	SessionCfg CutoverCfg     // tracking the cfg used in the session
 }
 
-func copyActCOInfo(destInfo *ActiveDbInfo, srcInfo ActiveDbInfo) {
+func (crd *Coordinator) copyActCOInfo(destInfo *ActiveDbInfo, srcInfo ActiveDbInfo) {
+	if destInfo == nil {
+		destInfo = &ActiveDbInfo{}
+	}
 	destInfo.ShId = srcInfo.ShId
 	destInfo.Phase = srcInfo.Phase
 	destInfo.RwStatus = srcInfo.RwStatus
@@ -33,18 +36,21 @@ func copyActCOInfo(destInfo *ActiveDbInfo, srcInfo ActiveDbInfo) {
 // (00010) 2 if dbuname changes
 // (00100) 4 if phase changes (may force shard id )
 // (01000) 8 if RWStatus changes
-func compActiveInfo(cur ActiveDbInfo, new ActiveDbInfo) int {
+func compActiveInfo(cur *ActiveDbInfo, newcfg *ActiveDbInfo) int {
+	if cur == nil || newcfg == nil {
+		return -1
+	}
 	flag := 0
-	if cur.ShId != new.ShId {
+	if cur.ShId != newcfg.ShId {
 		flag |= 0x0001
 	}
-	if cur.DbUname != new.DbUname {
+	if cur.DbUname != newcfg.DbUname {
 		flag |= 0x0002
 	}
-	if cur.Phase != new.Phase {
+	if cur.Phase != newcfg.Phase {
 		flag |= 0x0004
 	}
-	if cur.RwStatus != new.RwStatus {
+	if cur.RwStatus != newcfg.RwStatus {
 		flag |= 0x0008
 	}
 	return flag
@@ -110,7 +116,8 @@ hang up conditions
 */
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
 
-	if GetCutoverCfg() == nil {
+	tmpcfg := GetCutoverCfg()
+	if tmpcfg == nil {
 		if !crd.isInternal {
 			evt := cal.NewCalEvent(EvtTypeCutover, "preproc_cfg_nil_startup", cal.TransOK, "")
 			evt.Completed()
@@ -119,40 +126,51 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 			}
 			return true, nil
 		}
-		// ok for internal queries all go to two_task pool. would this a problem to sql blocker, racmaint?
-		return false, nil // return true for debug, set to false afterward. 
-	}
-
-	if crd.curActDb == nil {
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
-		}
+		evt := cal.NewCalEvent(EvtTypeCutover, "preproc_internal_startup", cal.TransOK, "")
+		evt.Completed()
+		return false, nil 
 	}
 
 	interrupt := false // if txn should be disrupted
-	newActInfo := cvtActiveInfo(GetCutoverCfg())
+	newActInfo := cvtActiveInfo(tmpcfg)
+
 	if newActInfo == nil {
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "PreprocessCutover no new activeInfo, no change. Active [ShId, dbUname, phase, rwstatus]=[",
+			logger.GetLogger().Log(logger.Alert, "something is wrong. no new activeInfo in PreprocessCutover")
+		}
+		if crd.curActDb != nil {
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, crd.id, "cur  Active [ShId, dbUname, phase, rwstatus]=[",
 				crd.curActDb.ShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
+			}
 		}
 		return interrupt, nil
 	}
 
 	if crd.curActDb == nil {
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, "crd.curActInfo is nil")
-			crd.curActDb = newActInfo
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
+			crd.curActDb = &ActiveDbInfo{};
+			crd.copyActCOInfo(crd.curActDb, *newActInfo)   // now coordinator has updated with latest info
 		}
 	}
-	diff := compActiveInfo(*crd.curActDb, *newActInfo)
+	diff := compActiveInfo(crd.curActDb, newActInfo)
+	if diff < 0 {
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "crd failed to compare active db cfg")
+		}
+		return interrupt, nil // same cutover config
+	}
+
 	if diff == 0 {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, "crd.curActInfo and newActInfo is the same")
-			return interrupt, nil // same cutover config
 		}
-	} else {
-		logger.GetLogger().Log(logger.Alert, "crd.curActInfo and newActInfo is different", diff)
+		return interrupt, nil // same cutover config
+	}
+
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "crd.curActInfo and newActInfo is different", diff)
 	}
 	var err error
 	if crd.inTransaction {
@@ -218,13 +236,13 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				}
 			}
 		}
-		copyActCOInfo(crd.curActDb, *newActInfo)   // now coordinator has updated with latest info
+		crd.copyActCOInfo(crd.curActDb, *newActInfo)   // now coordinator has updated with latest info
 		crd.shard.shardID = int(crd.curActDb.ShId) // we will need shardID in dispatchRequest(). hm..
 		return interrupt, err
 	} else {
 		// worker is not in transactions
 		// we will just load the new cfg and update the crd flags as needed.
-		copyActCOInfo(crd.curActDb, *newActInfo)
+		crd.copyActCOInfo(crd.curActDb, *newActInfo)
 		crd.shard.shardID = int(crd.curActDb.ShId)
 		return false, nil // allow to proceed
 	}
