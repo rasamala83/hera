@@ -391,7 +391,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d", worker.shardID)
 		}
 		twoTask = os.Getenv(twoTaskEnv)
-		logger.GetLogger().Log(logger.Info, "CP 50 twoTaskEnv", twoTaskEnv, "value:", twoTask)
+		logger.GetLogger().Log(logger.Info, "twoTaskEnv", twoTaskEnv, "value:", twoTask)
 		if twoTask == "" {
 			if GetConfig().EnableCutover {
 				if logger.GetLogger().V(logger.Info) {
@@ -674,7 +674,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 				}
 				if cfgDbun != worker.dbUname {
 					if worker.ConnTwoTask == ShId2TaskCutover {
-						logger.GetLogger().Log(logger.Alert, "CP 11 target dbuname mismatch in Pre/Cutover phase [", cfgDbun, "][", worker.dbUname, "]")
+						logger.GetLogger().Log(logger.Alert, "target dbuname mismatch in Pre/Cutover phase [", cfgDbun, "][", worker.dbUname, "]")
 						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
 						et := cal.NewCalEvent(EvtTypeCutover, "tgt_new_dbun_mismatch", cal.TransOK, msg)
 						et.Completed()
@@ -682,7 +682,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 						return errors.New(errmsg)
 					} else {
 						// only warning
-						logger.GetLogger().Log(logger.Alert, "CP 11 source dbuname mismatch in Pre/Cutover phase [", cfgDbun, "][", worker.dbUname, "]")
+						logger.GetLogger().Log(logger.Alert, "source dbuname mismatch in Pre/Cutover phase [", cfgDbun, "][", worker.dbUname, "]")
 						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
 						et := cal.NewCalEvent(EvtTypeCutover, "warn_src_new_dbun_mismatch", cal.TransOK, msg)
 						et.Completed()
@@ -895,16 +895,13 @@ func (worker *WorkerClient) Terminate() error {
 	}()
 	pid := worker.pid
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "workerclient pid=", pid, " to be terminated, sending SIGTERM first for gracefull termination")
-		logger.GetLogger().Log(logger.Debug, "CP 25 workerclient pid=", pid, "worker id", worker.ID, "dbuname", worker.dbUname)
-
+		logger.GetLogger().Log(logger.Debug, "workerclient pid=", pid, "worker id=", worker.ID, " to be terminated, sending SIGTERM first for gracefull termination")
 	}
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		// right now on Unix erp is always nil
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "workerclient pid=", pid, ", find process error", err.Error())
-			logger.GetLogger().Log(logger.Debug, "CP 25 workerclient find process error pid=", pid, "worker id", worker.ID, "dbuname", worker.dbUname)
 		}
 		syscall.Kill(pid, syscall.SIGKILL)
 		return nil
@@ -932,7 +929,6 @@ func (worker *WorkerClient) Terminate() error {
 	if slept >= 2000 {
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, "workerclient pid=", pid, " sending SIGKILL")
-			logger.GetLogger().Log(logger.Debug, "CP 25 workerclient sebdubg SIGKILL pid=", pid, "worker id", worker.ID, "dbuname", worker.dbUname)
 		}
 		syscall.Kill(pid, syscall.SIGKILL)
 	}

@@ -453,7 +453,9 @@ func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, sha
 			logger.GetLogger().Log(logger.Alert, "Can't pool of type", wType, ", shard", shardID, ",error:", err)
 		}
 	} else {
-		logger.GetLogger().Log(logger.Alert, "wType", wType, ", shard", shardID, ",maxWorkers", maxWorkers)
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "wType", wType, ", shard", shardID, ",maxWorkers", maxWorkers)
+		}
 		pool.Resize(maxWorkers)
 	}
 }
