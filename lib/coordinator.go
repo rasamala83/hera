@@ -741,7 +741,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	}
 
 	if ok {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 16 crd.curActInfo is nil in dispatchRequest")
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, crd.id, "crd.curActInfo is nil in dispatchRequest")
+		}
 		wType := wtypeRW
 		cfg := GetNumWorkers(crd.shard.shardID)
 		if GetConfig().ReadonlyPct > 0 {
@@ -753,7 +755,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		}
 		numFree := GetStateLog().numFreeWorker(crd.shard.shardID, wType)
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 16 check numFreeWorker", numFree)
 		heavyUsage := false
 		thres := float64(GetConfig().BindEvictionTargetConnPct) / 100.0 * float64(cfg)
 		if numFree < int(thres) {
@@ -796,10 +797,10 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	}
 
 	if worker == nil {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6 worker nil")
 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6 worker == nil, sql is read and RW split enabled.")
-
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, crd.id, "worker == nil, sql is read and RW split enabled.")
+			}
 			if !GetConfig().EnableCutover {
 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
 				if err != nil {
@@ -884,14 +885,15 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					}
 					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, tgtshard, true)
 					if err != nil {
-						logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 error", err)
+						if logger.GetLogger().V(logger.Info) {
+							logger.GetLogger().Log(logger.Verbose, crd.id, "cutover external sql get wpool error:", err)
+						}
 						return err
 					}
 				}
 			}
 		}
 	} else {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6 worker not nil")
 		if !GetConfig().EnableCutover {
 			if crd.isRead {
 				if crd.shard.shardID != worker.shardID {
@@ -943,7 +945,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					if worker.shardID != int(ShId2Task) {
 						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, ShId2Task, true)
 						if err != nil {
-							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
+							logger.GetLogger().Log(logger.Verbose, crd.id, "cutover default sql route error:", err)
 							return err
 						}
 					}
@@ -953,7 +955,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					if worker.shardID != int(ShId2TaskCutover) {
 						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, ShId2TaskCutover, true)
 						if err != nil {
-							logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.3 error", err)
+							logger.GetLogger().Log(logger.Verbose, crd.id, "cutover default sql route (complete) error:", err)
 							return err
 						}
 					}
@@ -974,13 +976,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					}
 
 					if worker.shardID != int(crd.curActDb.ShId) {
-						logger.GetLogger().Log(logger.Warning, crd.id, "CP 6.3 CUTOVER phase, existing worker shid diff from active sh", worker.shardID, crd.curActDb.ShId)
 						evt := cal.NewCalEvent(EvtTypeMux, "cutover_switch_active", cal.TransOK, "")
 						evt.Completed()
 						tgtshard = crd.curActDb.ShId
 						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, tgtshard, true)
 						if err != nil {
-							logger.GetLogger().Log(logger.Warning, crd.id, "CP 6.3 error", err)
+							logger.GetLogger().Log(logger.Warning, crd.id, "sql switch (active) db error", err)
 							return err
 						}
 						if !crd.inTransaction {
@@ -990,12 +991,16 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 						}
 					} else {
 						// shard id match, good to proceed
-						logger.GetLogger().Log(logger.Alert, crd.id, "CP 6.3 worker shid match active sh id, worker not nil, continue")
+						if logger.GetLogger().V(logger.Debug) {
+							logger.GetLogger().Log(logger.Debug, crd.id, "worker shid match active sh id, worker not nil, continue")
+						}
 					}
 				}
 			} else {
 				// internal sql read and write, we will continue, do we need to do anything?
-				logger.GetLogger().Log(logger.Alert, crd.id, "CP 6.3 CUTOVER internal sql, worker not nil!")
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, crd.id, "CUTOVER internal sql, worker not nil!")
+				}
 			}
 		}
 	}

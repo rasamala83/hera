@@ -280,7 +280,7 @@ private:
 	unsigned long long int bit_mask; // Compute based on bits_to_match
 
 	// variables used for DB cutover
-	bool m_cutover_enabled;
+	bool m_enable_cutover;
 	std::string m_cutovercfg_tns;
 	bool cutover_role_alarm_set;
 	int m_last_user_role_check;

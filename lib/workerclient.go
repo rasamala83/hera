@@ -238,10 +238,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 	}
 
-	if GetConfig().EnableCutover {
-		envUpsert(&attr, "cutover_enabled", "1")
-	} // otherwise leave it unset
-
 	var twoTask string
 	switch worker.Type {
 	case wtypeStdBy:
