@@ -156,10 +156,11 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	}
 	diff := compActiveInfo(crd.curActDb, newActInfo)
 	if diff < 0 {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "crd failed to compare active db cfg")
+		// change log level, this should be frequently expected, right ?
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "crd failed to compare active db cfg, this can happen when crd is new")
 		}
-		return interrupt, nil // same cutover config
+		return interrupt, nil
 	}
 
 	if diff == 0 {
@@ -266,23 +267,30 @@ func (crd *Coordinator) ProceedWriteInCutover() error {
 
 func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 	shardToUse := ShIdUnset
-	logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 cutover - run external query", crd.curActDb.Phase)
 	if crd.curActDb.Phase == CutoverPhStr {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 CUTOVER phase isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActDb.RwStatus, "]")
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, crd.id, "phase cutover crd.isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActDb.RwStatus, "]")
+		}
 		if crd.isRead {
 			if (crd.curActDb.RwStatus & ReadOk) != ReadOk {
-				logger.GetLogger().Log(logger.Alert, crd.id, "OCC-500: active db cutover no read allowed")
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, crd.id, "OCC-500: active db cutover no read allowed")
+				}
 				return shardToUse, ErrCutoverReadNotAllowed
 			}
 		} else {
 			if (crd.curActDb.RwStatus & WriteOk) != WriteOk {
-				logger.GetLogger().Log(logger.Alert, crd.id, "OCC-501: active db cutover no write allowed")
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, crd.id, "OCC-501: active db cutover no write allowed")
+				}
 				return shardToUse, ErrCutoverWriteNotAllowed
 			}
 		}
 
 		shardToUse = crd.curActDb.ShId
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 CUTOVER phase, dispatch to", int(shardToUse), "workers")
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, crd.id, "phase cutover, dispatch to", int(shardToUse), "workers")
+		}
 	} else if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == PrePhStr {
 		shardToUse = ShId2Task
 		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 ENABLE or PRE phase, dispatch to two_task workers", int(shardToUse))

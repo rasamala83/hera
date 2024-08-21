@@ -247,7 +247,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	m_enable_sql_rewrite(false),
 	bits_to_match(1),
 	bit_mask(0),
-	m_cutover_enabled(false),
+	m_enable_cutover(false),
 	m_last_user_role_check(0),
 	cutover_role_alarm_set(false)
 {
@@ -279,21 +279,6 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		client_session.end_session();
 		constructor_success = 0; // ensure flag it
 		return;
-	}
-
-	const char* cutover_status = getenv("cutover_enabled");
-	if (!cutover_status) {
-		m_cutover_enabled = false;
-	} else {
-		m_cutover_enabled = true;
-	}
-
-	const char* tns_for_cutover  = getenv("cutover_two_task_key");
-	if (tns_for_cutover) {
-		m_cutovercfg_tns = tns_for_cutover;
-		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "cutover_two_task_key set %s", m_cutovercfg_tns.c_str());
-	} else {
-		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "cutover_two_task_key is null");
 	}
 
 	// initialize markdown system
@@ -477,6 +462,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	MAX_ARRAY_DATA_SIZE = config->get_ulong("max_batch_col_size", MAX_ARRAY_DATA_SIZE);
 
 	m_enable_sharding = config->get_bool("enable_sharding", false);
+	const char* tns_for_cutover = getenv("cutover_two_task_key");
 	if (m_enable_sharding) {
 		m_max_scuttle_buckets = config->get_int("max_scuttle", ABS_MAX_SCUTTLE_BUCKETS);
 		m_scuttle_attr_name = config->get_string("scuttle_col_name", DEFAULT_SCUTTLE_ATTR_NAME);
@@ -508,6 +494,17 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		
 		m_shardcfg_postfix.clear();
 		m_shardcfg_postfix = config->get_string("sharding_postfix", "");
+	} else {
+		m_enable_cutover = config->get_bool("enable_cutover", false);
+		if (m_enable_cutover) {
+			if (tns_for_cutover) {
+				m_cutovercfg_tns = tns_for_cutover;
+				WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s", m_cutovercfg_tns.c_str());
+			} else {
+				m_enable_cutover = false;
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "cutover_two_task_key not set, disable cutover");
+			}
+		}
 	}
 	client_session.set_status(CAL::TRANS_OK); // internal queries' error overwrite status so reset it.
 	client_session.end_session(); // end the CalClientSession
@@ -1060,9 +1057,11 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			if (m_scuttle_id.empty())
 				StringUtil::fmt_int(m_scuttle_id, -1);
 			
-			OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_scuttle_id.c_str()), 
+			if (!m_enable_cutover) { // OCI_ATTR_CLIENT_INFO is used for user role in cutover	
+				OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_scuttle_id.c_str()), 
 						   m_scuttle_id.length(), OCI_ATTR_CLIENT_INFO, errhp);
-
+			}
+			
 			execute(rc);
 			if (cur_stmt)
 			{
@@ -5802,103 +5801,6 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 }
 
 
-/* Mux will inform the worker to do this when cutover phase is cutover.
-1. SELECT enable_role FROM pypl_occ_cutover WHERE occ_two_task = <this TWO_TASK> and occ_name = <module>, return exact 1 row, as role_X.
-2. SELECT role FROM session_roles WHERE role = 'role_X';
-2.1 return 1 row, we are good.
-2.2 return 0 row, we run SET ROLE 'role_X'; if err, maybe recycle the connection?
-2.3 error state the function returns rc < 0, trigger recycle.
-3. We will need to enable heartbeat to make sure stop runaway txn
-*/
-
-//int OCCChild::verify_session_role() {
-//	// fetch enabled role from pypl_occ_cutover, expect 1 row to return.
-//	if (m_cutovercfg_tns.empty()) {
-//		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "TWO_TASK is NULL");
-//		return -1;
-//	}
-//	char roleSQL[256] = {'\0'};
-//	sprintf(roleSQL, "SELECT wisb_roles FROM pypl_occ_cutover WHERE occ_two_task = '%s' AND occ_name = '%s' AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles)", 
-//			m_cutovercfg_tns.c_str(), m_module_info.c_str());
-//	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, roleSQL);
-//
-//	OCIStmt *stmthp = NULL;
-//	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
-//	if (rc != OCI_SUCCESS) {
-//		return -1;
-//	}
-//
-//	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(roleSQL), strlen(roleSQL), OCI_NTV_SYNTAX, OCI_DEFAULT);
-//	if (rc != OCI_SUCCESS) {
-//		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
-//		log_oracle_error(rc, "fetch_role failed to prepare statement.", LOG_INFO);
-//		return -1;
-//	}
-//	CalTransaction cal_trans("CUTOVER");
-//	cal_trans.SetName("verify_session_role");
-//
-//	char role[256] = {'\0'};
-//	OCIDefine *defnp = NULL;
-//	rc = OCIDefineByPos(
-//			stmthp, &defnp, errhp,
-//			1, (dvoid *) role, sizeof(role), SQLT_STR,
-//			NULL, NULL, NULL, OCI_DEFAULT
-//		);
-//	if (rc != OCI_SUCCESS) {
-//		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
-//		cal_trans.Completed(CAL::TRANS_OK);
-//		log_oracle_error(rc, "verify_session_role failed to define output parameter 1.", LOG_INFO);
-//		return -1;
-//	}
-//
-//	rc = OCIStmtExecute(svchp, stmthp, errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
-//	if (rc != OCI_NO_DATA && rc != OCI_SUCCESS) {
-//		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
-//		cal_trans.Completed(CAL::TRANS_OK);
-//		log_oracle_error(rc, "verify_session_role failed to execute statement", LOG_INFO);
-//		return -1;
-//	}
-//
-//	int row = 0;
-//	do {
-//		rc = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
-//
-//		int fetched;
-//		OCIAttrGet(stmthp, OCI_HTYPE_STMT, (void*)&fetched, NULL, OCI_ATTR_ROWS_FETCHED, errhp);
-//			
-//		row += fetched;
-//		if(row > 1)
-//			break;
-//	
-//	} while(rc != OCI_NO_DATA);
-//	
-//	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
-//		cal_trans.Completed(CAL::TRANS_OK);
-//		log_oracle_error(rc, "CP 50 error: verify_session_role failed to free statement handle.");
-//		return -1;
-//	}
-//	if(rc < 0) {
-//		cal_trans.Completed(CAL::TRANS_OK);
-//		log_oracle_error(rc, "CP 50 error: verify_session_role failed", LOG_INFO);
-//		return rc;
-//	}
-//	
-//	cal_trans.Completed(CAL::TRANS_OK);
-//	
-//	if (row > 1) {
-//		WRITE_LOG_ENTRY(logfile, LOG_INFO, "CP 50 error: verify_session_role fetched more than 1 row!");
-//		return -1;
-//	}
-//
-//	if (row == 0) {
-//		WRITE_LOG_ENTRY(logfile, LOG_INFO, "user current roles mismatch wisb roles");
-//		return 0;
-//	}
-//
-//	return 1; 
-//}
-
-
 int OCCChild::set_role_for_the_session (){
 	std::string my_role;
 	// now handle role mismatch, set the role
@@ -5910,9 +5812,6 @@ int OCCChild::set_role_for_the_session (){
 	char set_role_SQL[1024] = {'\0'};
 	sprintf(set_role_SQL, 
 "DECLARE cursor c1 is SELECT wisb_roles FROM pypl_occ_cutover WHERE upper(occ_two_task) = upper('%s') AND upper(occ_name) = upper('%s') AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles);cnt integer := 0;wiri_roles pypl_occ_cutover.wisb_roles%%type;final_wiri pypl_occ_cutover.wisb_roles%%type;BEGIN FOR i in c1 LOOP cnt := cnt + 1;wiri_roles := i.wisb_roles;END LOOP;IF cnt = 1 THEN dbms_application_info.set_client_info(wiri_roles);ELSE FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE upper(occ_two_task) = upper('%s') AND upper(occ_name) = upper('%s') AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP;select listagg(role,',') within group ( order by role asc) into final_wiri from session_roles;dbms_application_info.set_client_info(final_wiri);END IF;END;", m_cutovercfg_tns.c_str(), m_module_info.c_str(), m_cutovercfg_tns.c_str(), m_module_info.c_str());
-
-	//WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set_role SQL:", set_role_SQL);
-	
 
 
 	CalTransaction cal_trans("CUTOVER");
