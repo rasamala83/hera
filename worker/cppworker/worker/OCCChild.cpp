@@ -70,6 +70,7 @@ const std::string CAL_DATA_SQL_TEXT = "SQL_Text";
 const std::string CAL_EVENT_TRANS_START = "TRANSSTART";
 const std::string CAL_STATUS_SUCCESS_WITH_INFO = "Success With Info";
 const std::string CAL_EVENT_ORACLE = "Oracle";
+const std::string CAL_EVENT_CUTOVER = "CUTOVER";
 const int MAX_VSESSION_BIND_DATA = 63;
 const uint DEFAULT_WINDOW = 240;
 const std::string CAL_EVENT_DATETIME = "Datetime";
@@ -463,6 +464,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 
 	m_enable_sharding = config->get_bool("enable_sharding", false);
 	const char* tns_for_cutover = getenv("cutover_two_task_key");
+	WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s", tns_for_cutover); 
 	if (m_enable_sharding) {
 		m_max_scuttle_buckets = config->get_int("max_scuttle", ABS_MAX_SCUTTLE_BUCKETS);
 		m_scuttle_attr_name = config->get_string("scuttle_col_name", DEFAULT_SCUTTLE_ATTR_NAME);
@@ -502,7 +504,9 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 				WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s", m_cutovercfg_tns.c_str());
 			} else {
 				m_enable_cutover = false;
-				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "cutover_two_task_key not set, disable cutover");
+				WRITE_LOG_ENTRY(logfile, LOG_WARNING, "cutover_two_task_key not set, disable cutover");
+				CalEvent ev(CAL_EVENT_CUTOVER, "wkr_cutover_2task_unset", CAL::TRANS_OK, "disable cutover in worker");
+				ev.Completed();
 			}
 		}
 	}
@@ -5802,6 +5806,9 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 
 
 int OCCChild::set_role_for_the_session (){
+	if (!m_enable_cutover) {
+		return 1;
+	}
 	std::string my_role;
 	// now handle role mismatch, set the role
 	if (m_cutovercfg_tns.empty()) {
@@ -5869,6 +5876,10 @@ int OCCChild::enable_set_user_role(bool enable) {
 
 // on_idle() invokes this function.
 void OCCChild::cutover_support() {
+	if (!m_enable_cutover) {
+		return;
+	}
+
 	if (m_set_user_role) {
         	struct timeval tv_now, tv_expire;
 		gettimeofday(&tv_now, NULL);
