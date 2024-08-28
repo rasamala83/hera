@@ -63,7 +63,8 @@ type Coordinator struct {
 	prevShard *shardInfo
 
 	//for cutover support so the coordinator knows where to dispatch.
-	curActDb *ActiveDbInfo // maybe we don't need this, just use the CutoverInfo (atomic) directly
+	curActDb      *ActiveDbInfo // maybe we don't need this, just use the CutoverInfo (atomic) directly
+	shId4Internal ShardByTwoTask
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
 	worker        *WorkerClient // if it is in transaction/in cursor, the worker attached
@@ -518,7 +519,12 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 		return false, nil
 	// sharding commands
 	case common.CmdSetShardID:
-		err := crd.processSetShardID(request.Payload)
+		if GetConfig().EnableCutover {
+			// internal query log goes to both pool
+			err = crd.processSetCoShardID(request.Payload)
+		} else {
+			err = crd.processSetShardID(request.Payload)
+		}
 		if err == nil {
 			// send OK
 			crd.respond([]byte("1:5,"))

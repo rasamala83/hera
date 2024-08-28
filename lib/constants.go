@@ -116,6 +116,7 @@ func MkErr(prefix string) {
 	ErrCutoverReadNotAllowed = errors.New(prefix + "-500: active db cutover no read allowed")
 	ErrCutoverWriteNotAllowed = errors.New(prefix + "-501: active db cutover no write allowed")
 	ErrCutoverKill = errors.New(prefix + "-502: db cutover stop txn in progress")
+	ErrNotInternal = errors.New(prefix + "-503: set shard by non-internal sql")
 
 }
 

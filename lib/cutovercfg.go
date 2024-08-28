@@ -756,8 +756,9 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 	}
 }
 
-func cutoverOpenDb() (*sql.DB, error) {
-	db, err := sql.Open("heraloop", fmt.Sprintf("0:0:0"))
+func cutoverOpenDb(shToUse ShardByTwoTask) (*sql.DB, error) {
+
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", int(shToUse)))
 	if err != nil {
 		return nil, err
 	}
