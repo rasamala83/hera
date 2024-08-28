@@ -113,10 +113,10 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 	if GetConfig().EnableCutover {
 		pool.CoShardID = pool2task
 		pool.ShardID = int(pool2task)
-		if pool2task == ShId2Task {
-			pool.str2task = Get2TaskName()
-		} else if pool2task == ShId2TaskCutover {
-			pool.str2task = Get2TaskCutoverName()
+		if pool2task == ShIdTns {
+			pool.str2task = GetTnsName()
+		} else if pool2task == ShIdTnsCutover {
+			pool.str2task = GetTnsCutoverName()
 		}
 	}
 
@@ -921,7 +921,7 @@ func (pool *WorkerPool) enforceIntegrity() {
 	}
 
 	warnOnly := true // warning only unless for Cutover workerpool at Pre and Cutover phase
-	if (pool.phase == PrePhStr || pool.phase == CutoverPhStr) && (pool.CoShardID == ShId2TaskCutover) {
+	if (pool.phase == PrePhStr || pool.phase == CutoverPhStr) && (pool.CoShardID == ShIdTnsCutover) {
 		warnOnly = false
 	}
 

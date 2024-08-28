@@ -173,10 +173,10 @@ func (broker *WorkerBroker) init() error {
 			}
 			broker.poolCfgs[s][wtypeRO].maxWorkerCnt = workercnt / 2
 			switch s {
-			case int(ShId2Task):
-				broker.poolCfgs[s][wtypeRO].p2t = ShId2Task
-			case int(ShId2TaskCutover):
-				broker.poolCfgs[s][wtypeRO].p2t = ShId2TaskCutover
+			case int(ShIdTns):
+				broker.poolCfgs[s][wtypeRO].p2t = ShIdTns
+			case int(ShIdTnsCutover):
+				broker.poolCfgs[s][wtypeRO].p2t = ShIdTnsCutover
 
 			default:
 				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset // ??
@@ -200,10 +200,10 @@ func (broker *WorkerBroker) init() error {
 			}
 			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = workercnt / 2
 			switch s {
-			case int(ShId2Task):
-				broker.poolCfgs[s][wtypeRW].p2t = ShId2Task
-			case int(ShId2TaskCutover):
-				broker.poolCfgs[s][wtypeRW].p2t = ShId2TaskCutover
+			case int(ShIdTns):
+				broker.poolCfgs[s][wtypeRW].p2t = ShIdTns
+			case int(ShIdTnsCutover):
+				broker.poolCfgs[s][wtypeRW].p2t = ShIdTnsCutover
 			default:
 				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset // ??
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1

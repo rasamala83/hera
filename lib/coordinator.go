@@ -441,8 +441,9 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 							crd.conn.Close()
 						} else {
 							if logger.GetLogger().V(logger.Info) {
-								logger.GetLogger().Log(logger.Info, "internal query has default target but crd.curActInfo is nil")
+								logger.GetLogger().Log(logger.Info, "internal query default to use source but crd.curActInfo is nil")
 							}
+
 						}
 					}
 					if err != nil {
@@ -820,8 +821,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 
 			} else {
 				if crd.isInternal {
-					// all internal read queries using two_task pool
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, ShId2Task, false)
+					//internal queries always use src shard when cutover feature is enabled.
+					srcShId := ShIdTns
+					if crd.curActDb.SrcTns == gTnsCutoverName {
+						srcShId = ShIdTnsCutover
+					}
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, srcShId, false)
 					if err != nil {
 						if logger.GetLogger().V(logger.Warning) {
 							logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool", err)
@@ -864,12 +869,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, crd.id, "cutover process write sql or read without RW split. isRead", crd.isRead)
 				}
-				var tgtshard ShardByTwoTask
+				var shardToUse ShardByTwoTask
 				if crd.isInternal {
 					if logger.GetLogger().V(logger.Verbose) {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover runs internal query. isRead", crd.isRead)
 					}
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, ShId2Task, false)
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, ShIdTns, false)
 					if err != nil {
 						if logger.GetLogger().V(logger.Info) {
 							logger.GetLogger().Log(logger.Info, crd.id, "cutover getWorkerHelper error", err)
@@ -879,11 +884,11 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 
 				} else {
 					// external sql, now need to check the phase
-					tgtshard, err = crd.getShardByCutoverCfg()
+					shardToUse, err = crd.getShardByCutoverCfg()
 					if err != nil {
 						return err
 					}
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, tgtshard, true)
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, shardToUse, true)
 					if err != nil {
 						if logger.GetLogger().V(logger.Info) {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "cutover external sql get wpool error:", err)
@@ -935,27 +940,21 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			// 2. PRE/ENABLE, COMPLETE/BROOM: change to either two_task or two_task_cutover but this shouldn't be allowed.
 			//
 			if !crd.isInternal {
-				var tgtshard ShardByTwoTask
+				var shardToUse ShardByTwoTask
 				wType := wtypeRW
 				if crd.isRead && GetConfig().ReadonlyPct > 0 {
 					wType = wtypeRO
 				}
 
 				if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == PrePhStr {
-					if worker.shardID != int(ShId2Task) {
-						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, ShId2Task, true)
+					shIdToGo := ShIdTns
+					if crd.curActDb.SrcTns == GetTnsCutoverName() {
+						shIdToGo = ShIdTnsCutover
+					}
+					if worker.shardID != int(ShIdTns) {
+						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, shIdToGo, true)
 						if err != nil {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "cutover default sql route error:", err)
-							return err
-						}
-					}
-				}
-
-				if crd.curActDb.Phase == CompletePhStr {
-					if worker.shardID != int(ShId2TaskCutover) {
-						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, ShId2TaskCutover, true)
-						if err != nil {
-							logger.GetLogger().Log(logger.Verbose, crd.id, "cutover default sql route (complete) error:", err)
 							return err
 						}
 					}
@@ -978,8 +977,8 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					if worker.shardID != int(crd.curActDb.ShId) {
 						evt := cal.NewCalEvent(EvtTypeMux, "cutover_switch_active", cal.TransOK, "")
 						evt.Completed()
-						tgtshard = crd.curActDb.ShId
-						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, tgtshard, true)
+						shardToUse = crd.curActDb.ShId
+						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, shardToUse, true)
 						if err != nil {
 							logger.GetLogger().Log(logger.Warning, crd.id, "sql switch (active) db error", err)
 							return err
@@ -997,9 +996,20 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					}
 				}
 			} else {
-				// internal sql read and write, we will continue, do we need to do anything?
+				// worker not nil, shard id change, we will need to switch too
 				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, crd.id, "CUTOVER internal sql, worker not nil!")
+					logger.GetLogger().Log(logger.Debug, crd.id, "CUTOVER enabled, internal sql, worker not nil!")
+				}
+				shIdToGo := ShIdTns
+				if crd.curActDb.SrcTns == GetTnsCutoverName() {
+					shIdToGo = ShIdTnsCutover
+				}
+				if worker.shardID != int(ShIdTns) {
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wType, shIdToGo, true)
+					if err != nil {
+						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover internal sql default sql route error:", err)
+						return err
+					}
 				}
 			}
 		}

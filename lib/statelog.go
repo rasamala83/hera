@@ -176,20 +176,20 @@ func GetStateLog() *StateLog {
 
 // PublishStateEvent sends the event to the channel, so it will be processed by the state log routine
 func (sl *StateLog) PublishStateEvent(_evt StateEvent) error {
-//	if logger.GetLogger().V(logger.Verbose) {
-//		logger.GetLogger().Log(logger.Verbose, "publish state event", _evt.eType)
-//	}
+	//	if logger.GetLogger().V(logger.Verbose) {
+	//		logger.GetLogger().Log(logger.Verbose, "publish state event", _evt.eType)
+	//	}
 
- /*       eType     StateEventType
-        shardID   int
-        wType     HeraWorkerType
-        instID    int
-        workerID  int
-        newWState HeraWorkerStatus
-        oldCState ConnState
-        newCState ConnState
-        newWSize  int
-*/
+	/*       eType     StateEventType
+	shardID   int
+	wType     HeraWorkerType
+	instID    int
+	workerID  int
+	newWState HeraWorkerStatus
+	oldCState ConnState
+	newCState ConnState
+	newWSize  int
+	*/
 
 	// missing event could cause unbalanced statelog output.
 	sl.mEventChann <- _evt
@@ -213,7 +213,7 @@ func (sl *StateLog) GetStartTime() int64 {
 	return sl.mServerStartTime
 }
 
-// Cutover enabled for single schema but two db and give any point in time, only single active shard. 
+// Cutover enabled for single schema but two db and give any point in time, only single active shard.
 func (sl *StateLog) HasActiveWorkerForCutover() bool {
 	//When cutover is enabled, internally we have two shards but we only check the active shard.
 	activeSh := 0
@@ -227,9 +227,9 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 	} else if cocfg.Phase == CompletePhStr {
 		activeSh = 1
 	} else if cocfg.Phase == CutoverPhStr {
-		activeSh = int(ShId2Task)
-		if cocfg.ActiveShardId == ShId2TaskCutover {
-			activeSh = int(ShId2TaskCutover)
+		activeSh = int(ShIdTns)
+		if cocfg.ActiveShardId == ShIdTnsCutover {
+			activeSh = int(ShIdTnsCutover)
 		}
 		if cocfg.ActiveShardId == ShIdUnset {
 			return false
@@ -373,6 +373,7 @@ func (sl *StateLog) GetWorkerCountForPool(workerState HeraWorkerStatus, shardID 
 	//logger.GetLogger().Log(logger.Verbose, "(strandcnt, shard, inst, wt)=", cnt, shardId, instID, wType)
 	return cnt
 }
+
 // helper for cutover enabled version
 func (sl *StateLog) ProxyHasCapacityForCutover(_wlimit int, _rlimit int) (bool, int) {
 	activeSh := 0
@@ -386,9 +387,9 @@ func (sl *StateLog) ProxyHasCapacityForCutover(_wlimit int, _rlimit int) (bool, 
 	} else if cocfg.Phase == CompletePhStr {
 		activeSh = 1
 	} else if cocfg.Phase == CutoverPhStr {
-		activeSh = int(ShId2Task)
-		if cocfg.ActiveShardId == ShId2TaskCutover {
-			activeSh = int(ShId2TaskCutover)
+		activeSh = int(ShIdTns)
+		if cocfg.ActiveShardId == ShIdTnsCutover {
+			activeSh = int(ShIdTnsCutover)
 		}
 		if cocfg.ActiveShardId == ShIdUnset {
 			return false, 128
@@ -413,7 +414,6 @@ func (sl *StateLog) ProxyHasCapacityForCutover(_wlimit int, _rlimit int) (bool, 
 	}
 	return (wbacklog <= _wlimit) && ((rbacklog <= _rlimit) || (readerCnt == 0)), wbacklog + rbacklog
 }
-
 
 // ProxyHasCapacity checks if there is enough capacity
 func (sl *StateLog) ProxyHasCapacity(_wlimit int, _rlimit int) (bool, int) {
@@ -546,7 +546,6 @@ func (sl *StateLog) init() error {
 		}
 	}
 
-
 	sl.maxStndbySize = GetConfig().NumStdbyDbs
 	if sl.maxStndbySize > 10 {
 		sl.maxStndbySize = 10
@@ -658,7 +657,7 @@ func (sl *StateLog) init() error {
 		for t := wtypeRW; t < wtypeTotalCount; t++ {
 			var suffix string
 			if GetConfig().EnableCutover {
-				if s == int(ShId2TaskCutover) {
+				if s == int(ShIdTnsCutover) {
 					suffix = ".live1"
 				}
 			} else {
@@ -671,7 +670,7 @@ func (sl *StateLog) init() error {
 				if instCnt > 1 {
 					sl.mTypeTitles[s][t][i] += strconv.Itoa(i + 1)
 				}
-				if shardEnabled || GetConfig().EnableCutover { 
+				if shardEnabled || GetConfig().EnableCutover {
 					sl.mTypeTitles[s][t][i] += suffix
 				}
 			}

@@ -13,6 +13,7 @@ import (
 // Each coordinator will pull the CutoverCfg to check if there is any update.
 // The information is stored in a structure ActiveDbInfo as for which shard and RW, R, or W
 type ActiveDbInfo struct {
+	SrcTns     string         // source Tns key
 	ShId       ShardByTwoTask // active pool shard id
 	Phase      string         // current cutover phase
 	DbUname    string         // Active DB_UNAME
@@ -62,25 +63,26 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 		return nil
 	}
 	var newActInfo ActiveDbInfo
+	newActInfo.SrcTns = cocfg.TnsByRole[Source]
 	if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
-		newActInfo.ShId = ShId2Task
-		newActInfo.DbUname = cocfg.DbBy2task[g2TaskName]
+		newActInfo.ShId = ShIdTns
+		newActInfo.DbUname = cocfg.DbByTns[gTnsName]
 		newActInfo.Phase = cocfg.Phase
 		newActInfo.RwStatus = (ReadOk | WriteOk)
 	} else if cocfg.Phase == CompletePhStr {
-		newActInfo.ShId = ShId2TaskCutover
-		newActInfo.DbUname = cocfg.DbBy2task[g2TaskCutoverName]
+		newActInfo.ShId = ShIdTnsCutover
+		newActInfo.DbUname = cocfg.DbByTns[gTnsCutoverName]
 		newActInfo.Phase = cocfg.Phase
 		newActInfo.RwStatus = (ReadOk | WriteOk)
 	} else {
 		//cutover or unknown phase
-		if cocfg.ActiveTwoTask == UnsetStr {
+		if cocfg.ActiveTns == UnsetStr {
 			logger.GetLogger().Log(logger.Alert, "CP 5 convert to ActiveInfo: no active DB in cutover phase", cocfg)
 			newActInfo.ShId = ShIdUnset
 			newActInfo.DbUname = UnsetStr
 			newActInfo.Phase = cocfg.Phase
 		} else {
-			actDb := cocfg.DbBy2task[cocfg.ActiveTwoTask]
+			actDb := cocfg.DbByTns[cocfg.ActiveTns]
 			newActInfo.DbUname = actDb
 			newActInfo.Phase = cocfg.Phase
 			newActInfo.ShId = cocfg.ActiveShardId
@@ -128,7 +130,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		}
 		evt := cal.NewCalEvent(EvtTypeCutover, "preproc_internal_startup", cal.TransOK, "")
 		evt.Completed()
-		return false, nil 
+		return false, nil
 	}
 
 	interrupt := false // if txn should be disrupted
@@ -141,7 +143,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		if crd.curActDb != nil {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, crd.id, "cur  Active [ShId, dbUname, phase, rwstatus]=[",
-				crd.curActDb.ShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
+					crd.curActDb.ShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
 			}
 		}
 		return interrupt, nil
@@ -150,8 +152,8 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	if crd.curActDb == nil {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
-			crd.curActDb = &ActiveDbInfo{};
-			crd.copyActCOInfo(crd.curActDb, *newActInfo)   // now coordinator has updated with latest info
+			crd.curActDb = &ActiveDbInfo{}
+			crd.copyActCOInfo(crd.curActDb, *newActInfo) // now coordinator has updated with latest info
 		}
 	}
 	diff := compActiveInfo(crd.curActDb, newActInfo)
@@ -178,11 +180,11 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		// worker could be in a long txn, break it if needed.
 		if (diff & 0x0001) == 0x0001 {
 			if newActInfo.Phase == PrePhStr || newActInfo.Phase == EnablePhStr {
-				if newActInfo.ShId != ShId2Task {
+				if newActInfo.ShId != ShIdTns {
 					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. prior to cutover phase config using ShId2TaskCutover!")
 				}
 			} else if newActInfo.Phase == CompletePhStr {
-				if newActInfo.ShId != ShId2TaskCutover {
+				if newActInfo.ShId != ShIdTnsCutover {
 					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. post cutover phase config using ShId2Task!")
 				}
 			} else if newActInfo.Phase == CutoverPhStr {
@@ -237,8 +239,8 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				}
 			}
 		}
-		crd.copyActCOInfo(crd.curActDb, *newActInfo)   // now coordinator has updated with latest info
-		crd.shard.shardID = int(crd.curActDb.ShId) // we will need shardID in dispatchRequest(). hm..
+		crd.copyActCOInfo(crd.curActDb, *newActInfo) // now coordinator has updated with latest info
+		crd.shard.shardID = int(crd.curActDb.ShId)   // we will need shardID in dispatchRequest(). hm..
 		return interrupt, err
 	} else {
 		// worker is not in transactions
@@ -292,10 +294,10 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 			logger.GetLogger().Log(logger.Verbose, crd.id, "phase cutover, dispatch to", int(shardToUse), "workers")
 		}
 	} else if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == PrePhStr {
-		shardToUse = ShId2Task
+		shardToUse = ShIdTns
 		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 ENABLE or PRE phase, dispatch to two_task workers", int(shardToUse))
 	} else if crd.curActDb.Phase == CompletePhStr {
-		shardToUse = ShId2TaskCutover
+		shardToUse = ShIdTnsCutover
 		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 COMPLETE phase, dispatch to two_task_cutover", int(shardToUse))
 	} else {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 dispatchRequest error invalid cutover phase")

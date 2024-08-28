@@ -153,10 +153,10 @@ const (
 // two_task_cutover is shard 1
 // support max 2 db at this time
 const (
-	ShId2Task        ShardByTwoTask = 0
-	ShId2TaskCutover ShardByTwoTask = 1
-	MaxDbInCutover   ShardByTwoTask = 2
-	ShIdUnset        ShardByTwoTask = 3
+	ShIdTns        ShardByTwoTask = 0
+	ShIdTnsCutover ShardByTwoTask = 1
+	MaxDbInCutover ShardByTwoTask = 2
+	ShIdUnset      ShardByTwoTask = 3
 )
 
 const (
@@ -165,6 +165,11 @@ const (
 	CutoverPhStr  = "CUTOVER"
 	CompletePhStr = "COMPLETE"
 	UnsetStr      = "NONE"
+)
+
+const (
+	Source = "SRC"
+	Target = "TGT"
 )
 
 const (
