@@ -63,7 +63,7 @@ func GetTnsRname() string {
 	return gTnsRname
 }
 
-func Get2TaskRCutoverName() string {
+func GetTnsRcutoverName() string {
 	return gTnsRcutoverName
 }
 
@@ -284,7 +284,7 @@ func loadCutoverCfg(db *sql.DB) error {
 
 	// can't have identical occ_two_task
 	if isCfgSame(records[0].occ2task.String, records[1].occ2task.String) {
-		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_occ2task", cal.TransOK, "")
+		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_occTns", cal.TransOK, "")
 		evt.Completed()
 		return fmt.Errorf("error cutover cfg can't have same two_task [%s, %s] [%s, %s]",
 			records[0].occ2task.String, records[0].dbUname.String,
@@ -562,10 +562,10 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.ActiveTns != nextcfg.ActiveTns {
 		changed = true
 		info := fmt.Sprint(curcfg.ActiveTns, "_to_", nextcfg.ActiveTns)
-		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_act_2task_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_act_tns_chg", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "cfg ActiveTwoTask changed", info)
+			logger.GetLogger().Log(logger.Info, "cfg ActiveTns changed", info)
 		}
 		whatchanged |= 0x0020
 	}
@@ -584,7 +584,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.DbByTns[gTnsName] != nextcfg.DbByTns[gTnsName] {
 		changed = true
 		info := fmt.Sprint(gTnsName, "_", curcfg.DbByTns[gTnsName], "_to_", nextcfg.DbByTns[gTnsName])
-		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_2task_db_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tns_db_chg", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, gTnsName, "DBUname changed:", info)
@@ -595,7 +595,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.DbByTns[gTnsCutoverName] != nextcfg.DbByTns[gTnsCutoverName] {
 		changed = true
 		info := fmt.Sprint(gTnsCutoverName, "_", curcfg.DbByTns[gTnsCutoverName], "_to_", nextcfg.DbByTns[gTnsCutoverName])
-		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_2taskcutover_db_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_cutover_tns_db_chg", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, gTnsCutoverName, "DBUname changed:", info)
@@ -631,7 +631,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.TnsByRole[Source] != nextcfg.TnsByRole[Source] {
 		changed = true
 		info := fmt.Sprint(gTnsName, "_", curcfg.TnsByRole[gTnsName], "_to_", nextcfg.TnsByRole[gTnsName])
-		evt := cal.NewCalEvent(EvtTypeCutover, "2task_dbrole_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "tns_dbrole_chg", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, gTnsName, "dbrole change changed:", info)
@@ -660,15 +660,15 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 	}
 
 	curActDb := curcfg.DbByTns[curcfg.ActiveTns]
-	curAct2task := curcfg.ActiveTns
+	curActTns := curcfg.ActiveTns
 	nextAct2task := nextcfg.ActiveTns
 	stopR := false
 	stopW := false
 	if nextcfg.Phase == CutoverPhStr {
 		// remains in cutover phase
-		if curAct2task == nextAct2task {
+		if curActTns == nextAct2task {
 			// active two_task remains the same
-			if curAct2task == UnsetStr { // no active db
+			if curActTns == UnsetStr { // no active db
 				return
 			}
 			curRw := curcfg.RWstatusByDb[curActDb]
@@ -717,7 +717,7 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 			// cur active2task and next active2task are different
 			//  * stop write on current active2task
 			//  * no action needed for next active2task
-			if curAct2task == UnsetStr { // from none to one active
+			if curActTns == UnsetStr { // from none to one active
 				return
 			}
 			stopR = true

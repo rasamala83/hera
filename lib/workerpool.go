@@ -91,7 +91,7 @@ type WorkerPool struct {
 	CoShardID        ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
 	phase            string         // the phase is updated by the cutovercfg
 	dbUname          string         // the dbuname is updated by the cutovercfg
-	str2task         string
+	strTns           string
 	checkSetUserRole uint // 0 disable, >0 enable, whether pool requires workers to do userrole check/set or not
 }
 
@@ -114,9 +114,9 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 		pool.CoShardID = pool2task
 		pool.ShardID = int(pool2task)
 		if pool2task == ShIdTns {
-			pool.str2task = GetTnsName()
+			pool.strTns = GetTnsName()
 		} else if pool2task == ShIdTnsCutover {
-			pool.str2task = GetTnsCutoverName()
+			pool.strTns = GetTnsCutoverName()
 		}
 	}
 
