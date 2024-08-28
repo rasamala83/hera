@@ -2,7 +2,7 @@ package lib
 
 import (
 	"errors"
-
+	"strconv"
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
@@ -311,7 +311,7 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 // only for internal write queries. When read cfg always use two_task shard, write uses two_task shard and cutover shard
 func (crd *Coordinator) processSetCoShardID(val []byte) error {
 	if !GetConfig().EnableCutover { // no need to pass
-		crd.coInternalShId = ShIdUnset
+		crd.shId4Internal = ShIdUnset
 		return nil
 	}
 	if !crd.isInternal { // not allow external connections
@@ -327,10 +327,10 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 		return ErrBadShardID
 	}
 
-	crd.coInternalShId = ShardByTwoTask(sh)
+	crd.shId4Internal = ShardByTwoTask(sh)
 	if crd.inTransaction && (crd.worker != nil) {
 		// in transaction, piggy back on the shard variable
-		if int(crd.coInternalShId) != crd.worker.shardID {
+		if int(crd.shId4Internal) != crd.worker.shardID {
 			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
 			evt.AddDataInt("cur_shard_id", int64(crd.worker.shardID))
 			evt.AddDataStr("requested_shard_id", string(val))

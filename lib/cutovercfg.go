@@ -94,7 +94,7 @@ func InitCutoverCfg(modulename string) error {
 			db.Close()
 		}
 		// always send cfg query to two_task connections
-		db, err = cutoverOpenDb()
+		db, err = cutoverOpenDb(ShIdTnsCutover)
 		if err != nil {
 			evt := cal.NewCalEvent(EvtTypeCutover, "err_init_opendb_"+strconv.Itoa(i), cal.TransOK, err.Error())
 			evt.Completed()
@@ -135,7 +135,7 @@ func InitCutoverCfg(modulename string) error {
 			}
 
 			// always two_task connections
-			db, err = cutoverOpenDb()
+			db, err = cutoverOpenDb(ShIdUnset)
 			if err != nil {
 				evt := cal.NewCalEvent(EvtTypeCutover, "err_reload_opendb", cal.TransOK, err.Error())
 				evt.Completed()
@@ -836,9 +836,9 @@ func setPermTwoTaskName() error {
 	}
 
 	if GetConfig().ReadonlyPct > 0 {
-		g2TnsRname = strings.ToUpper(os.Getenv("TWO_TASK_READ_0"))
-		if g2TnsRname == "" {
-			g2TnsRname = strings.ToUpper(os.Getenv("TWO_TASK_READ"))
+		gTnsRname = strings.ToUpper(os.Getenv("TWO_TASK_READ_0"))
+		if gTnsRname == "" {
+			gTnsRname = strings.ToUpper(os.Getenv("TWO_TASK_READ"))
 		}
 		gTnsRcutoverName = strings.ToUpper(os.Getenv("TWO_TASK_READ_CUTOVER_0"))
 		if gTnsRcutoverName == "" {
@@ -846,7 +846,7 @@ func setPermTwoTaskName() error {
 		}
 		if gTnsRcutoverName == "" || gTnsCutoverName == "" {
 			// can't proceed
-			return fmt.Errorf("error incomplete read-only utover env setup [%s] [%s]", g2TnsRname, gTnsRcutoverName)
+			return fmt.Errorf("error incomplete read-only utover env setup [%s] [%s]", gTnsRname, gTnsRcutoverName)
 		}
 	}
 	return nil

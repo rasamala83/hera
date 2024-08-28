@@ -519,6 +519,7 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 		return false, nil
 	// sharding commands
 	case common.CmdSetShardID:
+		var err error
 		if GetConfig().EnableCutover {
 			// internal query log goes to both pool
 			err = crd.processSetCoShardID(request.Payload)
@@ -1011,6 +1012,10 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					shIdToGo = ShIdTnsCutover
 				}
 				if worker.shardID != int(ShIdTns) {
+					wType := wtypeRW
+					if crd.isRead && GetConfig().ReadonlyPct > 0 {
+						wType = wtypeRO
+					}
 					workerpool, worker, ticket, err = crd.getWorkerHelper(wType, shIdToGo, true)
 					if err != nil {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover internal sql default sql route error:", err)
