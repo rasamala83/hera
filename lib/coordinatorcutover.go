@@ -26,6 +26,7 @@ func (crd *Coordinator) copyActCOInfo(destInfo *ActiveDbInfo, srcInfo ActiveDbIn
 	if destInfo == nil {
 		destInfo = &ActiveDbInfo{}
 	}
+	destInfo.SrcTns = srcInfo.SrcTns
 	destInfo.ShId = srcInfo.ShId
 	destInfo.Phase = srcInfo.Phase
 	destInfo.RwStatus = srcInfo.RwStatus
@@ -119,6 +120,9 @@ hang up conditions
 */
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
 
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, crd.id, "shtien PreprocessCutover")
+	}
 	tmpcfg := GetCutoverCfg()
 	if tmpcfg == nil {
 		if !crd.isInternal {
@@ -267,7 +271,23 @@ func (crd *Coordinator) ProceedWriteInCutover() error {
 	}
 	return nil
 }
+func (crd *Coordinator) getSrcShardByCutoverCfg() (ShardByTwoTask) {
+	if crd.curActDb == nil {
+		logger.GetLogger().Log(logger.Alert, crd.id, "shtien OCC-510: unknown source to internal sql")
+		// we don't know yet
+		return ShIdUnset
+	}
 
+	logger.GetLogger().Log(logger.Debug, crd.id, "shtien get ActiveDb source tns", crd.curActDb.SrcTns)
+	srcShId := ShIdTns
+	if crd.curActDb.SrcTns == GetTnsCutoverName() {
+		srcShId = ShIdTnsCutover
+	}
+	logger.GetLogger().Log(logger.Debug, crd.id, "shtien ActiveDb source tns", srcShId)
+	// reset the internal
+	crd.shId4Internal = ShIdUnset
+	return srcShId
+}
 func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 	shardToUse := ShIdUnset
 	if crd.curActDb.Phase == CutoverPhStr {

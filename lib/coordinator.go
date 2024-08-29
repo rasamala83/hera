@@ -835,7 +835,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					srcShId := ShIdTns
 					if crd.shId4Internal < MaxDbInCutover {
 						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, crd.id, "dispatchrequest: internal sql shard is dictated, should only occur during server start up")
+							logger.GetLogger().Log(logger.Info, crd.id, "shtien dispatchrequest: r/w internal sql shard is dictated, should only occur during server start up")
 						}
 						srcShId = crd.shId4Internal
 					} else {
@@ -888,10 +888,19 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				}
 				var shardToUse ShardByTwoTask
 				if crd.isInternal {
+					//internal queries always use src shard when cutover feature is enabled.
+					shardToUse = crd.getSrcShardByCutoverCfg()
+					if shardToUse >= MaxDbInCutover {
+						if logger.GetLogger().V(logger.Info) {
+							logger.GetLogger().Log(logger.Info, crd.id, "shtien dispatchrequest: internal sql shard is dictated, should only occur during server start up")
+						}
+						shardToUse = crd.shId4Internal
+					} 
 					if logger.GetLogger().V(logger.Verbose) {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover runs internal query. isRead", crd.isRead)
 					}
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, ShIdTns, false)
+					logger.GetLogger().Log(logger.Verbose, crd.id, "shtien. shardToUse ", shardToUse)
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, shardToUse, false)
 					if err != nil {
 						if logger.GetLogger().V(logger.Info) {
 							logger.GetLogger().Log(logger.Info, crd.id, "cutover getWorkerHelper error", err)

@@ -83,6 +83,7 @@ var (
 	ErrReqParseFail,
 	ErrCutoverReadNotAllowed,
 	ErrCutoverWriteNotAllowed,
+	ErrSrcUnknown,
 	ErrCutoverKill error
 )
 
@@ -117,7 +118,7 @@ func MkErr(prefix string) {
 	ErrCutoverWriteNotAllowed = errors.New(prefix + "-501: active db cutover no write allowed")
 	ErrCutoverKill = errors.New(prefix + "-502: db cutover stop txn in progress")
 	ErrNotInternal = errors.New(prefix + "-503: set shard by non-internal sql")
-
+	ErrSrcUnknown = errors.New(prefix + "-510: unknown source to internal sql")
 }
 
 // Configuration entry names
