@@ -522,6 +522,9 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 		var err error
 		if GetConfig().EnableCutover {
 			// internal query log goes to both pool
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, crd.id, "shtien CmdSetShardID", request.Payload)
+			}
 			err = crd.processSetCoShardID(request.Payload)
 		} else {
 			err = crd.processSetShardID(request.Payload)

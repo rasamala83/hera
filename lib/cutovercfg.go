@@ -325,6 +325,7 @@ func loadCutoverCfg(db *sql.DB) error {
 	var newcfg CutoverCfg
 	newcfg.DbByTns = make(map[string]string, 3)
 	newcfg.RWstatusByDb = make(map[string]int, 3)
+	newcfg.TnsByRole = make(map[string]string, 3)
 	newcfg.Phase = records[0].phase.String
 	active := 0
 	for i := 0; i < 2; i++ {
@@ -737,7 +738,7 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 					evt := cal.NewCalEvent(EvtTypeCutover, "err_wpool_stopRW_diff2task", cal.TransOK, stopRwCalName)
 					evt.Completed()
 					if logger.GetLogger().V(logger.Info) {
-						logger.GetLogger().Log(logger.Info, "CP 27", t, "error:", err.Error())
+						logger.GetLogger().Log(logger.Info, "err_wpool_stopRW_diff2task", t, "error:", err.Error())
 					}
 				} else {
 					if wpool != nil {
@@ -746,7 +747,7 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 						wpool.StopWorker(stopR, stopW)
 					} else {
 						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, "CP 27 workerpool nil. [shid, type] [", shid, ",", t, "]")
+							logger.GetLogger().Log(logger.Info, "workerpool nil. [shid, type] [", shid, ",", t, "]")
 						}
 					}
 					wpool = nil
@@ -757,6 +758,9 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 }
 
 func cutoverOpenDb(shToUse ShardByTwoTask) (*sql.DB, error) {
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "shtien", shToUse) 
+	}
 
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", int(shToUse)))
 	if err != nil {

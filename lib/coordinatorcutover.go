@@ -314,11 +314,17 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 		crd.shId4Internal = ShIdUnset
 		return nil
 	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, crd.id, "shtien processSetCoShardID")
+	}
 	if !crd.isInternal { // not allow external connections
 		return ErrNotInternal
 	}
 
 	sh, err := strconv.ParseInt(string(val), 10, 32)
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, crd.id, "shtien processSetCoShardID", sh)
+	}
 	if err != nil {
 		return nil
 	}
@@ -339,7 +345,7 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 		}
 	}
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "Shard ID forced to", crd.shard.shardID)
+		logger.GetLogger().Log(logger.Debug, crd.id, "shtien Shard ID forced to", crd.shard.shardID)
 	}
 	return nil
 }
