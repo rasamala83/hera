@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/paypal/hera/utility/logger"
@@ -215,4 +216,10 @@ func ClearLogsData() {
 		return
 	}
 	defer calLogFile.Close()
+}
+
+func CheckError(err error, t *testing.T) {
+	if err != nil {
+		t.Fatal("Error:", err)
+	}
 }
