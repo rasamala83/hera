@@ -3,6 +3,7 @@ package lib
 import (
 	"errors"
 	"strconv"
+
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
@@ -306,8 +307,6 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 	return shardToUse, nil
 }
 
-
-
 // only for internal write queries. When read cfg always use two_task shard, write uses two_task shard and cutover shard
 func (crd *Coordinator) processSetCoShardID(val []byte) error {
 	if !GetConfig().EnableCutover { // no need to pass
@@ -335,17 +334,21 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 
 	crd.shId4Internal = ShardByTwoTask(sh)
 	if crd.inTransaction && (crd.worker != nil) {
-		// in transaction, piggy back on the shard variable
+		// crd.worker.shardID is used by cutover feature so we check if we need switch.
+		// this is unlikely since internal sql don't use persistent connection.
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, crd.id, "shtien processSetCoShardID crd.shId4Internal", crd.shId4Internal, "crd.worker.shardID", crd.worker.shardID)
+		}
 		if int(crd.shId4Internal) != crd.worker.shardID {
 			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
 			evt.AddDataInt("cur_shard_id", int64(crd.worker.shardID))
 			evt.AddDataStr("requested_shard_id", string(val))
 			evt.Completed()
-			// processSetCoShardID has higher priority, switch worker.
+			return ErrChangeShardIDInTxn
 		}
 	}
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "shtien Shard ID forced to", crd.shard.shardID)
+		logger.GetLogger().Log(logger.Debug, crd.id, "shtien Shard ID forced to", crd.shId4Internal)
 	}
 	return nil
 }

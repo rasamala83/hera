@@ -833,8 +833,15 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				if crd.isInternal {
 					//internal queries always use src shard when cutover feature is enabled.
 					srcShId := ShIdTns
-					if crd.curActDb.SrcTns == gTnsCutoverName {
-						srcShId = ShIdTnsCutover
+					if crd.shId4Internal < MaxDbInCutover {
+						if logger.GetLogger().V(logger.Info) {
+							logger.GetLogger().Log(logger.Info, crd.id, "dispatchrequest: internal sql shard is dictated, should only occur during server start up")
+						}
+						srcShId = crd.shId4Internal
+					} else {
+						if crd.curActDb.SrcTns == gTnsCutoverName {
+							srcShId = ShIdTnsCutover
+						}
 					}
 					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, srcShId, false)
 					if err != nil {
