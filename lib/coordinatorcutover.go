@@ -66,20 +66,19 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 	}
 	var newActInfo ActiveDbInfo
 	newActInfo.SrcTns = cocfg.TnsByRole[Source]
-	if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
+	if cocfg.Phase == EnablePhStr || cocfg.Phase == FlexupPhStr {
 		newActInfo.ShId = ShIdTns
-		newActInfo.DbUname = cocfg.DbByTns[gTnsName]
-		newActInfo.Phase = cocfg.Phase
-		newActInfo.RwStatus = (ReadOk | WriteOk)
-	} else if cocfg.Phase == CompletePhStr {
-		newActInfo.ShId = ShIdTnsCutover
-		newActInfo.DbUname = cocfg.DbByTns[gTnsCutoverName]
+		newActInfo.DbUname = cocfg.DbByTns[gTnsAlias]
 		newActInfo.Phase = cocfg.Phase
 		newActInfo.RwStatus = (ReadOk | WriteOk)
 	} else {
 		//cutover or unknown phase
 		if cocfg.ActiveTns == UnsetStr {
-			logger.GetLogger().Log(logger.Alert, "CP 5 convert to ActiveInfo: no active DB in cutover phase", cocfg)
+			evt := cal.NewCalEvent(EvtTypeCutover, "cutover_no_active_db", cal.TransOK, "")
+			evt.Completed()
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "No active DB in cutover phase", cocfg)
+			}
 			newActInfo.ShId = ShIdUnset
 			newActInfo.DbUname = UnsetStr
 			newActInfo.Phase = cocfg.Phase
@@ -91,7 +90,9 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 			newActInfo.RwStatus = cocfg.RWstatusByDb[actDb]
 		}
 	}
-	logger.GetLogger().Log(logger.Info, "CP 5 convert cfg to newActInfo (ShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "ActiveDBInfo (ShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
+	}
 	return &newActInfo
 }
 
@@ -184,13 +185,11 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	if crd.inTransaction {
 		// worker could be in a long txn, break it if needed.
 		if (diff & 0x0001) == 0x0001 {
-			if newActInfo.Phase == PrePhStr || newActInfo.Phase == EnablePhStr {
+			if newActInfo.Phase == FlexupPhStr || newActInfo.Phase == EnablePhStr {
 				if newActInfo.ShId != ShIdTns {
-					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. prior to cutover phase config using ShId2TaskCutover!")
-				}
-			} else if newActInfo.Phase == CompletePhStr {
-				if newActInfo.ShId != ShIdTnsCutover {
-					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. post cutover phase config using ShId2Task!")
+					if logger.GetLogger().V(logger.Info) {
+						logger.GetLogger().Log(logger.Info, crd.id, "prior to cutover phase config using")
+					}
 				}
 			} else if newActInfo.Phase == CutoverPhStr {
 				//cutover phase, swithc worker pool
@@ -201,7 +200,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				err = errors.New("cutover database switch")
 			} else {
 				// shouldn't reach here
-				logger.GetLogger().Log(logger.Alert, crd.id, "logging only. Unrecognized new cutover phase with occ_two_task change")
+				logger.GetLogger().Log(logger.Alert, crd.id, "logging only. Unrecognized new cutover phase with occ_tns_alias change")
 			}
 		}
 		if (diff & 0x0002) == 0x0002 {
@@ -271,9 +270,9 @@ func (crd *Coordinator) ProceedWriteInCutover() error {
 	}
 	return nil
 }
-func (crd *Coordinator) getSrcShardByCutoverCfg() (ShardByTwoTask) {
+func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
 	if crd.curActDb == nil {
-		logger.GetLogger().Log(logger.Alert, crd.id, "shtien OCC-510: unknown source to internal sql")
+		logger.GetLogger().Log(logger.Warning, crd.id, "shtien OCC-510: unknown source, ignore during server init")
 		// we don't know yet
 		return ShIdUnset
 	}
@@ -314,15 +313,20 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, crd.id, "phase cutover, dispatch to", int(shardToUse), "workers")
 		}
-	} else if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == PrePhStr {
-		shardToUse = ShIdTns
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 ENABLE or PRE phase, dispatch to two_task workers", int(shardToUse))
-	} else if crd.curActDb.Phase == CompletePhStr {
-		shardToUse = ShIdTnsCutover
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 COMPLETE phase, dispatch to two_task_cutover", int(shardToUse))
+	} else if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == FlexupPhStr {
+		// now we need to know which connection pool is the source (in the opposite of target)
+		shardToUse = crd.getSrcShardByCutoverCfg()
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, crd.id, "ENABLE or PRE phase, get source shard = ", int(shardToUse))
+		}
+		if shardToUse >= MaxDbInCutover {
+			// we can't default sql routing by unknown source
+			shardToUse = ShIdUnset
+			return shardToUse, ErrSrcUnknown
+		}
 	} else {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 dispatchRequest error invalid cutover phase")
-		return shardToUse, errors.New("Invalid cutover phase")
+		return shardToUse, errors.New("invalid cutover phase")
 	}
 	return shardToUse, nil
 }

@@ -162,11 +162,10 @@ const (
 )
 
 const (
-	EnablePhStr   = "ENABLE"
-	PrePhStr      = "PRE"
-	CutoverPhStr  = "CUTOVER"
-	CompletePhStr = "COMPLETE"
-	UnsetStr      = "NONE"
+	EnablePhStr  = "ENABLE"
+	FlexupPhStr  = "FLEXUP"
+	CutoverPhStr = "CUTOVER"
+	UnsetStr     = "NONE"
 )
 
 const (
@@ -175,10 +174,9 @@ const (
 )
 
 const (
-	EnablePhId   = 1
-	PrePhId      = 2
-	CutoverPhId  = 3
-	CompletePhId = 4
+	EnablePhId  = 1
+	FlexupPhId  = 2
+	CutoverPhId = 3
 )
 
 const (

@@ -659,7 +659,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 	if GetConfig().EnableCutover {
 		coCfg := GetCutoverCfg()
 		if coCfg != nil {
-			if coCfg.Phase == PrePhStr || coCfg.Phase == CutoverPhStr {
+			if coCfg.Phase == FlexupPhStr || coCfg.Phase == CutoverPhStr {
 				tnsKeyName := GetTnsCutoverName()
 				if worker.ConnTwoTask == ShIdTns {
 					tnsKeyName = GetTnsName()

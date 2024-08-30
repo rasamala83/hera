@@ -101,17 +101,17 @@ func Run() {
 	if GetConfig().EnableCutover {
 		loadEnvErr := setPermTwoTaskName()
 		if loadEnvErr != nil {
-			evt := cal.NewCalEvent(EvtTypeCutover, "startup_error", cal.TransOK, loadEnvErr.Error())
+			evt := cal.NewCalEvent(EvtTypeCutover, "env_error", cal.TransOK, loadEnvErr.Error())
 			evt.Completed()
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, loadEnvErr.Error())
 			}
 			FullShutdown()
 		} else {
-			evt := cal.NewCalEvent(EvtTypeCutover, "enabled", cal.TransOK, "")
+			evt := cal.NewCalEvent(EvtTypeCutover, "env_ready", cal.TransOK, "")
 			evt.Completed()
 			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "mux starts up - cutover enabled")
+				logger.GetLogger().Log(logger.Info, "mux starts up - cutover env ready")
 			}
 		}
 	}

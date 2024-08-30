@@ -222,10 +222,16 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 		return false
 	}
 
-	if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
-		activeSh = 0
-	} else if cocfg.Phase == CompletePhStr {
-		activeSh = 1
+	if cocfg.Phase == EnablePhStr || cocfg.Phase == FlexupPhStr {
+		//activeSh = 0
+		if cocfg.TnsByRole[Source] == GetTnsCutoverName() {
+			activeSh = int(ShIdTns)
+		} else if cocfg.TnsByRole[Source] == GetTnsCutoverName() {
+			activeSh = int(ShIdTnsCutover)
+		} else {
+			// shouldn't get here.
+			return false
+		}
 	} else if cocfg.Phase == CutoverPhStr {
 		activeSh = int(ShIdTns)
 		if cocfg.ActiveShardId == ShIdTnsCutover {
@@ -382,10 +388,14 @@ func (sl *StateLog) ProxyHasCapacityForCutover(_wlimit int, _rlimit int) (bool, 
 		return false, 0
 	}
 
-	if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
-		activeSh = 0
-	} else if cocfg.Phase == CompletePhStr {
-		activeSh = 1
+	if cocfg.Phase == EnablePhStr || cocfg.Phase == FlexupPhStr {
+		if cocfg.TnsByRole[Source] == GetTnsName() {
+			activeSh = int(ShIdTns)
+		} else if cocfg.TnsByRole[Source] == GetTnsCutoverName() {
+			activeSh = int(ShIdTnsCutover)
+		} else {
+			return false, 128
+		}
 	} else if cocfg.Phase == CutoverPhStr {
 		activeSh = int(ShIdTns)
 		if cocfg.ActiveShardId == ShIdTnsCutover {

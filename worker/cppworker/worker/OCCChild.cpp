@@ -5818,7 +5818,7 @@ int OCCChild::set_role_for_the_session (){
 	
 	char set_role_SQL[1024] = {'\0'};
 	sprintf(set_role_SQL, 
-"DECLARE cursor c1 is SELECT wisb_roles FROM pypl_occ_cutover WHERE upper(occ_two_task) = upper('%s') AND upper(occ_name) = upper('%s') AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles);cnt integer := 0;wiri_roles pypl_occ_cutover.wisb_roles%%type;final_wiri pypl_occ_cutover.wisb_roles%%type;BEGIN FOR i in c1 LOOP cnt := cnt + 1;wiri_roles := i.wisb_roles;END LOOP;IF cnt = 1 THEN dbms_application_info.set_client_info(wiri_roles);ELSE FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE upper(occ_two_task) = upper('%s') AND upper(occ_name) = upper('%s') AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP;select listagg(role,',') within group ( order by role asc) into final_wiri from session_roles;dbms_application_info.set_client_info(final_wiri);END IF;END;", m_cutovercfg_tns.c_str(), m_module_info.c_str(), m_cutovercfg_tns.c_str(), m_module_info.c_str());
+"DECLARE cursor c1 is SELECT wisb_roles FROM pypl_occ_cutover WHERE upper(occ_tns_alias) = upper('%s') AND upper(occ_name) = upper('%s') AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles);cnt integer := 0;wiri_roles pypl_occ_cutover.wisb_roles%%type;final_wiri pypl_occ_cutover.wisb_roles%%type;BEGIN FOR i in c1 LOOP cnt := cnt + 1;wiri_roles := i.wisb_roles;END LOOP;IF cnt = 1 THEN dbms_application_info.set_client_info(wiri_roles);ELSE FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE upper(occ_tns_alias) = upper('%s') AND upper(occ_name) = upper('%s') AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP;select listagg(role,',') within group ( order by role asc) into final_wiri from session_roles;dbms_application_info.set_client_info(final_wiri);END IF;END;", m_cutovercfg_tns.c_str(), m_module_info.c_str(), m_cutovercfg_tns.c_str(), m_module_info.c_str());
 
 
 	CalTransaction cal_trans("CUTOVER");
@@ -5893,7 +5893,7 @@ void OCCChild::cutover_support() {
 			alarm(0);
 
 			if (rc == 1) {
-				WRITE_LOG_ENTRY(logfile, LOG_INFO, "set_role_for_the_session() comeplete successfully"); 
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set_role_for_the_session() comeplete successfully"); 
 			} else {
 				WRITE_LOG_ENTRY(logfile, LOG_ALERT, "set_role_for_the_session() done unsuccessfully, exiting");
 				exit(0);	

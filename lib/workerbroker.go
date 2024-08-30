@@ -333,9 +333,9 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 		cfgWorkerChange := GetConfig().NumWorkersCh()
 		for {
 			select {
-			case ph := <-cfgWorkerChange:
-				logger.GetLogger().Log(logger.Verbose, "worker size change, cutover phase is ", ph)
-				broker.changeMaxWorkers(ph)
+			case flex := <-cfgWorkerChange:
+				logger.GetLogger().Log(logger.Verbose, "worker size change, flexdown notice:", flex)
+				broker.changeMaxWorkers(flex)
 			//
 			// Block until a signal is received.
 			//
@@ -460,55 +460,57 @@ func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, sha
 	}
 }
 
-// Phase    |two_task | two_task_cutover
-// Enable   |100%     | 1
-// Pre      |100%     | 100%
-// Cutover  |100%     | 100%
-// Complete |1        | 100%
-/* when given a cutover phase, the function resizes the workerpool size accordingly. */
-func (broker *WorkerBroker) changeMaxWorkers(phase int) {
+// less or equal to 0, ignore
+// 1 -> minimize tns_cutover pool size
+// 2 -> minimize tns pool size
+// 3 -> tns and tns_cutover both full
+func (broker *WorkerBroker) changeMaxWorkers(notice int) {
+	if notice == 0 {
+		return
+	}
+
 	wW := GetNumWWorkers(0)
 	rW := GetNumRWorkers(0)
-	minSize := 1
+	minSize := 2
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "changeMaxWorkers GetNumRWorkers(0) =", rW, "GetNumWWorkers(0)", wW)
 	}
 
-	if phase == EnablePhId {
+	if notice == 1 {
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Enable phase")
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for tns pool full, tns_cutover 2")
 		}
-		broker.resizePool(wtypeRW, wW, 0)
-		broker.resizePool(wtypeRW, minSize, 1)
+		broker.resizePool(wtypeRW, wW, int(ShIdTns))
+		broker.resizePool(wtypeRW, minSize, int(ShIdTnsCutover))
 		if rW != 0 {
-			broker.resizePool(wtypeRO, rW, 0)
-			broker.resizePool(wtypeRO, minSize, 1)
+			broker.resizePool(wtypeRO, rW, int(ShIdTns))
+			broker.resizePool(wtypeRO, minSize, int(ShIdTnsCutover))
 		}
 		return
 	}
 
-	if phase == PrePhId || phase == CutoverPhId {
+	if notice == 3 {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Pre/Cutover")
 		}
-		broker.resizePool(wtypeRW, wW, 0)
-		broker.resizePool(wtypeRW, wW, 1)
+		broker.resizePool(wtypeRW, wW, int(ShIdTns))
+		broker.resizePool(wtypeRW, wW, int(ShIdTnsCutover))
 		if rW != 0 {
-			broker.resizePool(wtypeRO, rW, 0)
-			broker.resizePool(wtypeRO, rW, 1)
+			broker.resizePool(wtypeRO, rW, int(ShIdTns))
+			broker.resizePool(wtypeRO, rW, int(ShIdTnsCutover))
 		}
 		return
 	}
 
-	if phase == CompletePhId {
+	if notice == 2 {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Complete/Broom phase")
 		}
-		broker.resizePool(wtypeRW, minSize, 0)
-		broker.resizePool(wtypeRW, wW, 1)
+		broker.resizePool(wtypeRW, minSize, int(ShIdTns))
+		broker.resizePool(wtypeRW, wW, int(ShIdTnsCutover))
 		if rW != 0 {
-			broker.resizePool(wtypeRO, minSize, 0)
-			broker.resizePool(wtypeRO, rW, 1)
+			broker.resizePool(wtypeRO, minSize, int(ShIdTns))
+			broker.resizePool(wtypeRO, rW, int(ShIdTnsCutover))
 		}
 		return
 	}

@@ -687,7 +687,7 @@ func GetNumWWorkers(shard int) int {
 	return num
 }
 
-/* func CutoverPhaseResize(min bool, shid ShardByTwoTask) {
+/*func CutoverPhaseResize(min bool, shid ShardByTwoTask) {
 	cfg := config.GetOpsConfig()
 	numWorkers, err := cfg.GetInt(ConfigMaxWorkers)
 	if min {
@@ -720,4 +720,4 @@ func GetNumWWorkers(shard int) int {
 			gAppConfig.numWorkersCh <- numWorkers
 		}
 	}
-} */
+}*/

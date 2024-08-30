@@ -832,16 +832,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			} else {
 				if crd.isInternal {
 					//internal queries always use src shard when cutover feature is enabled.
-					srcShId := ShIdTns
-					if crd.shId4Internal < MaxDbInCutover {
+					srcShId := crd.getSrcShardByCutoverCfg()
+					if crd.shId4Internal >= MaxDbInCutover {
 						if logger.GetLogger().V(logger.Info) {
 							logger.GetLogger().Log(logger.Info, crd.id, "shtien dispatchrequest: r/w internal sql shard is dictated, should only occur during server start up")
 						}
 						srcShId = crd.shId4Internal
-					} else {
-						if crd.curActDb.SrcTns == gTnsCutoverName {
-							srcShId = ShIdTnsCutover
-						}
 					}
 					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, srcShId, false)
 					if err != nil {
@@ -889,18 +885,18 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				var shardToUse ShardByTwoTask
 				if crd.isInternal {
 					//internal queries always use src shard when cutover feature is enabled.
-					shardToUse = crd.getSrcShardByCutoverCfg()
-					if shardToUse >= MaxDbInCutover {
+					srcShardId := crd.getSrcShardByCutoverCfg()
+					if srcShardId >= MaxDbInCutover {
 						if logger.GetLogger().V(logger.Info) {
 							logger.GetLogger().Log(logger.Info, crd.id, "shtien dispatchrequest: internal sql shard is dictated, should only occur during server start up")
 						}
-						shardToUse = crd.shId4Internal
-					} 
+						srcShardId = crd.shId4Internal
+					}
 					if logger.GetLogger().V(logger.Verbose) {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover runs internal query. isRead", crd.isRead)
 					}
-					logger.GetLogger().Log(logger.Verbose, crd.id, "shtien. shardToUse ", shardToUse)
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, shardToUse, false)
+					logger.GetLogger().Log(logger.Verbose, crd.id, "shtien shardToUse ", srcShardId)
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, srcShardId, false)
 					if err != nil {
 						if logger.GetLogger().V(logger.Info) {
 							logger.GetLogger().Log(logger.Info, crd.id, "cutover getWorkerHelper error", err)
@@ -972,7 +968,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					wType = wtypeRO
 				}
 
-				if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == PrePhStr {
+				if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == FlexupPhStr {
 					shIdToGo := ShIdTns
 					if crd.curActDb.SrcTns == GetTnsCutoverName() {
 						shIdToGo = ShIdTnsCutover
