@@ -171,18 +171,16 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 				for idx, split := range splits {
 					if len(split) > 0 {
 						logger.GetLogger().Log(logger.Debug, crd.id, "Responding to client...")
-						if crd.sendResponseMetadata {
-							if idx == len(splits)-2 {
-								logger.GetLogger().Log(logger.Debug, "Before ResponseMetadata:", split)
-								prefix := "1:6,"
-								pos := strings.Index(split, prefix)
-								if pos != -1 {
-									// CmdServerRespondedFromCache = 1020
-									ns := netstring.NewNetstringFrom(common.RcNoMoreData, []byte("1020"))
-									split = string(ns.Serialized)
-								}
-								logger.GetLogger().Log(logger.Debug, "After ResponseMetadata:", split)
+						if crd.sendResponseMetadata && idx == len(splits)-2 {
+							logger.GetLogger().Log(logger.Debug, "Before ResponseMetadata:", split)
+							prefix := "1:6,"
+							pos := strings.Index(split, prefix)
+							if pos != -1 {
+								// CmdServerRespondedFromCache = 1020
+								ns := netstring.NewNetstringFrom(common.RcNoMoreData, []byte(fmt.Sprintf("%d",common.CmdServerRespondedFromCache)))
+								split = string(ns.Serialized)
 							}
+							logger.GetLogger().Log(logger.Debug, "After ResponseMetadata:", split)
 						}
 						err := crd.respond([]byte(split))
 						// _, err = crd.conn.Write([]byte(split))

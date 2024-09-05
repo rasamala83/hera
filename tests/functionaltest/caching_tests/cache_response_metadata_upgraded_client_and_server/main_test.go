@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/paypal/hera/client/gosqldriver"
-	"github.com/paypal/hera/tests/unittest/testutil"
+	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
 	"os"
 	"strings"
@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-var mx testutil.Mux
 var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
@@ -70,7 +69,7 @@ func populateCache() error {
 	}
 	mux := gosqldriver.InnerConn(conn)
 	mux.SetCalCorrID("5af5e4a2758e")
-	err = mux.SetClientInfoWithPayload("testApplication", "localhost", "ClientSupportedProtocolVersions: 2.0")
+	err = mux.SetClientInfoWithPayload("testApplication", "localhost", "ClientSupportedProtocolVersions: 2")
 	if err != nil {
 		return err
 	}
@@ -182,7 +181,7 @@ func TestTTLCacheResponseMetadataUpgradedClientAndServer(t *testing.T) {
 	mux := gosqldriver.InnerConn(conn)
 	mux.SetCalCorrID("5af5e4a2758e")
 
-	err = mux.SetClientInfoWithPayload("testApplication", "localhost", "ClientSupportedProtocolVersions: 2.0")
+	err = mux.SetClientInfoWithPayload("testApplication", "localhost", "ClientSupportedProtocolVersions: 2")
 	if err != nil {
 		t.Fatalf("Unable to set CLIENT_INFO")
 	}
@@ -197,12 +196,16 @@ func TestTTLCacheResponseMetadataUpgradedClientAndServer(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 
-	if testutil.RegexCountFile("Connection handler read.*ClientSupportedProtocolVersions: 2.0", "hera.log") < 2 {
+	if testutil.RegexCountFile("Connection handler read.*ClientSupportedProtocolVersions: 2", "hera.log") < 2 {
 		t.Fatalf("Error: expected ClientSupportedProtocolVersions in CLIENT_INFO")
 	}
 
-	if testutil.RegexCountFile("server info:.*ServerSupportedProtocolVersion:2", "hera.log") < 2 {
+	if testutil.RegexCountFile("server info:.*ServerSupportedProtocolVersion: 2", "hera.log") < 2 {
 		t.Fatalf("Error: expected to respond with ServerSupportedProtocolVersion")
+	}
+
+	if testutil.RegexCountFile(".*sendCacheResponseMetadata.*", "cal.log") < 2 {
+		t.Fatalf("Error: should see sendCacheResponseMetadata event with the client application name")
 	}
 
 	if testutil.RegexCountFile("3029497934 CachingEnabled for  GET : true", "hera.log") < 2 {

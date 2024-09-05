@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/paypal/hera/client/gosqldriver"
-	"github.com/paypal/hera/tests/unittest/testutil"
+	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
 	"os"
 	"strings"
@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-var mx testutil.Mux
 var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
@@ -130,6 +129,10 @@ func TestTTLCacheResponseMetadataUpgradedServer(t *testing.T) {
 		t.Fatalf("Error: should be a cache miss for the first read")
 	}
 
+	if testutil.RegexCountFile(".*sendCacheResponseMetadata.*", "cal.log") > 0 {
+		t.Fatalf("Error: should not see sendCacheResponseMetadata event")
+	}
+
 	if testutil.RegexCountFile("Trying SET with key", "hera.log") < 1 {
 		t.Fatalf("Error: should have entered setRecordToCache when caching is enabled")
 	}
@@ -184,12 +187,16 @@ func TestTTLCacheResponseMetadataUpgradedServer(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 
-	if testutil.RegexCountFile("Connection handler read.*ClientSupportedProtocolVersions: 2.0", "hera.log") > 0 {
+	if testutil.RegexCountFile("Connection handler read.*ClientSupportedProtocolVersions: 2", "hera.log") > 0 {
 		t.Fatalf("Error: should not see ClientSupportedProtocolVersions in CLIENT_INFO")
 	}
 
-	if testutil.RegexCountFile("server info:.*ServerSupportedProtocolVersion:2", "hera.log") > 0 {
+	if testutil.RegexCountFile("server info:.*ServerSupportedProtocolVersion: 2", "hera.log") > 0 {
 		t.Fatalf("Error: should not respond with ServerSupportedProtocolVersion")
+	}
+
+	if testutil.RegexCountFile(".*sendCacheResponseMetadata.*", "cal.log") > 0 {
+		t.Fatalf("Error: should not see sendCacheResponseMetadata event")
 	}
 
 	if testutil.RegexCountFile("3029497934 CachingEnabled for  GET : true", "hera.log") < 2 {
