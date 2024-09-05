@@ -173,9 +173,8 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 						logger.GetLogger().Log(logger.Debug, crd.id, "Responding to client...")
 						if crd.sendResponseMetadata && idx == len(splits)-2 {
 							logger.GetLogger().Log(logger.Debug, "Before ResponseMetadata:", split)
-							prefix := "1:6,"
-							pos := strings.Index(split, prefix)
-							if pos != -1 {
+							noMoreData := "1:6,"
+							if split == noMoreData {
 								// CmdServerRespondedFromCache = 1020
 								ns := netstring.NewNetstringFrom(common.RcNoMoreData, []byte(fmt.Sprintf("%d",common.CmdServerRespondedFromCache)))
 								split = string(ns.Serialized)
