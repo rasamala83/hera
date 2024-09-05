@@ -47,6 +47,8 @@ type HeraConn interface {
 	SetClientInfo(poolname string, host string) error
 
 	SetClientInfoWithPoolStack(poolName string, host string, poolStack string) error
+
+	SetClientInfoWithPayload(poolName string, host string, payload string) error
 }
 
 // HeraStmt is an API extension for *sql.Stmt

@@ -239,3 +239,35 @@ func (c *heraConnection) SetClientInfoWithPoolStack(poolName string, host string
         }
 	return nil
 }
+
+func (c *heraConnection) SetClientInfoWithPayload(poolName string, host string, payload string)(error){
+	if len(poolName) <= 0 && len(host) <= 0 && len(payload) <= 0 {
+		return nil
+	}
+
+	pid := os.Getpid()
+	data := fmt.Sprintf("PID: %d, HOST: %s, Poolname: %s, %s, Command: SetClientInfo,", pid, host, poolName, payload)
+	c.clientinfo = netstring.NewNetstringFrom(common.CmdClientInfo, []byte(string(data)))
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "SetClientInfo", c.clientinfo.Serialized)
+	}
+
+	_, err := c.conn.Write(c.clientinfo.Serialized)
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Failed to send client info")
+		}
+		return errors.New("Failed custom auth, failed to send client info")
+	}
+	ns, err := c.reader.ReadNext()
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Failed to read server info")
+		}
+		return errors.New("Failed to read server info")
+	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "Server info:", string(ns.Payload))
+	}
+	return nil
+}

@@ -84,6 +84,7 @@ const (
 	CmdServerConnectionRejectedClientTime  = 1010
 	CmdServerInfo                          = 1011
 	CmdServerIntInfo                       = 1012
+	CmdServerRespondedFromCache            = 1020
 
 	CmdClientProtocolNameNoAuth = 2001
 	CmdClientProtocolName       = 2002

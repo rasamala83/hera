@@ -23,13 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
-	"math/rand"
-	"strconv"
 	"time"
 
 	"github.com/paypal/hera/cal"
@@ -56,6 +56,7 @@ type Coordinator struct {
 	clientHostName   string
 	poolName         string
 	clientPoolStack  string
+	sendResponseMetadata bool
 	// tells if the current request is SELECT
 	isRead bool
 	// for debugging
@@ -600,8 +601,18 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 	if len(hostname) >= 40 {
 		hostname = hostname[:39]
 	}
+	crd.sendResponseMetadata = false
 	serverInfo := fmt.Sprintf("%s:load_saved_sessions*CalThreadId=0*TopLevelTxnStartTime=TopLevelTxn not set*Host=%s",
 		cal.GetCalClientInstance().GetPoolName(), hostname)
+	if GetConfig().EnableCaching {
+		idx := strings.Index(clientInfo, "ClientSupportedProtocolVersions: 2,")
+		if idx != -1 {
+			crd.sendResponseMetadata = true // Send response metadata (when caching is enabled) for clients with version 2.
+			// Indicate to the client that the server is going to send additional metadata while responding to requests.
+			serverInfo = fmt.Sprintf("%s:load_saved_sessions*CalThreadId=0*TopLevelTxnStartTime=TopLevelTxn not set*Host=%s*ServerSupportedProtocolVersion: 2",
+				cal.GetCalClientInstance().GetPoolName(), hostname)
+		}
+	}
 	ns := netstring.NewNetstringFrom(common.RcOK, []byte(serverInfo))
 	crd.respond(ns.Serialized)
 	prefix := "Poolname: "
@@ -663,6 +674,11 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "Req info: request source AZ: [", crd.clientHostPrefix, "]")
 		}
+	}
+
+	if crd.sendResponseMetadata {
+		evt := cal.NewCalEvent("sendCacheResponseMetadata", crd.poolName, cal.TransOK, "")
+		evt.Completed()
 	}
 
 	et := cal.NewCalEvent(cal.EventTypeClientInfo, crd.poolName, cal.TransOK, "mux")
