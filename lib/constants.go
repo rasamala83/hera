@@ -83,6 +83,7 @@ var (
 	ErrReqParseFail,
 	ErrCutoverReadNotAllowed,
 	ErrCutoverWriteNotAllowed,
+	ErrSrcUnknown,
 	ErrCutoverKill error
 )
 
@@ -116,7 +117,8 @@ func MkErr(prefix string) {
 	ErrCutoverReadNotAllowed = errors.New(prefix + "-500: active db cutover no read allowed")
 	ErrCutoverWriteNotAllowed = errors.New(prefix + "-501: active db cutover no write allowed")
 	ErrCutoverKill = errors.New(prefix + "-502: db cutover stop txn in progress")
-
+	ErrNotInternal = errors.New(prefix + "-503: set shard by non-internal sql")
+	ErrSrcUnknown = errors.New(prefix + "-510: unknown source to internal sql")
 }
 
 // Configuration entry names
@@ -153,25 +155,28 @@ const (
 // two_task_cutover is shard 1
 // support max 2 db at this time
 const (
-	ShId2Task        ShardByTwoTask = 0
-	ShId2TaskCutover ShardByTwoTask = 1
-	MaxDbInCutover   ShardByTwoTask = 2
-	ShIdUnset        ShardByTwoTask = 3
+	ShIdTns        ShardByTwoTask = 0
+	ShIdTnsCutover ShardByTwoTask = 1
+	MaxDbInCutover ShardByTwoTask = 2
+	ShIdUnset      ShardByTwoTask = 3
 )
 
 const (
-	EnablePhStr   = "ENABLE"
-	PrePhStr      = "PRE"
-	CutoverPhStr  = "CUTOVER"
-	CompletePhStr = "COMPLETE"
-	UnsetStr      = "NONE"
+	EnablePhStr  = "ENABLE"
+	FlexupPhStr  = "FLEXUP"
+	CutoverPhStr = "CUTOVER"
+	UnsetStr     = "NONE"
 )
 
 const (
-	EnablePhId   = 1
-	PrePhId      = 2
-	CutoverPhId  = 3
-	CompletePhId = 4
+	Source = "SRC"
+	Target = "TGT"
+)
+
+const (
+	EnablePhId  = 1
+	FlexupPhId  = 2
+	CutoverPhId = 3
 )
 
 const (

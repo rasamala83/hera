@@ -91,7 +91,7 @@ type WorkerPool struct {
 	CoShardID        ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
 	phase            string         // the phase is updated by the cutovercfg
 	dbUname          string         // the dbuname is updated by the cutovercfg
-	str2task         string
+	strTns           string
 	checkSetUserRole uint // 0 disable, >0 enable, whether pool requires workers to do userrole check/set or not
 }
 
@@ -113,10 +113,10 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 	if GetConfig().EnableCutover {
 		pool.CoShardID = pool2task
 		pool.ShardID = int(pool2task)
-		if pool2task == ShId2Task {
-			pool.str2task = Get2TaskName()
-		} else if pool2task == ShId2TaskCutover {
-			pool.str2task = Get2TaskCutoverName()
+		if pool2task == ShIdTns {
+			pool.strTns = GetTnsName()
+		} else if pool2task == ShIdTnsCutover {
+			pool.strTns = GetTnsCutoverName()
 		}
 	}
 
@@ -916,12 +916,13 @@ func (pool *WorkerPool) enforceIntegrity() {
 		evt.Completed()
 		return
 	}
-	if pool.phase == EnablePhStr || pool.phase == CompletePhStr {
+	if pool.phase == EnablePhStr { // won't check and enforce at all
 		return
 	}
 
 	warnOnly := true // warning only unless for Cutover workerpool at Pre and Cutover phase
-	if (pool.phase == PrePhStr || pool.phase == CutoverPhStr) && (pool.CoShardID == ShId2TaskCutover) {
+	if pool.phase == CutoverPhStr {
+		// cutover phase, enforce on the target pool only
 		warnOnly = false
 	}
 
@@ -942,7 +943,7 @@ func (pool *WorkerPool) enforceIntegrity() {
 	pool.poolCond.L.Unlock()
 	for _, w := range workers {
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "CUTOVER enforceIntegrity dbuname mismatched, terminate worker: pid =",
+			logger.GetLogger().Log(logger.Info, "error: dbuname mismatched. workerpool coshard=", pool.CoShardID, ", shard=", pool.ShardID, ", terminate worker: pid =",
 				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
 		}
 		if warnOnly {
@@ -969,7 +970,7 @@ func (pool *WorkerPool) enforceIntegrity() {
 // At Pre ignore the TWO_TASK pool DBUNAME mismatch
 // At Complete ignore TWO_TASK_CUTOVER pool DBUNAME mismatch
 
-func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
+func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string, isSrc bool) {
 	if pool.phase == newPhase && pool.dbUname == newDbUname {
 		logger.GetLogger().Log(logger.Debug, "ChangeCutoverInfo, phase and dbuname no change, done.")
 		return
@@ -984,7 +985,7 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string) {
 	pool.phase = newPhase
 	pool.dbUname = newDbUname
 	// only enforce two_task_cutover pool's dbuname integrity at PRE and CUTOVER
-	if pool.phase == CutoverPhStr || pool.phase == PrePhStr {
+	if !isSrc && (pool.phase == CutoverPhStr || pool.phase == FlexupPhStr) {
 		pool.enforceIntegrity()
 	}
 }

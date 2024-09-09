@@ -293,7 +293,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_%d", dbHostName, worker.shardID))
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
-			if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
+			if GetConfig().EnableCutover && worker.ConnTwoTask == ShIdTnsCutover {
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R_CUTOVER")
 				envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_CUTOVER", dbHostName))
 				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER CUTOVER %d", worker.ID))
@@ -308,7 +308,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 
 		twoTaskEnv := ""
 		if GetConfig().EnableCutover {
-			if worker.ConnTwoTask == ShId2TaskCutover {
+			if worker.ConnTwoTask == ShIdTnsCutover {
 				twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_CUTOVER_0") // should this be "_CUTOVER_%d" ? looks yes, see fallback handling below
 			} else {
 				twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_0")
@@ -324,7 +324,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			logger.GetLogger().Log(logger.Debug, "cutover enabled. handle", twoTaskEnv, "not defined")
 			if GetConfig().EnableCutover {
 				logger.GetLogger().Log(logger.Debug, twoTaskEnv, "is not defined, fallback")
-				if worker.ConnTwoTask == ShId2Task {
+				if worker.ConnTwoTask == ShIdTns {
 					twoTaskEnv = "TWO_TASK_READ"
 				} else {
 					twoTaskEnv = "TWO_TASK_READ_CUTOVER"
@@ -347,10 +347,10 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		if twoTask != "" {
 			envUpsert(&attr, envTwoTask, twoTask)
 			if GetConfig().EnableCutover {
-				if worker.ConnTwoTask == ShId2TaskCutover {
-					envUpsert(&attr, "cutover_two_task_key", Get2TaskCutoverName())
+				if worker.ConnTwoTask == ShIdTnsCutover {
+					envUpsert(&attr, "cutover_two_task_key", GetTnsCutoverName())
 				} else {
-					envUpsert(&attr, "cutover_two_task_key", Get2TaskName())
+					envUpsert(&attr, "cutover_two_task_key", GetTnsName())
 				}
 			}
 		} else {
@@ -369,7 +369,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_%d", dbHostName, worker.shardID))
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
-			if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
+			if GetConfig().EnableCutover && worker.ConnTwoTask == ShIdTnsCutover {
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_CUTOVER")
 				envUpsert(&attr, envDbHostName, dbHostName)
 				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER CUTOVER %d", worker.ID))
@@ -381,7 +381,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 		envUpsert(&attr, envHeraName, worker.moduleName)
 		twoTaskEnv := ""
-		if GetConfig().EnableCutover && worker.ConnTwoTask == ShId2TaskCutover {
+		if GetConfig().EnableCutover && worker.ConnTwoTask == ShIdTnsCutover {
 			twoTaskEnv = "TWO_TASK_CUTOVER"
 		} else {
 			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d", worker.shardID)
@@ -394,7 +394,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 					logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback to default")
 				}
 				twoTaskEnv = envTwoTask
-				if worker.ConnTwoTask == ShId2TaskCutover {
+				if worker.ConnTwoTask == ShIdTnsCutover {
 					twoTaskEnv += "_CUTOVER"
 				}
 				twoTask = os.Getenv(twoTaskEnv)
@@ -423,10 +423,10 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		} else {
 			envUpsert(&attr, envTwoTask, twoTask)
 			if GetConfig().EnableCutover {
-				if worker.ConnTwoTask == ShId2TaskCutover {
-					envUpsert(&attr, "cutover_two_task_key", Get2TaskCutoverName())
+				if worker.ConnTwoTask == ShIdTnsCutover {
+					envUpsert(&attr, "cutover_two_task_key", GetTnsCutoverName())
 				} else {
-					envUpsert(&attr, "cutover_two_task_key", Get2TaskName())
+					envUpsert(&attr, "cutover_two_task_key", GetTnsName())
 				}
 			}
 		}
@@ -659,17 +659,17 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 	if GetConfig().EnableCutover {
 		coCfg := GetCutoverCfg()
 		if coCfg != nil {
-			if coCfg.Phase == PrePhStr || coCfg.Phase == CutoverPhStr {
-				tnsKeyName := Get2TaskCutoverName()
-				if worker.ConnTwoTask == ShId2Task {
-					tnsKeyName = Get2TaskName()
+			if coCfg.Phase == FlexupPhStr || coCfg.Phase == CutoverPhStr {
+				tnsKeyName := GetTnsCutoverName()
+				if worker.ConnTwoTask == ShIdTns {
+					tnsKeyName = GetTnsName()
 				}
-				cfgDbun := coCfg.DbBy2task[tnsKeyName]
+				cfgDbun := coCfg.DbByTns[tnsKeyName]
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, "check cutovercfg and workerclient integrity: worker two_task", tnsKeyName, "target dbuname", cfgDbun)
 				}
 				if cfgDbun != worker.dbUname {
-					if worker.ConnTwoTask == ShId2TaskCutover {
+					if worker.ConnTwoTask == ShIdTnsCutover {
 						logger.GetLogger().Log(logger.Alert, "target dbuname mismatch in Pre/Cutover phase [", cfgDbun, "][", worker.dbUname, "]")
 						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
 						et := cal.NewCalEvent(EvtTypeCutover, "tgt_new_dbun_mismatch", cal.TransOK, msg)

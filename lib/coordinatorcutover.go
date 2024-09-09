@@ -2,6 +2,7 @@ package lib
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/encoding/netstring"
@@ -13,6 +14,7 @@ import (
 // Each coordinator will pull the CutoverCfg to check if there is any update.
 // The information is stored in a structure ActiveDbInfo as for which shard and RW, R, or W
 type ActiveDbInfo struct {
+	SrcTns     string         // source Tns key
 	ShId       ShardByTwoTask // active pool shard id
 	Phase      string         // current cutover phase
 	DbUname    string         // Active DB_UNAME
@@ -24,6 +26,7 @@ func (crd *Coordinator) copyActCOInfo(destInfo *ActiveDbInfo, srcInfo ActiveDbIn
 	if destInfo == nil {
 		destInfo = &ActiveDbInfo{}
 	}
+	destInfo.SrcTns = srcInfo.SrcTns
 	destInfo.ShId = srcInfo.ShId
 	destInfo.Phase = srcInfo.Phase
 	destInfo.RwStatus = srcInfo.RwStatus
@@ -62,32 +65,34 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 		return nil
 	}
 	var newActInfo ActiveDbInfo
-	if cocfg.Phase == EnablePhStr || cocfg.Phase == PrePhStr {
-		newActInfo.ShId = ShId2Task
-		newActInfo.DbUname = cocfg.DbBy2task[g2TaskName]
-		newActInfo.Phase = cocfg.Phase
-		newActInfo.RwStatus = (ReadOk | WriteOk)
-	} else if cocfg.Phase == CompletePhStr {
-		newActInfo.ShId = ShId2TaskCutover
-		newActInfo.DbUname = cocfg.DbBy2task[g2TaskCutoverName]
+	newActInfo.SrcTns = cocfg.TnsByRole[Source]
+	if cocfg.Phase == EnablePhStr || cocfg.Phase == FlexupPhStr {
+		newActInfo.ShId = ShIdTns
+		newActInfo.DbUname = cocfg.DbByTns[gTnsAlias]
 		newActInfo.Phase = cocfg.Phase
 		newActInfo.RwStatus = (ReadOk | WriteOk)
 	} else {
 		//cutover or unknown phase
-		if cocfg.ActiveTwoTask == UnsetStr {
-			logger.GetLogger().Log(logger.Alert, "CP 5 convert to ActiveInfo: no active DB in cutover phase", cocfg)
+		if cocfg.ActiveTns == UnsetStr {
+			evt := cal.NewCalEvent(EvtTypeCutover, "cutover_no_active_db", cal.TransOK, "")
+			evt.Completed()
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "No active DB in cutover phase", cocfg)
+			}
 			newActInfo.ShId = ShIdUnset
 			newActInfo.DbUname = UnsetStr
 			newActInfo.Phase = cocfg.Phase
 		} else {
-			actDb := cocfg.DbBy2task[cocfg.ActiveTwoTask]
+			actDb := cocfg.DbByTns[cocfg.ActiveTns]
 			newActInfo.DbUname = actDb
 			newActInfo.Phase = cocfg.Phase
 			newActInfo.ShId = cocfg.ActiveShardId
 			newActInfo.RwStatus = cocfg.RWstatusByDb[actDb]
 		}
 	}
-	logger.GetLogger().Log(logger.Info, "CP 5 convert cfg to newActInfo (ShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "ActiveDBInfo (ShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
+	}
 	return &newActInfo
 }
 
@@ -116,6 +121,9 @@ hang up conditions
 */
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
 
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, crd.id, "shtien PreprocessCutover")
+	}
 	tmpcfg := GetCutoverCfg()
 	if tmpcfg == nil {
 		if !crd.isInternal {
@@ -128,7 +136,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		}
 		evt := cal.NewCalEvent(EvtTypeCutover, "preproc_internal_startup", cal.TransOK, "")
 		evt.Completed()
-		return false, nil 
+		return false, nil
 	}
 
 	interrupt := false // if txn should be disrupted
@@ -141,7 +149,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		if crd.curActDb != nil {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, crd.id, "cur  Active [ShId, dbUname, phase, rwstatus]=[",
-				crd.curActDb.ShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
+					crd.curActDb.ShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
 			}
 		}
 		return interrupt, nil
@@ -150,8 +158,8 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	if crd.curActDb == nil {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
-			crd.curActDb = &ActiveDbInfo{};
-			crd.copyActCOInfo(crd.curActDb, *newActInfo)   // now coordinator has updated with latest info
+			crd.curActDb = &ActiveDbInfo{}
+			crd.copyActCOInfo(crd.curActDb, *newActInfo) // now coordinator has updated with latest info
 		}
 	}
 	diff := compActiveInfo(crd.curActDb, newActInfo)
@@ -177,13 +185,11 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	if crd.inTransaction {
 		// worker could be in a long txn, break it if needed.
 		if (diff & 0x0001) == 0x0001 {
-			if newActInfo.Phase == PrePhStr || newActInfo.Phase == EnablePhStr {
-				if newActInfo.ShId != ShId2Task {
-					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. prior to cutover phase config using ShId2TaskCutover!")
-				}
-			} else if newActInfo.Phase == CompletePhStr {
-				if newActInfo.ShId != ShId2TaskCutover {
-					logger.GetLogger().Log(logger.Alert, crd.id, "logging only. post cutover phase config using ShId2Task!")
+			if newActInfo.Phase == FlexupPhStr || newActInfo.Phase == EnablePhStr {
+				if newActInfo.ShId != ShIdTns {
+					if logger.GetLogger().V(logger.Info) {
+						logger.GetLogger().Log(logger.Info, crd.id, "prior to cutover phase config using")
+					}
 				}
 			} else if newActInfo.Phase == CutoverPhStr {
 				//cutover phase, swithc worker pool
@@ -194,7 +200,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				err = errors.New("cutover database switch")
 			} else {
 				// shouldn't reach here
-				logger.GetLogger().Log(logger.Alert, crd.id, "logging only. Unrecognized new cutover phase with occ_two_task change")
+				logger.GetLogger().Log(logger.Alert, crd.id, "logging only. Unrecognized new cutover phase with occ_tns_alias change")
 			}
 		}
 		if (diff & 0x0002) == 0x0002 {
@@ -237,8 +243,8 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				}
 			}
 		}
-		crd.copyActCOInfo(crd.curActDb, *newActInfo)   // now coordinator has updated with latest info
-		crd.shard.shardID = int(crd.curActDb.ShId) // we will need shardID in dispatchRequest(). hm..
+		crd.copyActCOInfo(crd.curActDb, *newActInfo) // now coordinator has updated with latest info
+		crd.shard.shardID = int(crd.curActDb.ShId)   // we will need shardID in dispatchRequest(). hm..
 		return interrupt, err
 	} else {
 		// worker is not in transactions
@@ -264,7 +270,23 @@ func (crd *Coordinator) ProceedWriteInCutover() error {
 	}
 	return nil
 }
+func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
+	if crd.curActDb == nil {
+		logger.GetLogger().Log(logger.Warning, crd.id, "shtien OCC-510: unknown source, ignore during server init")
+		// we don't know yet
+		return ShIdUnset
+	}
 
+	logger.GetLogger().Log(logger.Debug, crd.id, "shtien get ActiveDb source tns", crd.curActDb.SrcTns)
+	srcShId := ShIdTns
+	if crd.curActDb.SrcTns == GetTnsCutoverName() {
+		srcShId = ShIdTnsCutover
+	}
+	logger.GetLogger().Log(logger.Debug, crd.id, "shtien ActiveDb source tns", srcShId)
+	// reset the internal
+	crd.shId4Internal = ShIdUnset
+	return srcShId
+}
 func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 	shardToUse := ShIdUnset
 	if crd.curActDb.Phase == CutoverPhStr {
@@ -291,15 +313,66 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, crd.id, "phase cutover, dispatch to", int(shardToUse), "workers")
 		}
-	} else if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == PrePhStr {
-		shardToUse = ShId2Task
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 ENABLE or PRE phase, dispatch to two_task workers", int(shardToUse))
-	} else if crd.curActDb.Phase == CompletePhStr {
-		shardToUse = ShId2TaskCutover
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 COMPLETE phase, dispatch to two_task_cutover", int(shardToUse))
+	} else if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == FlexupPhStr {
+		// now we need to know which connection pool is the source (in the opposite of target)
+		shardToUse = crd.getSrcShardByCutoverCfg()
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, crd.id, "ENABLE or PRE phase, get source shard = ", int(shardToUse))
+		}
+		if shardToUse >= MaxDbInCutover {
+			// we can't default sql routing by unknown source
+			shardToUse = ShIdUnset
+			return shardToUse, ErrSrcUnknown
+		}
 	} else {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 dispatchRequest error invalid cutover phase")
-		return shardToUse, errors.New("Invalid cutover phase")
+		return shardToUse, errors.New("invalid cutover phase")
 	}
 	return shardToUse, nil
+}
+
+// only for internal write queries. When read cfg always use two_task shard, write uses two_task shard and cutover shard
+func (crd *Coordinator) processSetCoShardID(val []byte) error {
+	if !GetConfig().EnableCutover { // no need to pass
+		crd.shId4Internal = ShIdUnset
+		return nil
+	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, crd.id, "shtien processSetCoShardID")
+	}
+	if !crd.isInternal { // not allow external connections
+		return ErrNotInternal
+	}
+
+	sh, err := strconv.ParseInt(string(val), 10, 32)
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, crd.id, "shtien processSetCoShardID", sh)
+	}
+	if err != nil {
+		return nil
+	}
+	// cutover enabled. we expect sh to be 0 (two_task) or 1 (two_task_cutover)
+	if sh != 0 && sh != 1 {
+		return ErrBadShardID
+	}
+
+	crd.shId4Internal = ShardByTwoTask(sh)
+	if crd.inTransaction && (crd.worker != nil) {
+		// crd.worker.shardID is used by cutover feature so we check if we need switch.
+		// this is unlikely since internal sql don't use persistent connection.
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, crd.id, "shtien processSetCoShardID crd.shId4Internal", crd.shId4Internal, "crd.worker.shardID", crd.worker.shardID)
+		}
+		if int(crd.shId4Internal) != crd.worker.shardID {
+			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
+			evt.AddDataInt("cur_shard_id", int64(crd.worker.shardID))
+			evt.AddDataStr("requested_shard_id", string(val))
+			evt.Completed()
+			return ErrChangeShardIDInTxn
+		}
+	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, crd.id, "shtien Shard ID forced to", crd.shId4Internal)
+	}
+	return nil
 }

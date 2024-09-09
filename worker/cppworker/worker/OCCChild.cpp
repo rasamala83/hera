@@ -70,6 +70,7 @@ const std::string CAL_DATA_SQL_TEXT = "SQL_Text";
 const std::string CAL_EVENT_TRANS_START = "TRANSSTART";
 const std::string CAL_STATUS_SUCCESS_WITH_INFO = "Success With Info";
 const std::string CAL_EVENT_ORACLE = "Oracle";
+const std::string CAL_EVENT_CUTOVER = "CUTOVER";
 const int MAX_VSESSION_BIND_DATA = 63;
 const uint DEFAULT_WINDOW = 240;
 const std::string CAL_EVENT_DATETIME = "Datetime";
@@ -463,6 +464,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 
 	m_enable_sharding = config->get_bool("enable_sharding", false);
 	const char* tns_for_cutover = getenv("cutover_two_task_key");
+	WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s", tns_for_cutover); 
 	if (m_enable_sharding) {
 		m_max_scuttle_buckets = config->get_int("max_scuttle", ABS_MAX_SCUTTLE_BUCKETS);
 		m_scuttle_attr_name = config->get_string("scuttle_col_name", DEFAULT_SCUTTLE_ATTR_NAME);
@@ -502,7 +504,9 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 				WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s", m_cutovercfg_tns.c_str());
 			} else {
 				m_enable_cutover = false;
-				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "cutover_two_task_key not set, disable cutover");
+				WRITE_LOG_ENTRY(logfile, LOG_WARNING, "cutover_two_task_key not set, disable cutover");
+				CalEvent ev(CAL_EVENT_CUTOVER, "wkr_cutover_2task_unset", CAL::TRANS_OK, "disable cutover in worker");
+				ev.Completed();
 			}
 		}
 	}
@@ -5802,6 +5806,9 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 
 
 int OCCChild::set_role_for_the_session (){
+	if (!m_enable_cutover) {
+		return 1;
+	}
 	std::string my_role;
 	// now handle role mismatch, set the role
 	if (m_cutovercfg_tns.empty()) {
@@ -5811,7 +5818,7 @@ int OCCChild::set_role_for_the_session (){
 	
 	char set_role_SQL[1024] = {'\0'};
 	sprintf(set_role_SQL, 
-"DECLARE cursor c1 is SELECT wisb_roles FROM pypl_occ_cutover WHERE upper(occ_two_task) = upper('%s') AND upper(occ_name) = upper('%s') AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles);cnt integer := 0;wiri_roles pypl_occ_cutover.wisb_roles%%type;final_wiri pypl_occ_cutover.wisb_roles%%type;BEGIN FOR i in c1 LOOP cnt := cnt + 1;wiri_roles := i.wisb_roles;END LOOP;IF cnt = 1 THEN dbms_application_info.set_client_info(wiri_roles);ELSE FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE upper(occ_two_task) = upper('%s') AND upper(occ_name) = upper('%s') AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP;select listagg(role,',') within group ( order by role asc) into final_wiri from session_roles;dbms_application_info.set_client_info(final_wiri);END IF;END;", m_cutovercfg_tns.c_str(), m_module_info.c_str(), m_cutovercfg_tns.c_str(), m_module_info.c_str());
+"DECLARE cursor c1 is SELECT wisb_roles FROM pypl_occ_cutover WHERE upper(occ_tns_alias) = upper('%s') AND upper(occ_name) = upper('%s') AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles);cnt integer := 0;wiri_roles pypl_occ_cutover.wisb_roles%%type;final_wiri pypl_occ_cutover.wisb_roles%%type;BEGIN FOR i in c1 LOOP cnt := cnt + 1;wiri_roles := i.wisb_roles;END LOOP;IF cnt = 1 THEN dbms_application_info.set_client_info(wiri_roles);ELSE FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE upper(occ_tns_alias) = upper('%s') AND upper(occ_name) = upper('%s') AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP;select listagg(role,',') within group ( order by role asc) into final_wiri from session_roles;dbms_application_info.set_client_info(final_wiri);END IF;END;", m_cutovercfg_tns.c_str(), m_module_info.c_str(), m_cutovercfg_tns.c_str(), m_module_info.c_str());
 
 
 	CalTransaction cal_trans("CUTOVER");
@@ -5869,6 +5876,10 @@ int OCCChild::enable_set_user_role(bool enable) {
 
 // on_idle() invokes this function.
 void OCCChild::cutover_support() {
+	if (!m_enable_cutover) {
+		return;
+	}
+
 	if (m_set_user_role) {
         	struct timeval tv_now, tv_expire;
 		gettimeofday(&tv_now, NULL);
@@ -5882,7 +5893,7 @@ void OCCChild::cutover_support() {
 			alarm(0);
 
 			if (rc == 1) {
-				WRITE_LOG_ENTRY(logfile, LOG_INFO, "set_role_for_the_session() comeplete successfully"); 
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set_role_for_the_session() comeplete successfully"); 
 			} else {
 				WRITE_LOG_ENTRY(logfile, LOG_ALERT, "set_role_for_the_session() done unsuccessfully, exiting");
 				exit(0);	
