@@ -121,9 +121,6 @@ hang up conditions
 */
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
 
-	if logger.GetLogger().V(logger.Info) {
-		logger.GetLogger().Log(logger.Info, crd.id, "shtien PreprocessCutover")
-	}
 	tmpcfg := GetCutoverCfg()
 	if tmpcfg == nil {
 		if !crd.isInternal {
@@ -143,8 +140,10 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	newActInfo := cvtActiveInfo(tmpcfg)
 
 	if newActInfo == nil {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "something is wrong. no new activeInfo in PreprocessCutover")
+		evt := cal.NewCalEvent(EvtTypeCutover, "preproc_empty_newactive", cal.TransOK, "")
+		evt.Completed()
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "something is wrong. no new activeInfo in PreprocessCutover")
 		}
 		if crd.curActDb != nil {
 			if logger.GetLogger().V(logger.Debug) {
@@ -164,17 +163,10 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	}
 	diff := compActiveInfo(crd.curActDb, newActInfo)
 	if diff < 0 {
-		// change log level, this should be frequently expected, right ?
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "crd failed to compare active db cfg, this can happen when crd is new")
-		}
 		return interrupt, nil
 	}
 
 	if diff == 0 {
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, "crd.curActInfo and newActInfo is the same")
-		}
 		return interrupt, nil // same cutover config
 	}
 
@@ -272,17 +264,17 @@ func (crd *Coordinator) ProceedWriteInCutover() error {
 }
 func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
 	if crd.curActDb == nil {
-		logger.GetLogger().Log(logger.Warning, crd.id, "shtien OCC-510: unknown source, ignore during server init")
+		logger.GetLogger().Log(logger.Warning, crd.id, "unknown source, ignore during server init")
 		// we don't know yet
 		return ShIdUnset
 	}
 
-	logger.GetLogger().Log(logger.Debug, crd.id, "shtien get ActiveDb source tns", crd.curActDb.SrcTns)
+	logger.GetLogger().Log(logger.Debug, crd.id, "get ActiveDb source tns", crd.curActDb.SrcTns)
 	srcShId := ShIdTns
 	if crd.curActDb.SrcTns == GetTnsCutoverName() {
 		srcShId = ShIdTnsCutover
 	}
-	logger.GetLogger().Log(logger.Debug, crd.id, "shtien ActiveDb source tns", srcShId)
+	logger.GetLogger().Log(logger.Debug, crd.id, "ActiveDb source tns", srcShId)
 	// reset the internal
 	crd.shId4Internal = ShIdUnset
 	return srcShId
@@ -337,16 +329,13 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 		crd.shId4Internal = ShIdUnset
 		return nil
 	}
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "shtien processSetCoShardID")
-	}
 	if !crd.isInternal { // not allow external connections
 		return ErrNotInternal
 	}
 
 	sh, err := strconv.ParseInt(string(val), 10, 32)
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "shtien processSetCoShardID", sh)
+		logger.GetLogger().Log(logger.Debug, crd.id, "processSetCoShardID", sh)
 	}
 	if err != nil {
 		return nil
@@ -361,7 +350,7 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 		// crd.worker.shardID is used by cutover feature so we check if we need switch.
 		// this is unlikely since internal sql don't use persistent connection.
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, crd.id, "shtien processSetCoShardID crd.shId4Internal", crd.shId4Internal, "crd.worker.shardID", crd.worker.shardID)
+			logger.GetLogger().Log(logger.Debug, crd.id, "processSetCoShardID crd.shId4Internal", crd.shId4Internal, "crd.worker.shardID", crd.worker.shardID)
 		}
 		if int(crd.shId4Internal) != crd.worker.shardID {
 			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
@@ -370,9 +359,6 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 			evt.Completed()
 			return ErrChangeShardIDInTxn
 		}
-	}
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "shtien Shard ID forced to", crd.shId4Internal)
 	}
 	return nil
 }

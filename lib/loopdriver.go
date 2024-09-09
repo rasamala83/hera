@@ -91,23 +91,23 @@ func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {
 				// shardId: 0 (non_cutover tns of shard), 1(cutover tns of shard)
 				shid, err := strconv.Atoi(fields[0])
 				if err != nil {
-					return nil, fmt.Errorf("shtien Failed to process shardID")
+					return nil, fmt.Errorf("cutover Failed to process shardID")
 				}
-				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, "shtien attempt to use shard", fields[0])
+				if logger.GetLogger().V(logger.Debug) {dd
+					logger.GetLogger().Log(logger.Debug, "cutover cfg sql attempt to use shard", fields[0])
 				}
 				if shid == int(ShIdTns) || shid == int(ShIdTnsCutover) {
 					ns := netstring.NewNetstringFrom(common.CmdSetShardID, []byte(fields[0]))
 					cli.Write(ns.Serialized)
 					ns, err := netstring.NewNetstring(cli)
 					if err != nil {
-						return nil, fmt.Errorf("shtien Failed to set shardID: %s", err.Error())
+						return nil, fmt.Errorf("cutover enabled. Failed to set shardID: %s", err.Error())
 					}
 					if ns.Cmd != common.RcOK {
-						return nil, fmt.Errorf("shtien HERA_SET_CUTOVER_ID response: %s", string(ns.Serialized))
+						return nil, fmt.Errorf("cutover enabled. HERA_SET_CUTOVER_ID response: %s", string(ns.Serialized))
 					}
 					if logger.GetLogger().V(logger.Debug) {
-						logger.GetLogger().Log(logger.Debug, "shtien HERA loop driver driver, opened to DB by shard %s", fields[0])
+						logger.GetLogger().Log(logger.Debug, "cutover enabled. HERA loop driver driver, opened to DB by shard %s", fields[0])
 					}
 				}
 			}

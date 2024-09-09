@@ -460,12 +460,12 @@ func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, sha
 	}
 }
 
-// less or equal to 0, ignore
 // 1 -> minimize tns_cutover pool size
 // 2 -> minimize tns pool size
 // 3 -> tns and tns_cutover both full
+// everything else ignored
 func (broker *WorkerBroker) changeMaxWorkers(notice int) {
-	if notice == 0 {
+	if notice <= 0 || notice > 3 {
 		return
 	}
 
@@ -478,7 +478,7 @@ func (broker *WorkerBroker) changeMaxWorkers(notice int) {
 
 	if notice == 1 {
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for tns pool full, tns_cutover 2")
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for tns pool full, tns_cutover size to 2")
 		}
 		broker.resizePool(wtypeRW, wW, int(ShIdTns))
 		broker.resizePool(wtypeRW, minSize, int(ShIdTnsCutover))
@@ -488,7 +488,18 @@ func (broker *WorkerBroker) changeMaxWorkers(notice int) {
 		}
 		return
 	}
-
+	if notice == 2 {
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for tns_cutover pool full, tns size to 2")
+		}
+		broker.resizePool(wtypeRW, minSize, int(ShIdTns))
+		broker.resizePool(wtypeRW, wW, int(ShIdTnsCutover))
+		if rW != 0 {
+			broker.resizePool(wtypeRO, minSize, int(ShIdTns))
+			broker.resizePool(wtypeRO, rW, int(ShIdTnsCutover))
+		}
+		return
+	}
 	if notice == 3 {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Pre/Cutover")
@@ -501,19 +512,7 @@ func (broker *WorkerBroker) changeMaxWorkers(notice int) {
 		}
 		return
 	}
-
-	if notice == 2 {
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Complete/Broom phase")
-		}
-		broker.resizePool(wtypeRW, minSize, int(ShIdTns))
-		broker.resizePool(wtypeRW, wW, int(ShIdTnsCutover))
-		if rW != 0 {
-			broker.resizePool(wtypeRO, minSize, int(ShIdTns))
-			broker.resizePool(wtypeRO, rW, int(ShIdTnsCutover))
-		}
-		return
-	}
+	return
 }
 
 // Stopped is called when we are done, it sends a message to the "stopped" channel, which is read by the main mux routine

@@ -523,7 +523,7 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 		if GetConfig().EnableCutover {
 			// internal query log goes to both pool
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, crd.id, "shtien CmdSetShardID", request.Payload)
+				logger.GetLogger().Log(logger.Debug, crd.id, "cutover enabled. CmdSetShardID", request.Payload)
 			}
 			err = crd.processSetCoShardID(request.Payload)
 		} else {
@@ -835,7 +835,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					srcShId := crd.getSrcShardByCutoverCfg()
 					if crd.shId4Internal >= MaxDbInCutover {
 						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, crd.id, "shtien dispatchrequest: r/w internal sql shard is dictated, should only occur during server start up")
+							logger.GetLogger().Log(logger.Info, crd.id, "dispatchrequest: r/w split, internal sql shard is not specified, should only occur during server start up")
 						}
 						srcShId = crd.shId4Internal
 					}
@@ -888,14 +888,14 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					srcShardId := crd.getSrcShardByCutoverCfg()
 					if srcShardId >= MaxDbInCutover {
 						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, crd.id, "shtien dispatchrequest: internal sql shard is dictated, should only occur during server start up")
+							logger.GetLogger().Log(logger.Info, crd.id, "dispatchrequest: r/w split disabled, internal sql shard is not specified, should only occur during server start up")
 						}
 						srcShardId = crd.shId4Internal
 					}
 					if logger.GetLogger().V(logger.Verbose) {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover runs internal query. isRead", crd.isRead)
 					}
-					logger.GetLogger().Log(logger.Verbose, crd.id, "shtien shardToUse ", srcShardId)
+					logger.GetLogger().Log(logger.Verbose, crd.id, "cutover enabled. shardToUse ", srcShardId)
 					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, srcShardId, false)
 					if err != nil {
 						if logger.GetLogger().V(logger.Info) {
