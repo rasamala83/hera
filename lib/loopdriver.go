@@ -93,9 +93,6 @@ func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {
 				if err != nil {
 					return nil, fmt.Errorf("cutover Failed to process shardID")
 				}
-				if logger.GetLogger().V(logger.Debug) {dd
-					logger.GetLogger().Log(logger.Debug, "cutover cfg sql attempt to use shard", fields[0])
-				}
 				if shid == int(ShIdTns) || shid == int(ShIdTnsCutover) {
 					ns := netstring.NewNetstringFrom(common.CmdSetShardID, []byte(fields[0]))
 					cli.Write(ns.Serialized)

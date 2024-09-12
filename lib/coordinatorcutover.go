@@ -186,7 +186,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 			} else if newActInfo.Phase == CutoverPhStr {
 				//cutover phase, swithc worker pool
 				logger.GetLogger().Log(logger.Alert, crd.id, "cutover phase worker pool switch")
-				evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_db", cal.TransOK, "")
+				evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_db_change", cal.TransOK, "")
 				evt.Completed()
 				interrupt = true
 				err = errors.New("cutover database switch")
@@ -209,7 +209,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 			if newActInfo.Phase == CutoverPhStr {
 				if crd.curActDb.RwStatus > newActInfo.RwStatus { // either W or R or both RW are newly disabled.
 					if newActInfo.RwStatus == 0 {
-						evt := cal.NewCalEvent(EvtTypeCutover, "crd_stop_in_rw", cal.TransOK, "")
+						evt := cal.NewCalEvent(EvtTypeCutover, "crd_stop_in_txn_rw", cal.TransOK, "")
 						evt.Completed()
 						interrupt = true //we will check this later
 						err = errors.New("cutover stop in-txn")
@@ -217,7 +217,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 					if newActInfo.RwStatus&0x0001 == 0 { // read is disabled now
 						// stop READ
 						if crd.isRead {
-							evt := cal.NewCalEvent(EvtTypeCutover, "crd_stop_in_r", cal.TransOK, "")
+							evt := cal.NewCalEvent(EvtTypeCutover, "crd_stop_in_txn_r", cal.TransOK, "")
 							evt.Completed()
 							interrupt = true // we will check this later
 							err = errors.New("cutover stop in-txn read")
@@ -226,7 +226,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 					if newActInfo.RwStatus&0x0002 == 0 { // write is disabled now
 						// stop WRTIE
 						if !crd.isRead {
-							evt := cal.NewCalEvent(EvtTypeCutover, "crd_stop_in_w", cal.TransOK, "")
+							evt := cal.NewCalEvent(EvtTypeCutover, "crd_stop_in_txn_w", cal.TransOK, "")
 							evt.Completed()
 							interrupt = true // we will check this later
 							err = errors.New("cutover top in-txn write")

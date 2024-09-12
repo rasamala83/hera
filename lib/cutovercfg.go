@@ -127,7 +127,7 @@ func InitCutoverCfg(modulename string) error {
 			}
 
 			if i == maxRetry {
-				evt := cal.NewCalEvent(EvtTypeCutover, "init_fail_max_retry"+strconv.Itoa(int(shid)), cal.TransOK, "")
+				evt := cal.NewCalEvent(EvtTypeCutover, "init_fail_max_retry_"+strconv.Itoa(int(shid)), cal.TransOK, "")
 				evt.Completed()
 				var emptycfg CutoverCfg
 				startData <- &emptycfg
@@ -310,7 +310,7 @@ func updateGlobalCfg(newcfg *CutoverCfg) {
 		for t := 0; t <= maxtype; t++ {
 			wpool, initerr := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 			if initerr != nil {
-				evtn := fmt.Sprint("init_wpool_err", shid, "_", t)
+				evtn := fmt.Sprint("init_wpool_err_", shid, "_", t)
 				evt = cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, initerr.Error())
 				evt.Completed()
 				if logger.GetLogger().V(logger.Warning) {
