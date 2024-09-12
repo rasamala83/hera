@@ -127,7 +127,7 @@ func InitCutoverCfg(modulename string) error {
 			}
 
 			if i == maxRetry {
-				evt := cal.NewCalEvent(EvtTypeCutover, "init_fail_max_retry"+strconv.Itoa(int(shid)), cal.TransOK, "")
+				evt := cal.NewCalEvent(EvtTypeCutover, "init_fail_max_retry_"+strconv.Itoa(int(shid)), cal.TransOK, "")
 				evt.Completed()
 				var emptycfg CutoverCfg
 				startData <- &emptycfg
@@ -145,18 +145,18 @@ func InitCutoverCfg(modulename string) error {
 		select {
 		case peekcfg := <-startData:
 			if len(peekcfg.TnsByRole) == 0 {
-				logger.GetLogger().Log(logger.Warning, "shtien got an empty cfg, abort start up")
+				logger.GetLogger().Log(logger.Warning, "empty cutover cfg, abort start up")
 				shutdown = true
 				break
 			}
 			copyCutoverCfg(&firstcfg[cnt], peekcfg)
 		case <-time.After(time.Minute):
-			logger.GetLogger().Log(logger.Warning, "shtien timed out waiting on the init cfg", cnt)
+			logger.GetLogger().Log(logger.Warning, "timed out waiting on the init cfg", cnt)
 			shutdown = true
 		}
 		cnt++
 	}
-	
+
 	rc := 0
 	changed := false
 	if !shutdown {
@@ -213,7 +213,7 @@ func InitCutoverCfg(modulename string) error {
 
 // Get the SQL used to read the cutover configuration.
 func getCutoverSQL() string {
-	sqltxt := fmt.Sprintf("select upper(occ_name), upper(tns_alias_role), upper(db_unique_name), upper(occ_tns_alias), upper(cutover_phase), upper(write_status), upper(read_status), upper(wisb_roles) from %s_cutover where upper(occ_name) = upper('%s') and upper(occ_tns_alias) IN (upper('%s'), upper('%s'))",
+	sqltxt := fmt.Sprintf("select /* cutover cfg */ upper(occ_name), upper(tns_alias_role), upper(db_unique_name), upper(occ_tns_alias), upper(cutover_phase), upper(write_status), upper(read_status), upper(wisb_roles) from %s_cutover where upper(occ_name) = upper('%s') and upper(occ_tns_alias) IN (upper('%s'), upper('%s'))",
 		GetConfig().ManagementTablePrefix,
 		//GetConfig().CutoverPostfix, // why do we need postfix for table name ?
 		gModuleName,
@@ -310,7 +310,7 @@ func updateGlobalCfg(newcfg *CutoverCfg) {
 		for t := 0; t <= maxtype; t++ {
 			wpool, initerr := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 			if initerr != nil {
-				evtn := fmt.Sprint("init_wpool_err", shid, "_", t)
+				evtn := fmt.Sprint("init_wpool_err_", shid, "_", t)
 				evt = cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, initerr.Error())
 				evt.Completed()
 				if logger.GetLogger().V(logger.Warning) {
@@ -884,8 +884,8 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 }
 
 func cutoverOpenDb(shToUse ShardByTwoTask) (*sql.DB, error) {
-	if logger.GetLogger().V(logger.Info) {
-		logger.GetLogger().Log(logger.Info, "shtien", shToUse)
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "cutoverOpenDb to shard:", shToUse)
 	}
 
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", int(shToUse)))

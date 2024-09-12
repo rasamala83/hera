@@ -979,7 +979,7 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string, is
 	evt := cal.NewCalEvent(EvtTypeCutover, "update_wp_cfg_change", cal.TransOK, "")
 	evt.Completed()
 
-	logger.GetLogger().Log(logger.Alert, "workerpool", pool.Type, pool.ShardID, "phase and dbuname before: [",
+	logger.GetLogger().Log(logger.Warning, "workerpool", pool.Type, pool.ShardID, "phase and dbuname before: [",
 		pool.phase, ",", pool.dbUname, "], new: [", newPhase, ",", newDbUname, "]")
 
 	pool.phase = newPhase
