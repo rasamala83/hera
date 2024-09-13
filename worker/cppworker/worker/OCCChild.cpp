@@ -505,7 +505,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 			} else {
 				m_enable_cutover = false;
 				WRITE_LOG_ENTRY(logfile, LOG_WARNING, "cutover_two_task_key not set, disable cutover");
-				CalEvent ev(CAL_EVENT_CUTOVER, "wkr_cutover_2task_unset", CAL::TRANS_OK, "disable cutover in worker");
+				CalEvent ev(CAL_EVENT_CUTOVER, "wkr_cutover_tns_unset", CAL::TRANS_OK, "disable cutover in worker");
 				ev.Completed();
 			}
 		}

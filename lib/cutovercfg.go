@@ -172,7 +172,7 @@ func InitCutoverCfg(modulename string) error {
 		errmsg := fmt.Sprintf("shutdown due to incorrect/inconsistent cutover cfg during init %d", rc)
 		return errors.New(errmsg)
 	}
-	updateGlobalCfg(&firstcfg[0])
+	initUpdateGlobalCfg(&firstcfg[0])
 	logger.GetLogger().Log(logger.Info, "successful cutovercfg init at start up", GetCutoverCfg())
 
 	go func() {
@@ -292,7 +292,7 @@ func copyCutoverCfg(dst *CutoverCfg, src *CutoverCfg) {
 	dst.UserRoleByDb = src.UserRoleByDb
 }
 
-func updateGlobalCfg(newcfg *CutoverCfg) {
+func initUpdateGlobalCfg(newcfg *CutoverCfg) {
 	if newcfg == nil {
 		return
 	}
@@ -348,7 +348,7 @@ func validateRecord(r1 CutoverRecord, r2 CutoverRecord) error {
 
 	// can't have identical occ_two_task
 	if r1.occTnsAlias.String == r2.occTnsAlias.String {
-		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_occTns", cal.TransOK, "")
+		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_occ_tns_alias", cal.TransOK, "")
 		evt.Completed()
 		return fmt.Errorf("error cutover cfg can't have same two_task [%s, %s] [%s, %s]",
 			r1.occTnsAlias.String, r2.dbUname.String, r1.occTnsAlias.String, r2.dbUname.String)
@@ -429,7 +429,7 @@ func populateNewCfg(rcrds [2]CutoverRecord) (CutoverCfg, error) {
 				outcfg.ActiveShardId = ShIdTnsCutover
 			} else {
 				// this should never happen w/ the defined sql
-				evt := cal.NewCalEvent(EvtTypeCutover, "err_undefined_occ2task", cal.TransOK, rec2task)
+				evt := cal.NewCalEvent(EvtTypeCutover, "err_undefined_occ_tns_alias", cal.TransOK, rec2task)
 				evt.Completed()
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "error: occ2task not match defined two_task or two_task_cutover", rec2task)
@@ -598,7 +598,7 @@ func loadCutoverCfg(db *sql.DB, localonly bool) (CutoverCfg, error) {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, "INIT cutover cfg", newcfg)
 		}
-		updateGlobalCfg(&newcfg)
+		initUpdateGlobalCfg(&newcfg)
 
 	} else {
 		changed, changedAttr := CheckCfgChange(*precfg, newcfg)
@@ -631,7 +631,7 @@ func loadCutoverCfg(db *sql.DB, localonly bool) (CutoverCfg, error) {
 				wpool = nil
 				wpool, err = GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 				if err != nil {
-					evtn := fmt.Sprint("err_get_wpool_", shid, "_", t)
+					evtn := fmt.Sprint("err_chg_info_get_wpool_", shid, "_", t)
 					evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, err.Error())
 					evt.Completed()
 					if logger.GetLogger().V(logger.Warning) {
@@ -649,7 +649,7 @@ func loadCutoverCfg(db *sql.DB, localonly bool) (CutoverCfg, error) {
 						}
 						wpool.ChangeCutoverInfo(newcfg.Phase, newcfg.DbByTns[tname], (tname == newcfg.TnsByRole[Source]))
 					} else {
-						evtn := fmt.Sprint("err_wpool_", shid, "_", t)
+						evtn := fmt.Sprint("err_chg_info_wpool_", shid, "_", t)
 						evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, "can't get workerpool")
 						evt.Completed()
 						if logger.GetLogger().V(logger.Warning) {
@@ -861,10 +861,10 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 				}
 				wpool, err := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 				if err != nil {
-					evt := cal.NewCalEvent(EvtTypeCutover, "err_wpool_stopRW_diff2task", cal.TransOK, stopRwCalName)
+					evt := cal.NewCalEvent(EvtTypeCutover, "err_wpool_stopRW_diff_tns", cal.TransOK, stopRwCalName)
 					evt.Completed()
 					if logger.GetLogger().V(logger.Info) {
-						logger.GetLogger().Log(logger.Info, "err_wpool_stopRW_diff2task", t, "error:", err.Error())
+						logger.GetLogger().Log(logger.Info, "err_wpool_stopRW_diff_tns", t, "error:", err.Error())
 					}
 				} else {
 					if wpool != nil {
@@ -1023,7 +1023,7 @@ func setCheckUserRoleFlag(nextcfg *CutoverCfg) {
 		for t := 0; t <= maxtype; t++ {
 			wpool, err := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 			if err != nil {
-				evtn := fmt.Sprint("err_wpool_user_flag", shid, "_", t)
+				evtn := fmt.Sprint("err_wpool_user_flag_", shid, "_", t)
 				evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, err.Error())
 				evt.Completed()
 				if logger.GetLogger().V(logger.Warning) {
