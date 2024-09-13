@@ -218,7 +218,7 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 	//When cutover is enabled, internally we have two shards but we only check the active shard.
 	activeSh := 0
 	cocfg := GetCutoverCfg()
-	if cocfg == nil {
+	if cocfg.Phase == "" {
 		return false
 	}
 
@@ -384,7 +384,7 @@ func (sl *StateLog) GetWorkerCountForPool(workerState HeraWorkerStatus, shardID 
 func (sl *StateLog) ProxyHasCapacityForCutover(_wlimit int, _rlimit int) (bool, int) {
 	activeSh := 0
 	cocfg := GetCutoverCfg()
-	if cocfg == nil {
+	if cocfg.Phase == "" {
 		return false, 0
 	}
 

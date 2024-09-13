@@ -920,7 +920,7 @@ func (pool *WorkerPool) enforceIntegrity() {
 		return
 	}
 
-	warnOnly := true // warning only unless for Cutover workerpool at Pre and Cutover phase
+	warnOnly := true // warning only unless for Cutover workerpool at flexup and cutover phase
 	if pool.phase == CutoverPhStr {
 		// cutover phase, enforce on the target pool only
 		warnOnly = false

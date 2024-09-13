@@ -658,7 +658,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 	// At Pre and Cutover phase, enforce pool integrity for the new two_task_cutover workers, only warning to two_task workers.
 	if GetConfig().EnableCutover {
 		coCfg := GetCutoverCfg()
-		if coCfg != nil {
+		if coCfg.Phase != "" {
 			if coCfg.Phase == FlexupPhStr || coCfg.Phase == CutoverPhStr {
 				tnsKeyName := GetTnsCutoverName()
 				if worker.ConnTwoTask == ShIdTns {
@@ -669,18 +669,25 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 					logger.GetLogger().Log(logger.Verbose, "check cutovercfg and workerclient integrity: worker two_task", tnsKeyName, "target dbuname", cfgDbun)
 				}
 				if cfgDbun != worker.dbUname {
-					if worker.ConnTwoTask == ShIdTnsCutover {
-						logger.GetLogger().Log(logger.Alert, "target dbuname mismatch in Pre/Cutover phase [", cfgDbun, "][", worker.dbUname, "]")
+					// we need to get to know TnsAliasRole, Warning for source but error for target
+					tgtSh := coCfg.TnsByRole[Target]
+					tgtShId := ShIdTns
+					if tgtSh == GetTnsCutoverName() {
+						tgtShId = ShIdTnsCutover
+					}
+
+					if worker.ConnTwoTask == tgtShId {
+						logger.GetLogger().Log(logger.Alert, "tns_role_tgt_dbuname mismatch in flexup/cutover phase [", cfgDbun, "][", worker.dbUname, "]")
 						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
-						et := cal.NewCalEvent(EvtTypeCutover, "tgt_new_dbun_mismatch", cal.TransOK, msg)
+						et := cal.NewCalEvent(EvtTypeCutover, "new_wkr_dbun_mismatch_tns_tgt", cal.TransOK, msg)
 						et.Completed()
-						errmsg := fmt.Sprintf("new workerclient integrity check failed at CUTOVER. Expect dbname [%s], %s, %d, %d", cfgDbun, worker.dbUname, worker.Type, worker.ConnTwoTask)
+						errmsg := fmt.Sprintf("new workerclient integrity check failed at flexup/cutover. Expect dbname [%s], %s, %d, %d", cfgDbun, worker.dbUname, worker.Type, worker.ConnTwoTask)
 						return errors.New(errmsg)
 					} else {
 						// only warning
-						logger.GetLogger().Log(logger.Alert, "source dbuname mismatch in Pre/Cutover phase [", cfgDbun, "][", worker.dbUname, "]")
+						logger.GetLogger().Log(logger.Alert, "tns_role_src dbuname mismatch in flexup/cutover phase [", cfgDbun, "][", worker.dbUname, "]")
 						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
-						et := cal.NewCalEvent(EvtTypeCutover, "warn_src_new_dbun_mismatch", cal.TransOK, msg)
+						et := cal.NewCalEvent(EvtTypeCutover, "warn_new_wkr_dbun_mismatch_tns_src", cal.TransOK, msg)
 						et.Completed()
 					}
 				}
