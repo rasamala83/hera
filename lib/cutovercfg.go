@@ -68,12 +68,12 @@ func GetTnsRcutoverName() string {
 }
 
 // Get the cfg atomically
-func GetCutoverCfg() *CutoverCfg {
+func GetCutoverCfg() CutoverCfg {
 	cfg := gCutoverCfg.Load()
 	if cfg == nil {
-		return nil
+		return CutoverCfg{Phase:""}
 	}
-	return cfg.(*CutoverCfg)
+	return cfg.(CutoverCfg)
 }
 
 // main.go calls this function. DB can't suspend user sessions.
@@ -297,7 +297,7 @@ func initUpdateGlobalCfg(newcfg *CutoverCfg) {
 		return
 	}
 
-	gCutoverCfg.Store(newcfg) // now coordinator can pick new cfg.
+	gCutoverCfg.Store(*newcfg) // now coordinator can pick new cfg.
 	evt := cal.NewCalEvent(EvtTypeCutover, "init_cfg_updated", cal.TransOK, "")
 	evt.Completed()
 	// now ensure the change-triggered action are done as well
@@ -594,28 +594,28 @@ func loadCutoverCfg(db *sql.DB, localonly bool) (CutoverCfg, error) {
 	**/
 
 	precfg := GetCutoverCfg()
-	if precfg == nil {
+	if precfg.Phase == "" {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, "INIT cutover cfg", newcfg)
 		}
 		initUpdateGlobalCfg(&newcfg)
 
 	} else {
-		changed, changedAttr := CheckCfgChange(*precfg, newcfg)
+		changed, changedAttr := CheckCfgChange(precfg, newcfg)
 		if !changed {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, "cutovercfg reload shows no change")
 			}
 		}
 		var curCfg CutoverCfg
-		copyCutoverCfg(&curCfg, precfg) // create a deep copy
+		copyCutoverCfg(&curCfg, &precfg) // create a deep copy
 		if changed {
 			if logger.GetLogger().V(logger.Info) {
 				logger.GetLogger().Log(logger.Info, "cutovercfg has new change", changed, changedAttr)
 			}
 			evt := cal.NewCalEvent(EvtTypeCutover, "detect_cfg_change", cal.TransOK, "")
 			evt.Completed()
-			gCutoverCfg.Store(&newcfg)
+			gCutoverCfg.Store(newcfg)
 			immediateStopReq(&curCfg, &newcfg)
 		}
 

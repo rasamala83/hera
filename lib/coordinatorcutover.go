@@ -122,7 +122,7 @@ hang up conditions
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
 
 	tmpcfg := GetCutoverCfg()
-	if tmpcfg == nil {
+	if tmpcfg.Phase == "" {
 		if !crd.isInternal {
 			evt := cal.NewCalEvent(EvtTypeCutover, "preproc_cfg_nil_startup", cal.TransOK, "")
 			evt.Completed()
@@ -137,7 +137,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	}
 
 	interrupt := false // if txn should be disrupted
-	newActInfo := cvtActiveInfo(tmpcfg)
+	newActInfo := cvtActiveInfo(&tmpcfg)
 
 	if newActInfo == nil {
 		evt := cal.NewCalEvent(EvtTypeCutover, "preproc_empty_newactive", cal.TransOK, "")

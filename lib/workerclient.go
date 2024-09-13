@@ -658,7 +658,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 	// At Pre and Cutover phase, enforce pool integrity for the new two_task_cutover workers, only warning to two_task workers.
 	if GetConfig().EnableCutover {
 		coCfg := GetCutoverCfg()
-		if coCfg != nil {
+		if coCfg.Phase != "" {
 			if coCfg.Phase == FlexupPhStr || coCfg.Phase == CutoverPhStr {
 				tnsKeyName := GetTnsCutoverName()
 				if worker.ConnTwoTask == ShIdTns {
