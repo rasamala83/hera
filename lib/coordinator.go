@@ -77,6 +77,8 @@ type Coordinator struct {
 	isInternal bool
 	extractedcorrId string
 	response string
+	writeToCache bool
+	isMultiReq bool
 }
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
@@ -324,13 +326,17 @@ func (crd *Coordinator) Run() {
 func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 	var getErr error
 	var cache_ttl uint32
-	if GetConfig().EnableCaching {
+	crd.isMultiReq = false
+	if crd.worker != nil {
+		crd.isMultiReq = true
+	}
+	if GetConfig().EnableCaching && (crd.worker == nil) {
 		logger.GetLogger().Log(logger.Verbose, "Inside dispatch...Caching is enabled")
 		timeStart := time.Now()
 		cache_ttl, getErr = crd.DispatchCachingSession(request, "GET")
 		timediff := time.Since(timeStart)
 		if getErr != nil {
-			if getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheShadowTest || getErr == ErrCacheCorridNotSet {
+			if getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheShadowTest || getErr == ErrCacheCorridNotSet || getErr == ErrCacheBadRequest || getErr == ErrCacheReqNotSupported || getErr == ErrCacheSkipResponse {
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", getErr)
 				}
@@ -366,17 +372,22 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 			if getErr != nil && getErr == ErrCacheShadowTest {
 				logger.GetLogger().Log(logger.Verbose, "Skip setting the record again to cache.. GET returned:", getErr)
 			} else {
-				// Caching disabled in the config table (or) caching disabled (or) corrId missing -- Do not SET record to cache
-				if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheCorridNotSet) {
+				// Caching disabled in the config table (or) caching disabled (or) corrId missing (or) bad request (or) req not supported -- Do not SET record to cache
+				if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheCorridNotSet || getErr == ErrCacheBadRequest || getErr == ErrCacheReqNotSupported) {
 					if logger.GetLogger().V(logger.Verbose) {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", getErr)
 					}
 				} else {
-					go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash)
+					if crd.writeToCache && (crd.worker == nil) && !crd.isMultiReq {
+						go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash)
+					} else {
+						logger.GetLogger().Log(logger.Verbose, "Skip setting the record to cache.. crd.writeToCache:", crd.writeToCache, "crd.isMultiReq", crd.isMultiReq)
+					}
 				}
 			}
 		}
 		crd.response = ""
+		crd.writeToCache = false
 		getErr = nil
 		return (taferr == nil)
 	}
@@ -390,17 +401,22 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 		if getErr != nil && getErr == ErrCacheShadowTest {
 			logger.GetLogger().Log(logger.Verbose, "Skip setting the record again to cache.. GET returned:", getErr)
 		} else {
-			// Caching disabled in the config table (or) caching disabled (or) corrId missing -- Do not SET record to cache
-			if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheCorridNotSet) {
+			// Caching disabled in the config table (or) caching disabled (or) corrId missing (or) bad request (or) req not supported -- Do not SET record to cache
+			if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheCorridNotSet || getErr == ErrCacheBadRequest || getErr == ErrCacheReqNotSupported) {
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", getErr)
 				}
 			} else {
-				go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash)
+				if crd.writeToCache && (crd.worker == nil) && !crd.isMultiReq {
+					go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash)
+				} else {
+					logger.GetLogger().Log(logger.Verbose, "Skip setting the record to cache.. crd.writeToCache:", crd.writeToCache, "crd.isMultiReq", crd.isMultiReq)
+				}
 			}
 		}
 	}
 	crd.response = ""
+	crd.writeToCache = false
 	getErr = nil
 	return (deferr == nil)
 }
@@ -605,7 +621,7 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 	serverInfo := fmt.Sprintf("%s:load_saved_sessions*CalThreadId=0*TopLevelTxnStartTime=TopLevelTxn not set*Host=%s",
 		cal.GetCalClientInstance().GetPoolName(), hostname)
 	if GetConfig().EnableCaching {
-		idx := strings.Index(clientInfo, "ClientSupportedProtocolVersions: 2,")
+		idx := strings.Index(clientInfo, "ClientSupportedProtocolVersions: 2")
 		if idx != -1 {
 			crd.sendResponseMetadata = true // Send response metadata (when caching is enabled) for clients with version 2.
 			// Indicate to the client that the server is going to send additional metadata while responding to requests.
@@ -1026,6 +1042,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 		}
 	}()
 	crd.response = ""
+	crd.writeToCache = false
 	now := time.Now().UnixNano()
 	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
@@ -1242,19 +1259,35 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 				return false, ErrWorkerFail
 			}
 			msglen := len(msg.data)
+			noMoreData := "1:6,"
 			if msglen > 0 {
-				logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...msg.data:", string(msg.data))
 				// disable timeout once response was sent to the client
 				timeout = nil
-				crd.response += string(msg.data) + CacheSeparator
-				logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...crd.response:", crd.response)
-				// logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...msg.ns", string(msg.ns.Serialized))
-
+				if GetConfig().EnableCaching {
+					logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...msg.data:", string(msg.data))
+					crd.response += string(msg.data) + CacheSeparator
+					logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest got message from worker channel...crd.response:", crd.response)
+					// Write to cache only when EOR Code = EORFree and response is RcNoMoreData
+					if msg.eor && msg.free && string(msg.data) == noMoreData {
+						logger.GetLogger().Log(logger.Verbose, "coordinator:doRequest received eor free from worker channel...EOR:", msg.eor, "Free:", msg.free, "msg.data", string(msg.data))
+						crd.writeToCache = true
+						if crd.isMultiReq {
+							dice := rand.Intn(GetConfig().numCalThreads)
+							calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
+							evt := cal.NewCalEvent("doRequestEORFree", "skipCacheWriteMultiReq", cal.TransOK, "", calThreadGroupName)
+							evt.AddDataStr("corrId", crd.extractedcorrId)
+							evt.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(crd.sqlhash)))
+							evt.AddDataStr("client", crd.poolName)
+							evt.Completed()
+						}
+					}
+				}
 				_, err := clientWriter.Write(msg.data)
 				if err != nil {
 					if logger.GetLogger().V(logger.Debug) {
 						logger.GetLogger().Log(logger.Debug, crd.id, "Fail to reply to client")
 					}
+					crd.writeToCache = false
 					return false, ErrClientFail
 				}
 

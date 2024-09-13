@@ -44,7 +44,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["cache_by_corrid"] = "false"
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "5"
-	opscfg["opscfg.default.server.log_level"] = "5"
+	opscfg["opscfg.default.server.log_level"] = "10"
 	opscfg["opscfg.default.server.max_lifespan_per_child"] = "500"
 
 	appcfg["child.executable"] = "mysqlworker"

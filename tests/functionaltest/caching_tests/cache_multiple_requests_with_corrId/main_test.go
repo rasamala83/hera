@@ -43,7 +43,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["cache_response_timeout_ms"] = "3000"
 	appcfg["cache_by_corrid"] = "true"
 	opscfg := make(map[string]string)
-	opscfg["opscfg.default.server.max_connections"] = "5"
+	opscfg["opscfg.default.server.max_connections"] = "10"
 	opscfg["opscfg.default.server.log_level"] = "5"
 	opscfg["opscfg.default.server.max_lifespan_per_child"] = "500"
 

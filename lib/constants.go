@@ -80,6 +80,9 @@ var (
 	ErrOther,
 	ErrCacheNotEnabled,
 	ErrCacheCorridNotSet,
+	ErrCacheBadRequest,
+	ErrCacheReqNotSupported,
+	ErrCacheSkipResponse,
 	ErrCacheDisabled,
 	ErrCacheShadowTest,
 	ErrCacheClientClosed,
@@ -118,9 +121,12 @@ func MkErr(prefix string) {
 	ErrReqParseFail = errors.New("Request error")
 	ErrCacheNotEnabled = errors.New("sql is not enabled for caching")
 	ErrCacheCorridNotSet = errors.New("cache session: corrid is NotSet")
+	ErrCacheBadRequest = errors.New("cache session: bad request")
+	ErrCacheReqNotSupported = errors.New("cache session: request not supported")
+	ErrCacheSkipResponse = errors.New("cache session: skip GET response from cache")
 	ErrCacheDisabled = errors.New("sql is disabled for caching")
 	ErrCacheShadowTest = errors.New("cache session: shadow test enabled")
-	ErrCacheClientClosed = errors.New("client connection closed during cache session")
+	ErrCacheClientClosed = errors.New("cache session: client connection closed")
 	ErrCacheMultipleClientReq = errors.New("cache session: multiple client request not supported")
 	ErrCacheClientReqCanceled = errors.New("cache session: client request canceled")
 	ErrCacheClientWriteFailed = errors.New("cache session: client write failed")

@@ -31,46 +31,105 @@ import (
 	"strings"
 )
 
+func parseRequest(request *netstring.Netstring) (hasPrepare bool, hasExec bool, hasFetch bool, parseErr error) {
+	foundPrepare := false
+	foundExec := false
+	foundFetch := false
+	if request == nil {
+		return false, false, false, ErrCacheBadRequest
+	}
+	if request.IsComposite() {
+		nss, err := netstring.SubNetstrings(request)
+		if err != nil {
+			return false, false, false, err
+		}
+		for _, ns := range nss {
+			if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
+				foundPrepare = true
+			} else if ns.Cmd == common.CmdExecute {
+				foundExec = true
+			} else if ns.Cmd == common.CmdFetch {
+				foundFetch = true
+			}
+		}
+		return foundPrepare, foundExec, foundFetch, nil
+	} else {
+		ns := request
+		if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
+			return true, false, false, nil
+		} else if ns.Cmd == common.CmdExecute {
+			return false, true, false, nil
+		} else if ns.Cmd == common.CmdFetch {
+			return false, false, true, nil
+		}
+	}
+	return false, false, false, nil
+}
+
 // getKey is a utility to construct the cache key based on a request
 func getKey(request *netstring.Netstring, corrId string, sqlHash int32) ([]byte, string, error) {
-	var key string
-	if GetConfig().CacheByCorrId {
-		// Return err if corrid is NotSet
-		if corrId == "NotSet" || corrId == "" || corrId == "unset" {
-			evt := cal.NewCalEvent("getKey", "ErrCacheCorridNotSet", cal.TransWarning, "")
-			evt.AddDataStr("extracteedcorrId", corrId)
-			evt.Completed()
-			return nil, "", ErrCacheCorridNotSet
-		}
-		key += corrId + "|"
+	dice := rand.Intn(GetConfig().numCalThreads)
+	calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
+	// Check if the request is valid for caching
+	hasPrepare, hasExec, hasFetch, err := parseRequest(request)
+	if err != nil {
+		evt := cal.NewCalEvent("getKeyErr", "ErrParseRequest", cal.TransWarning, "", calThreadGroupName)
+		evt.AddDataStr("corr_id_", corrId)
+		evt.AddDataStr("err", err.Error())
+		evt.Completed()
+		return nil, "", ErrCacheBadRequest
 	}
-	reqAfterCorrId := ""
-	if request != nil {
-		str := string(request.Payload)
-		pos := strings.Index(str, ",")
-		if pos != -1 {
-			reqAfterCorrId = str[pos+1:]
+	if hasPrepare && hasExec && hasFetch {
+		var key string
+		if GetConfig().CacheByCorrId {
+			// Return err if corrid is NotSet
+			if corrId == "NotSet" || corrId == "" || corrId == "unset" {
+				evt := cal.NewCalEvent("getKeyErr", "ErrCacheCorridNotSet", cal.TransWarning, "", calThreadGroupName)
+				evt.AddDataStr("corr_id_", corrId)
+				evt.Completed()
+				return nil, "", ErrCacheCorridNotSet
+			}
+			key += corrId + "|"
 		}
-		logger.GetLogger().Log(logger.Verbose, "reqAfterCorrId:", reqAfterCorrId)
-		if len(reqAfterCorrId) > 0 {
-			key += reqAfterCorrId + "|"
+		reqAfterCorrId := ""
+		if request != nil {
+			// CorrId
+			str := string(request.Payload)
+			pos := strings.LastIndex(str, "CorrId=")
+			if pos != -1 {
+				tmpStr := str[pos:]
+				end := strings.Index(tmpStr, ",")
+				if end != -1 {
+					reqAfterCorrId = tmpStr[end+1:]
+				}
+			} else {
+				reqAfterCorrId = str
+			}
+			logger.GetLogger().Log(logger.Verbose, "reqAfterCorrId:", reqAfterCorrId)
+			if len(reqAfterCorrId) > 0 {
+				key += reqAfterCorrId + "|"
+			}
 		}
+		sqlhashStr := fmt.Sprintf("%d", uint32(sqlHash))
+		logger.GetLogger().Log(logger.Verbose, "SQLHash:", sqlhashStr)
+		key += sqlhashStr + "|"
+		binds := parseBinds(request)
+		var concatKey string
+		for bindName, bindValue := range binds {
+			concatKey += fmt.Sprintf("%s^%s|", bindName, bindValue)
+		}
+		logger.GetLogger().Log(logger.Verbose, "Binds after parsing:", concatKey)
+		key += concatKey
+		poolName := cal.GetCalClientInstance().GetPoolName()
+		key += poolName
+		logger.GetLogger().Log(logger.Verbose, "key inside getKey:", key)
+		keyHash := utility.GetFNV128a(key)
+		return keyHash, key, nil
 	}
-	sqlhashStr := fmt.Sprintf("%d", uint32(sqlHash))
-	logger.GetLogger().Log(logger.Verbose, "SQLHash:", sqlhashStr)
-	key += sqlhashStr + "|"
-	binds := parseBinds(request)
-	var concatKey string
-	for bindName, bindValue := range binds {
-		concatKey += fmt.Sprintf("%s^%s|", bindName, bindValue)
-	}
-	logger.GetLogger().Log(logger.Verbose, "Binds after parsing:", concatKey)
-	key += concatKey
-	poolName := cal.GetCalClientInstance().GetPoolName()
-	key += poolName
-	logger.GetLogger().Log(logger.Verbose, "key inside getKey:", key)
-	keyHash := utility.GetFNV128a(key)
-	return keyHash, key, nil
+	evt := cal.NewCalEvent("getKeyErr", "ErrCacheReqNotSupported", cal.TransWarning, "", calThreadGroupName)
+	evt.AddDataStr("corr_id_", corrId)
+	evt.Completed()
+	return nil, "", ErrCacheReqNotSupported
 }
 
 // setRecordToCache tries to write the data to cache
@@ -84,8 +143,8 @@ func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint
 		if keyerr != nil {
 			evt := cal.NewCalEvent("setRecordToCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
 			evt.AddDataStr("corr_id_", corrId)
+			evt.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(sqlHash)))
 			evt.AddDataStr("err", keyerr.Error())
-			evt.SetStatus("3")
 			evt.Completed()
 			return
 		}
@@ -124,8 +183,9 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 		if keyerr != nil {
 			evt := cal.NewCalEvent("getRecordFromCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
 			evt.AddDataStr("corr_id_", crd.extractedcorrId)
+			evt.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(crd.sqlhash)))
+			evt.AddDataStr("clientApp", crd.poolName)
 			evt.AddDataStr("err", keyerr.Error())
-			evt.SetStatus("3")
 			evt.Completed()
 			return keyerr
 		}
@@ -168,12 +228,25 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 					return ErrCacheShadowTest
 				}
 				splits := strings.Split(string(resp), CacheSeparator)
+				noMoreData := "1:6,"
+				lastSplit := splits[len(splits)-2]
+				if lastSplit != noMoreData {
+					caltxn.SetStatus("skipCacheResponse")
+					caltxn.AddDataStr("lastSplit", lastSplit)
+					caltxn.AddDataStr("resp", ErrCacheSkipResponse.Error())
+					caltxn.Completed()
+					logger.GetLogger().Log(logger.Debug, crd.id, "Not responding to the client from cache...Resp did not contain RcNoMoreData. Found:", lastSplit)
+					evt := cal.NewCalEvent("dispatchRequest", "cache_response_not_sent", cal.TransOK, "", calThreadGroupName)
+					evt.AddDataStr("resp", ErrCacheSkipResponse.Error())
+					evt.AddDataStr("lastSplit", lastSplit)
+					evt.Completed()
+					return ErrCacheSkipResponse
+				}
 				for idx, split := range splits {
 					if len(split) > 0 {
 						logger.GetLogger().Log(logger.Debug, crd.id, "Responding to client...")
 						if crd.sendResponseMetadata && idx == len(splits)-2 {
 							logger.GetLogger().Log(logger.Debug, "Before ResponseMetadata:", split)
-							noMoreData := "1:6,"
 							if split == noMoreData {
 								// CmdServerRespondedFromCache = 1020
 								ns := netstring.NewNetstringFrom(common.RcNoMoreData, []byte(fmt.Sprintf("%d",common.CmdServerRespondedFromCache)))
