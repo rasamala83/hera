@@ -219,16 +219,22 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 	activeSh := 0
 	cocfg := GetCutoverCfg()
 	if cocfg.Phase == "" {
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "shtien: No capacity and Bounce due to empty cutover cutover")
+		}
 		return false
 	}
 
 	if cocfg.Phase == EnablePhStr || cocfg.Phase == FlexupPhStr {
 		//activeSh = 0
-		if cocfg.TnsByRole[Source] == GetTnsCutoverName() {
+		if cocfg.TnsByRole[Source] == GetTnsName() {
 			activeSh = int(ShIdTns)
 		} else if cocfg.TnsByRole[Source] == GetTnsCutoverName() {
 			activeSh = int(ShIdTnsCutover)
 		} else {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "shtien: Bouncing, shouldn't get here for checking active worker capacity")
+			}
 			// shouldn't get here.
 			return false
 		}
@@ -242,22 +248,33 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 		}
 	} else {
 		// can't be here
-		return false
-	}
-	rwpool, era := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, activeSh)
-	if era != nil {
-		// wow, is this possible?
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "no RW pool")
-		}
-		return false
-	}
-	if rwpool.GetHealthyWorkersCount() > 0 {
 		return true
 	}
+	if logger.GetLogger().V(logger.Alert) {
+		logger.GetLogger().Log(logger.Alert, "shtien: Bouncer check RW pool shard id:", activeSh)
+	}
+	rwpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, activeSh)
+	if err != nil {
+		// wow, is this possible?
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "shtien can this possible? no RW pool")
+		}
+		return false
+	} else {
+		return rwpool.GetHealthyWorkersCount() > 0
+	}
+	if logger.GetLogger().V(logger.Alert) {
+		logger.GetLogger().Log(logger.Alert, "shtien: Bouncer check RO pool shard id:", activeSh)
+	}
 
-	roPool, erc := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, activeSh)
-	if erc == nil {
+	roPool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, activeSh)
+	if err != nil {
+		// wow, is this possible?
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "shtien can this possible? no RO pool")
+		}
+		return false
+	} else {
 		return roPool.GetHealthyWorkersCount() > 0
 	}
 	return true
