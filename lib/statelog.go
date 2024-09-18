@@ -220,7 +220,7 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 	cocfg := GetCutoverCfg()
 	if cocfg.Phase == "" {
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "shtien: No capacity and Bounce due to empty cutover cutover")
+			logger.GetLogger().Log(logger.Alert, "active worker check but empty cutover cfg")
 		}
 		return false
 	}
@@ -233,7 +233,7 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 			activeSh = int(ShIdTnsCutover)
 		} else {
 			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "shtien: Bouncing, shouldn't get here for checking active worker capacity")
+				logger.GetLogger().Log(logger.Alert, "active worker check no valid active src shard")
 			}
 			// shouldn't get here.
 			return false
@@ -250,28 +250,22 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 		// can't be here
 		return true
 	}
-	if logger.GetLogger().V(logger.Alert) {
-		logger.GetLogger().Log(logger.Alert, "shtien: Bouncer check RW pool shard id:", activeSh)
-	}
 	rwpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, activeSh)
 	if err != nil {
 		// wow, is this possible?
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "shtien can this possible? no RW pool")
+			logger.GetLogger().Log(logger.Alert, "error getting active shard RW worker pool", err.Error())
 		}
 		return false
 	} else {
 		return rwpool.GetHealthyWorkersCount() > 0
-	}
-	if logger.GetLogger().V(logger.Alert) {
-		logger.GetLogger().Log(logger.Alert, "shtien: Bouncer check RO pool shard id:", activeSh)
 	}
 
 	roPool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, activeSh)
 	if err != nil {
 		// wow, is this possible?
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "shtien can this possible? no RO pool")
+			logger.GetLogger().Log(logger.Alert, "error getting active shard RO")
 		}
 		return false
 	} else {

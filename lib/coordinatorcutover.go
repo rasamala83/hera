@@ -19,7 +19,6 @@ type ActiveDbInfo struct {
 	Phase      string         // current cutover phase
 	DbUname    string         // Active DB_UNAME
 	RwStatus   int            // dbuname --> rw status, 1 R, 2 W, 3 RW, 0 NRNW
-	SessionCfg CutoverCfg     // tracking the cfg used in the session
 }
 
 func (crd *Coordinator) copyActCOInfo(destInfo *ActiveDbInfo, srcInfo ActiveDbInfo) {
@@ -138,7 +137,6 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 
 	interrupt := false // if txn should be disrupted
 	newActInfo := cvtActiveInfo(&tmpcfg)
-
 	if newActInfo == nil {
 		evt := cal.NewCalEvent(EvtTypeCutover, "preproc_empty_newactive", cal.TransOK, "")
 		evt.Completed()
@@ -155,14 +153,18 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	}
 
 	if crd.curActDb == nil {
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
-			crd.curActDb = &ActiveDbInfo{}
-			crd.copyActCOInfo(crd.curActDb, *newActInfo) // now coordinator has updated with latest info
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
 		}
+		crd.curActDb = &ActiveDbInfo{}
+		crd.copyActCOInfo(crd.curActDb, *newActInfo) // now coordinator has updated with latest info
 	}
 	diff := compActiveInfo(crd.curActDb, newActInfo)
+
 	if diff < 0 {
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, crd.id, "PreprocessCutover unexpected nil at comparing ActiveInfo")
+		}
 		return interrupt, nil
 	}
 
@@ -309,7 +311,7 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 		// now we need to know which connection pool is the source (in the opposite of target)
 		shardToUse = crd.getSrcShardByCutoverCfg()
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "ENABLE or PRE phase, get source shard = ", int(shardToUse))
+			logger.GetLogger().Log(logger.Verbose, crd.id, "ENABLE or FLEXUP phase, get source shard = ", int(shardToUse))
 		}
 		if shardToUse >= MaxDbInCutover {
 			// we can't default sql routing by unknown source
@@ -317,7 +319,7 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 			return shardToUse, ErrSrcUnknown
 		}
 	} else {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "CP 6.2 dispatchRequest error invalid cutover phase")
+		logger.GetLogger().Log(logger.Verbose, crd.id, "dispatchRequest error invalid cutover phase")
 		return shardToUse, errors.New("invalid cutover phase")
 	}
 	return shardToUse, nil

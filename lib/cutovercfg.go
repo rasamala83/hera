@@ -175,6 +175,7 @@ func InitCutoverCfg(modulename string) error {
 	initUpdateGlobalCfg(&firstcfg[0])
 	logger.GetLogger().Log(logger.Info, "successful cutovercfg init at start up", GetCutoverCfg())
 
+	hostname, _ := os.Hostname()
 	go func() {
 		var db *sql.DB
 		var err error
@@ -201,6 +202,8 @@ func InitCutoverCfg(modulename string) error {
 						logger.GetLogger().Log(logger.Warning, "error: reload loadCutoverCfg()", err.Error())
 					}
 				} else {
+					evt := cal.NewCalEvent(EvtTypeCutover, "reload_done", cal.TransOK, hostname)
+					evt.Completed()
 					if logger.GetLogger().V(logger.Info) {
 						logger.GetLogger().Log(logger.Info, "successful reload cutovercfg")
 					}
@@ -825,7 +828,7 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 					evt := cal.NewCalEvent(EvtTypeCutover, "err_wpool_stopRW", cal.TransOK, stopRwCalName)
 					evt.Completed()
 					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, "CP 27 ", t, "error:", err.Error())
+						logger.GetLogger().Log(logger.Warning, "error: can't get workerpool", t, "error:", err.Error())
 					}
 				} else {
 					if wpool != nil {

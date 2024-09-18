@@ -434,19 +434,20 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 					if crd.curActDb == nil {
 						//this is wrong - why ? how it got nothing , only happen during init? and what to proceed.
 						if !crd.isInternal {
-							if logger.GetLogger().V(logger.Debug) {
-								logger.GetLogger().Log(logger.Debug, "crd.curActInfo is nil! This shoudn't happen, hang up on client")
+							if logger.GetLogger().V(logger.Warning) {
+								logger.GetLogger().Log(logger.Warning, "crd.curActInfo is nil! This shoudn't happen, hang up on client")
 							}
 							hangup = true
 							handled = true
 							crd.conn.Close()
 						} else {
-							if logger.GetLogger().V(logger.Info) {
-								logger.GetLogger().Log(logger.Info, "internal query default to use source but crd.curActInfo is nil")
+							if logger.GetLogger().V(logger.Warning) {
+								logger.GetLogger().Log(logger.Warning, "internal query default to use source but crd.curActInfo is nil")
 							}
 
 						}
 					}
+
 					if err != nil {
 						handled = true
 						if logger.GetLogger().V(logger.Info) {
@@ -887,8 +888,8 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					//internal queries always use src shard when cutover feature is enabled.
 					srcShardId := crd.getSrcShardByCutoverCfg()
 					if srcShardId >= MaxDbInCutover {
-						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, crd.id, "dispatchrequest: r/w split disabled, internal sql shard is not specified, should only occur during server start up")
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, crd.id, "dispatchrequest: r/w split disabled, internal sql shard is not specified, should only occur during server start up")
 						}
 						srcShardId = crd.shId4Internal
 					}
