@@ -915,7 +915,7 @@ func (pool *WorkerPool) enforceIntegrity() {
 	}
 
 	warnOnly := true // warning only unless for Cutover workerpool at flexup and cutover phase
-	if pool.phase == CutoverPhStr {
+	if pool.phase == CutoverPhStr || pool.phase == FlexupPhStr {
 		// cutover phase, enforce on the target pool only
 		warnOnly = false
 	}
@@ -946,7 +946,7 @@ func (pool *WorkerPool) enforceIntegrity() {
 			evt := cal.NewCalEvent(EvtTypeCutover, calname, cal.TransOK, "")
 			evt.Completed()
 		} else {
-			calname := fmt.Sprintf("kill_diff_dbun_%d_%d", int(w.Type), w.instID)
+			calname := fmt.Sprintf("kill_diff_dbun_%d_%d_%d", int(pool.CoShardID), int(w.Type), w.instID)
 			evt := cal.NewCalEvent(EvtTypeCutover, calname, cal.TransOK, "")
 			evt.Completed()
 			w.Terminate()

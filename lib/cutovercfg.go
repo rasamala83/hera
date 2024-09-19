@@ -202,7 +202,7 @@ func InitCutoverCfg(modulename string) error {
 						logger.GetLogger().Log(logger.Warning, "error: reload loadCutoverCfg()", err.Error())
 					}
 				} else {
-					evt := cal.NewCalEvent(EvtTypeCutover, "reload_done", cal.TransOK, hostname)
+					evt := cal.NewCalEvent(EvtTypeCutover, "cfg_reloaded", cal.TransOK, hostname)
 					evt.Completed()
 					if logger.GetLogger().V(logger.Info) {
 						logger.GetLogger().Log(logger.Info, "successful reload cutovercfg")
@@ -761,7 +761,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.TnsByRole[Source] != nextcfg.TnsByRole[Source] {
 		changed = true
 		info := fmt.Sprint(gTnsAlias, "_", curcfg.TnsByRole[Source], "_to_", nextcfg.TnsByRole[Source])
-		evt := cal.NewCalEvent(EvtTypeCutover, "tns_dbrole_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "tns_role_chg", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, gTnsAlias, "dbrole change changed:", info)
@@ -946,13 +946,13 @@ func getPoolSizePolicy(phase string, srcTns string) int {
 func isValidDbRole(role1 string, role2 string) bool {
 	// can't be the same
 	if role1 == role2 {
-		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_dbRole", cal.TransOK, "")
+		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_tnsRole", cal.TransOK, "")
 		evt.Completed()
 		return false
 	}
 	// must be either 'SRC' or 'TGT'
 	if !(role1 == Source || role1 == Target) || !(role2 == Source || role2 == Target) {
-		evt := cal.NewCalEvent(EvtTypeCutover, "err_invalid_dbRole", cal.TransOK, "")
+		evt := cal.NewCalEvent(EvtTypeCutover, "err_invalid_tnsRole", cal.TransOK, "")
 		evt.Completed()
 		return false
 	}

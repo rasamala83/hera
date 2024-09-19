@@ -679,7 +679,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 					if worker.ConnTwoTask == tgtShId {
 						logger.GetLogger().Log(logger.Alert, "tns_role_tgt_dbuname mismatch in flexup/cutover phase [", cfgDbun, "][", worker.dbUname, "]")
 						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
-						et := cal.NewCalEvent(EvtTypeCutover, "new_wkr_dbun_mismatch_tns_tgt", cal.TransOK, msg)
+						et := cal.NewCalEvent(EvtTypeCutover, "new_wkr_tgt_dbun_mismatch", cal.TransOK, msg)
 						et.Completed()
 						errmsg := fmt.Sprintf("new workerclient integrity check failed at flexup/cutover. Expect dbname [%s], %s, %d, %d", cfgDbun, worker.dbUname, worker.Type, worker.ConnTwoTask)
 						return errors.New(errmsg)
@@ -687,7 +687,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 						// only warning
 						logger.GetLogger().Log(logger.Alert, "tns_role_src dbuname mismatch in flexup/cutover phase [", cfgDbun, "][", worker.dbUname, "]")
 						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
-						et := cal.NewCalEvent(EvtTypeCutover, "warn_new_wkr_dbun_mismatch_tns_src", cal.TransOK, msg)
+						et := cal.NewCalEvent(EvtTypeCutover, "warn_new_wkr_src_dbun_mismatch", cal.TransOK, msg)
 						et.Completed()
 					}
 				}
