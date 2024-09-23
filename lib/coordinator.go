@@ -440,11 +440,6 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 							hangup = true
 							handled = true
 							crd.conn.Close()
-						} else {
-							if logger.GetLogger().V(logger.Warning) {
-								logger.GetLogger().Log(logger.Warning, "internal query default to use source but crd.curActInfo is nil")
-							}
-
 						}
 					}
 
@@ -689,6 +684,9 @@ func (crd *Coordinator) resetWorkerInfo() {
 
 // Helper function in cutover
 func (crd *Coordinator) getWorkerHelper(wtype HeraWorkerType, shid ShardByTwoTask, bklgtimeout bool) (*WorkerPool, *WorkerClient, string, error) {
+	if shid >= MaxDbInCutover {
+		return nil, nil, "", errors.New("invalid shard")
+	}
 	workerpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtype, 0, int(shid))
 	if err != nil {
 		return workerpool, nil, "", err
@@ -833,14 +831,18 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			} else {
 				if crd.isInternal {
 					//internal queries always use src shard when cutover feature is enabled.
-					srcShId := crd.getSrcShardByCutoverCfg()
-					if crd.shId4Internal >= MaxDbInCutover {
-						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, crd.id, "dispatchrequest: r/w split, internal sql shard is not specified, should only occur during server start up")
+					srcShardId := crd.getSrcShardByCutoverCfg()
+					if srcShardId >= MaxDbInCutover {
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, crd.id, "dispatchrequest: r/w split enabled, src shard ID unspecified. This should only occur during server start up")
 						}
-						srcShId = crd.shId4Internal
+						srcShardId = crd.shId4Internal
 					}
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, srcShId, false)
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover runs internal query. isRead", crd.isRead)
+					}
+					
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, srcShardId, false)
 					if err != nil {
 						if logger.GetLogger().V(logger.Warning) {
 							logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool", err)

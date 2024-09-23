@@ -163,25 +163,6 @@ func Run() {
 		time.Sleep(time.Millisecond * 100)
 	}
 
-	// when cutover is enabled, it requires at least one read connection from two_task pool
-	if GetConfig().ReadonlyPct > 0 && GetConfig().EnableCutover {
-		rpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, 0)
-		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RO, 0, 0:", err)
-			}
-			FullShutdown()
-		}
-		for {
-			if rpool.GetHealthyWorkersCount() > 0 {
-				break
-			}
-			time.Sleep(time.Millisecond * 100)
-		}
-		evt := cal.NewCalEvent(EvtTypeCutover, "ro_pool_avail", cal.TransOK, "")
-		evt.Completed()
-	}
-
 	var lsn Listener
 	if GetConfig().KeyFile != "" {
 		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
@@ -189,22 +170,20 @@ func Run() {
 		lsn = NewTCPListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
 	}
 
-	time.Sleep(time.Second * 1)
-	if GetConfig().EnableCutover {
-		err = InitCutoverCfg(*namePtr)
-		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err.Error())
-			}
-			FullShutdown()
-		}
-	}
-
 	if GetConfig().EnableSharding {
 		err = InitShardingCfg()
 		if err != nil {
 			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to initialize sharding config:", err)
+				logger.GetLogger().Log(logger.Alert, "failed to initialize sharding config:", err.Error())
+			}
+			FullShutdown()
+		}
+	} else if GetConfig().EnableCutover {
+		time.Sleep(time.Second * 1)
+		err = InitCutoverCfg(*namePtr)
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err.Error())
 			}
 			FullShutdown()
 		}

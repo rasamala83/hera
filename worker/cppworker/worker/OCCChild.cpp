@@ -5887,7 +5887,7 @@ void OCCChild::cutover_support() {
 			m_last_user_role_check = tv_now.tv_sec;
 			cutover_role_alarm_set = true;
 			
-			alarm(2); // allow total 2 seconds before forcing a recycling.
+			alarm(1); // allow total 1 seconds before forcing a recycling.
 			int rc = set_role_for_the_session(); // if failure, exit already
 			cutover_role_alarm_set = false;
 			alarm(0);

@@ -1059,6 +1059,9 @@ func (worker *WorkerClient) doRead() {
 					logger.GetLogger().Log(logger.Verbose, "workerclient sqltime=", worker.sqlStartTimeMs)
 				}*/
 			} else {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "workerclient (<<< pid =", worker.pid, ",wrqId:", worker.rqId, "): EOR code:", eor, ", rqId: ", rqId, ", data:", DebugString(payload))
+				}
 				worker.setState(wsWait)
 			}
 			if eor != common.EORMoreIncomingRequests {
@@ -1083,6 +1086,9 @@ func (worker *WorkerClient) doRead() {
 			return
 		default:
 			if ns.Cmd != common.RcStillExecuting {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "workerclient (<<< pid =", worker.pid, "); data:", DebugString(ns.Serialized), len(ns.Serialized))
+				}
 				worker.setState(wsWait)
 			}
 			if logger.GetLogger().V(logger.Verbose) {

@@ -89,14 +89,14 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 			newActInfo.RwStatus = cocfg.RWstatusByDb[actDb]
 		}
 	}
-	if logger.GetLogger().V(logger.Info) {
-		logger.GetLogger().Log(logger.Info, "ActiveDBInfo (ShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "ActiveDBInfo (ShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
 	}
 	return &newActInfo
 }
 
 /*
-PreprocessCutover returns bool: hang up client connection or not regardless if error is nil. error: if there is an error in process.
+PreprocessCutover returns bool: true -> hang up client connection. error: if there is an error in process.
 Every sqlrequest goes through PreprocessCutover. The function loads the latest cfg and detect which pool shard it should go
 and disconnect the client if needed.
 
@@ -106,16 +106,9 @@ and disconnect the client if needed.
 	(00100) 4 if phase changes (may force shard id )
 	(01000) 8 if RWStatus changes. any type (of R or W) is stopped, terminate ongoing txn
 
-	info required.
-
-a. which workerpool (sh + type) to dispatch such request
-b. some phase has default behavior and different policy
-c. update the ActiveInfo struct
-d. return bool -> hang up or not, int -> shard id
-
 hang up conditions
-1. active two_task has changed from last tracked active info in this coordinator
-2. active two_task is unchanged but RWstatus disabled from enabled.
+1. active tns alias has changed from last tracked active info in this coordinator
+2. active tns alias is unchanged but RWstatus disabled from enabled.
 3. if no active config can be constructed, return hangup true
 */
 func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool, error) {
@@ -179,22 +172,22 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	if crd.inTransaction {
 		// worker could be in a long txn, break it if needed.
 		if (diff & 0x0001) == 0x0001 {
-			if newActInfo.Phase == FlexupPhStr || newActInfo.Phase == EnablePhStr {
-				if newActInfo.ShId != ShIdTns {
-					if logger.GetLogger().V(logger.Info) {
-						logger.GetLogger().Log(logger.Info, crd.id, "prior to cutover phase config using")
+			if newActInfo.SrcTns != crd.curActDb.SrcTns {
+				if newActInfo.Phase == FlexupPhStr || newActInfo.Phase == EnablePhStr {
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, crd.id, "enter new phase enable/flexup, cur txn is not using src pool")
 					}
+					evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_db_change_to_EF", cal.TransOK, "")
+					evt.Completed()
+				} else {
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, crd.id, "cutover phase worker pool switch")
+					}
+					evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_db_change_to_CO", cal.TransOK, "")
+					evt.Completed()
 				}
-			} else if newActInfo.Phase == CutoverPhStr {
-				//cutover phase, swithc worker pool
-				logger.GetLogger().Log(logger.Alert, crd.id, "cutover phase worker pool switch")
-				evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_db_change", cal.TransOK, "")
-				evt.Completed()
 				interrupt = true
 				err = errors.New("cutover database switch")
-			} else {
-				// shouldn't reach here
-				logger.GetLogger().Log(logger.Alert, crd.id, "logging only. Unrecognized new cutover phase with occ_tns_alias change")
 			}
 		}
 		if (diff & 0x0002) == 0x0002 {
@@ -325,7 +318,7 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 	return shardToUse, nil
 }
 
-// only for internal write queries. When read cfg always use two_task shard, write uses two_task shard and cutover shard
+// only for internal write queries. When read cfg always use tns alias shard, write uses tns alias shard and cutover shard
 func (crd *Coordinator) processSetCoShardID(val []byte) error {
 	if !GetConfig().EnableCutover { // no need to pass
 		crd.shId4Internal = ShIdUnset
@@ -342,7 +335,7 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 	if err != nil {
 		return nil
 	}
-	// cutover enabled. we expect sh to be 0 (two_task) or 1 (two_task_cutover)
+	// cutover enabled. we expect sh to be 0 (tns alias) or 1 (tns alias_cutover)
 	if sh != 0 && sh != 1 {
 		return ErrBadShardID
 	}

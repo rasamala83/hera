@@ -213,7 +213,7 @@ func (sl *StateLog) GetStartTime() int64 {
 	return sl.mServerStartTime
 }
 
-// Cutover enabled for single schema but two db and give any point in time, only single active shard.
+// Support cutover enabled activeworker check.
 func (sl *StateLog) HasActiveWorkerForCutover() bool {
 	//When cutover is enabled, internally we have two shards but we only check the active shard.
 	activeSh := 0
@@ -233,7 +233,7 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 			activeSh = int(ShIdTnsCutover)
 		} else {
 			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "active worker check no valid active src shard")
+				logger.GetLogger().Log(logger.Alert, "Enable/flexup, no valid active src shard")
 			}
 			// shouldn't get here.
 			return false
@@ -246,29 +246,14 @@ func (sl *StateLog) HasActiveWorkerForCutover() bool {
 		if cocfg.ActiveShardId == ShIdUnset {
 			return false
 		}
-	} else {
-		// can't be here
-		return true
 	}
 	rwpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, activeSh)
-	if err != nil {
-		// wow, is this possible?
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "error getting active shard RW worker pool", err.Error())
-		}
-		return false
-	} else {
+	if err == nil {
 		return rwpool.GetHealthyWorkersCount() > 0
 	}
 
 	roPool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, activeSh)
-	if err != nil {
-		// wow, is this possible?
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "error getting active shard RO")
-		}
-		return false
-	} else {
+	if err == nil {
 		return roPool.GetHealthyWorkersCount() > 0
 	}
 	return true
