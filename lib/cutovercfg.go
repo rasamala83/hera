@@ -449,7 +449,7 @@ func populateNewCfg(rcrds [2]CutoverRecord) (CutoverCfg, error) {
 
 		}
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "done loading cfg", i, "](two_task, phase, tns_alias_role, dbuname, wstatus, rstatus)(", rec2task, rcrds[i].phase, recDbRole, recDbUname, recWstatus, recRstatus, ")")
+			logger.GetLogger().Log(logger.Debug, "done loading rec", i, "(two_task, phase, tns_alias_role, dbuname, wstatus, rstatus)(", rec2task, rcrds[i].phase, recDbRole, recDbUname, recWstatus, recRstatus, ")")
 		}
 	}
 	// set default active db for Enable, Pre, and Complete phases.

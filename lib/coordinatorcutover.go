@@ -15,6 +15,7 @@ import (
 // The information is stored in a structure ActiveDbInfo as for which shard and RW, R, or W
 type ActiveDbInfo struct {
 	SrcTns     string         // source Tns key
+	SrcShId    ShardByTwoTask // source shard id 
 	ShId       ShardByTwoTask // active pool shard id
 	Phase      string         // current cutover phase
 	DbUname    string         // Active DB_UNAME
@@ -38,6 +39,7 @@ func (crd *Coordinator) copyActCOInfo(destInfo *ActiveDbInfo, srcInfo ActiveDbIn
 // (00010) 2 if dbuname changes
 // (00100) 4 if phase changes (may force shard id )
 // (01000) 8 if RWStatus changes
+// (10000) 16 if SrcTns changes
 func compActiveInfo(cur *ActiveDbInfo, newcfg *ActiveDbInfo) int {
 	if cur == nil || newcfg == nil {
 		return -1
@@ -55,6 +57,9 @@ func compActiveInfo(cur *ActiveDbInfo, newcfg *ActiveDbInfo) int {
 	if cur.RwStatus != newcfg.RwStatus {
 		flag |= 0x0008
 	}
+	if cur.SrcTns != newcfg.SrcTns {
+		flag |= 0x0010
+	}
 	return flag
 }
 
@@ -65,13 +70,18 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 	}
 	var newActInfo ActiveDbInfo
 	newActInfo.SrcTns = cocfg.TnsByRole[Source]
+	newActInfo.SrcShId = ShIdTns
+	if newActInfo.SrcTns == gTnsAliasCutover {
+		newActInfo.SrcShId = ShIdTnsCutover
+	}
+
 	if cocfg.Phase == EnablePhStr || cocfg.Phase == FlexupPhStr {
-		newActInfo.ShId = ShIdTns
+		newActInfo.ShId = newActInfo.SrcShId
 		newActInfo.DbUname = cocfg.DbByTns[gTnsAlias]
 		newActInfo.Phase = cocfg.Phase
 		newActInfo.RwStatus = (ReadOk | WriteOk)
 	} else {
-		//cutover or unknown phase
+		//cutover 
 		if cocfg.ActiveTns == UnsetStr {
 			evt := cal.NewCalEvent(EvtTypeCutover, "cutover_no_active_db", cal.TransOK, "")
 			evt.Completed()
@@ -99,12 +109,6 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 PreprocessCutover returns bool: true -> hang up client connection. error: if there is an error in process.
 Every sqlrequest goes through PreprocessCutover. The function loads the latest cfg and detect which pool shard it should go
 and disconnect the client if needed.
-
-	(00000) identical
-	(00001) 1 if (active) twotask changes (shard id changes), terminate ongoing txn
-	(00010) 2 if dbuname changes (doesn't affect shard id)
-	(00100) 4 if phase changes (may force shard id )
-	(01000) 8 if RWStatus changes. any type (of R or W) is stopped, terminate ongoing txn
 
 hang up conditions
 1. active tns alias has changed from last tracked active info in this coordinator
@@ -170,34 +174,84 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	}
 	var err error
 	if crd.inTransaction {
-		// worker could be in a long txn, break it if needed.
-		if (diff & 0x0001) == 0x0001 {
-			if newActInfo.SrcTns != crd.curActDb.SrcTns {
-				if newActInfo.Phase == FlexupPhStr || newActInfo.Phase == EnablePhStr {
-					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, crd.id, "enter new phase enable/flexup, cur txn is not using src pool")
+		if (diff & 0x0001) == 0x0001 { // active tns changes. 
+			if (!crd.isInternal) {
+				if diff & 0x0004 == 0x0004 { // phase changes
+					if (crd.curActDb.Phase == CutoverPhStr) && (crd.curActDb.ShId != newActInfo.SrcShId) {
+						// cutover -> flexup or enable phase
+						// compare cur active tns and SrcTns, if mismatch, error
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, crd.id, "enter new phase enable/flexup, cur txn is not using src pool")
+						}
+						evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_tns_chg_exit_cutover", cal.TransOK, "")
+						evt.Completed()
+						interrupt = true
+						err = errors.New("crd_act_tns_chg_exit_cutover")
+
+					} else if newActInfo.Phase == CutoverPhStr && (crd.curActDb.SrcShId != newActInfo.ShId){
+						// flex up or enable -> cutover phase
+						// compare cur SrcTns and new active tns, if mismatch, error 
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, crd.id, "enter new phase cutover, cur txn is not using active tns")
+						}
+						evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_tns_chg_enter_cutover", cal.TransOK, "")
+						evt.Completed()
+						interrupt = true
+						err = errors.New("crd_act_tns_chg_enter_cutover")
+					} else {
+						// enable -> flex up or flex up -> enable
+						// compare cur and new SrcTns, if mismatch, error
+						if diff & 0x0010 == 0x0010 {
+							if logger.GetLogger().V(logger.Warning) {
+								logger.GetLogger().Log(logger.Warning, crd.id, "cur txn is not using active tns")
+							}
+							evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_tns_chg_enter_cutover", cal.TransOK, "")
+							evt.Completed()
+							interrupt = true
+							err = errors.New("crd_act_tns_chg_enter_cutover")
+						}
 					}
-					evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_db_change_to_EF", cal.TransOK, "")
-					evt.Completed()
 				} else {
-					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, crd.id, "cutover phase worker pool switch")
+					// phase is the same. we only need to see check if current phase is cutover
+					if (crd.curActDb.Phase == CutoverPhStr) {
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, crd.id, "cutover phase active tns changes")
+						}
+						evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_tns_chg_at_cutover", cal.TransOK, "")
+						evt.Completed()
+						interrupt = true
+						err = errors.New("crd_act_tns_chg_at_cutover")
+					} else {
+						// phase remains in enable or flex up, check if SrcTns changed
+						if diff & 0x0010 == 0x0010 {
+							if logger.GetLogger().V(logger.Warning) {
+								logger.GetLogger().Log(logger.Warning, crd.id, "enable/flex up phase src tns changes")
+							}
+							evt := cal.NewCalEvent(EvtTypeCutover, "crd_src_tns_chg_not_cutover", cal.TransOK, "")
+							evt.Completed()
+							interrupt = true
+							err = errors.New("crd_src_tns_chg_not_cutover.")
+						}
 					}
-					evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_db_change_to_CO", cal.TransOK, "")
+				}
+			} else {
+				if diff & 0x0010 == 0x0010 {
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, crd.id, "crd internal src tns changes")
+					}
+					evt := cal.NewCalEvent(EvtTypeCutover, "crd_internal_src_tns_chg", cal.TransOK, "")
 					evt.Completed()
 				}
-				interrupt = true
-				err = errors.New("cutover database switch")
 			}
 		}
 		if (diff & 0x0002) == 0x0002 {
-			// integrity is handled by workerpool in a separate way, is there anything we should do here as dispatching?
-			logger.GetLogger().Log(logger.Alert, crd.id, "logging only. active dbuname change")
+			evt := cal.NewCalEvent(EvtTypeCutover, "crd_see_dbuname_change", cal.TransOK, "")
+			evt.Completed()
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Info, crd.id, "logging only. crd cutover preprocess active dbuname change")
+			}
 		}
-		if (diff & 0x0004) == 0x0004 {
-			// preprocess upon phase change, what does this mean?
-			logger.GetLogger().Log(logger.Alert, crd.id, "logging only. cutover phase change")
-		}
+
 		if (diff & 0x0008) == 0x0008 {
 			// if this has a stop to read or write, we will take action by stopping the intransaction
 			// rw status, 1 R, 2 W, 3 RW, 0 NRNW
@@ -257,6 +311,7 @@ func (crd *Coordinator) ProceedWriteInCutover() error {
 	}
 	return nil
 }
+
 func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
 	if crd.curActDb == nil {
 		logger.GetLogger().Log(logger.Warning, crd.id, "unknown source, ignore during server init")
@@ -274,11 +329,13 @@ func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
 	crd.shId4Internal = ShIdUnset
 	return srcShId
 }
-func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
+
+// getActiveShId return the active shard id based on phase and read/write status. Not for internal sqls.
+func (crd *Coordinator) getActiveShId() (ShardByTwoTask, error) {
 	shardToUse := ShIdUnset
 	if crd.curActDb.Phase == CutoverPhStr {
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "phase cutover crd.isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActDb.RwStatus, "]")
+			logger.GetLogger().Log(logger.Verbose, crd.id, "cutover phase crd.isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActDb.RwStatus, "]")
 		}
 		if crd.isRead {
 			if (crd.curActDb.RwStatus & ReadOk) != ReadOk {
@@ -298,13 +355,12 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 
 		shardToUse = crd.curActDb.ShId
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "phase cutover, dispatch to", int(shardToUse), "workers")
+			logger.GetLogger().Log(logger.Verbose, crd.id, "cutover phase, crd dispatch to", int(shardToUse), "workers")
 		}
 	} else if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == FlexupPhStr {
-		// now we need to know which connection pool is the source (in the opposite of target)
-		shardToUse = crd.getSrcShardByCutoverCfg()
+		shardToUse = crd.curActDb.SrcShId
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "ENABLE or FLEXUP phase, get source shard = ", int(shardToUse))
+			logger.GetLogger().Log(logger.Verbose, crd.id, "enable/flexupi phase, crd dispatch to ", int(shardToUse), "workers")
 		}
 		if shardToUse >= MaxDbInCutover {
 			// we can't default sql routing by unknown source
@@ -319,7 +375,7 @@ func (crd *Coordinator) getShardByCutoverCfg() (ShardByTwoTask, error) {
 }
 
 // only for internal write queries. When read cfg always use tns alias shard, write uses tns alias shard and cutover shard
-func (crd *Coordinator) processSetCoShardID(val []byte) error {
+func (crd *Coordinator) processSetInternalShID(val []byte) error {
 	if !GetConfig().EnableCutover { // no need to pass
 		crd.shId4Internal = ShIdUnset
 		return nil
@@ -330,13 +386,13 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 
 	sh, err := strconv.ParseInt(string(val), 10, 32)
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "processSetCoShardID", sh)
+		logger.GetLogger().Log(logger.Debug, crd.id, "processSetInternalShID", sh)
 	}
 	if err != nil {
 		return nil
 	}
 	// cutover enabled. we expect sh to be 0 (tns alias) or 1 (tns alias_cutover)
-	if sh != 0 && sh != 1 {
+	if !(sh == 0 || sh == 1) {
 		return ErrBadShardID
 	}
 
@@ -345,7 +401,7 @@ func (crd *Coordinator) processSetCoShardID(val []byte) error {
 		// crd.worker.shardID is used by cutover feature so we check if we need switch.
 		// this is unlikely since internal sql don't use persistent connection.
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, crd.id, "processSetCoShardID crd.shId4Internal", crd.shId4Internal, "crd.worker.shardID", crd.worker.shardID)
+			logger.GetLogger().Log(logger.Debug, crd.id, "processSetInternalShID crd.shId4Internal", crd.shId4Internal, "crd.worker.shardID", crd.worker.shardID)
 		}
 		if int(crd.shId4Internal) != crd.worker.shardID {
 			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
