@@ -63,8 +63,8 @@ type Coordinator struct {
 	prevShard *shardInfo
 
 	//for cutover support so the coordinator knows where to dispatch.
-	curActDb      *ActiveDbInfo // maybe we don't need this, just use the CutoverInfo (atomic) directly
-	shId4Internal ShardByTwoTask
+	curActDb     *ActiveDbInfo  // maybe we don't need this, just use the CutoverInfo (atomic) directly
+	internalShId ShardByTwoTask // internal requests only, the shard set for the session
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
 	worker        *WorkerClient // if it is in transaction/in cursor, the worker attached
@@ -80,7 +80,7 @@ type Coordinator struct {
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
 func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstring, conn net.Conn) *Coordinator {
-	coordinator := &Coordinator{clientchannel: clientchannel, conn: conn, ctx: ctx, done: make(chan int, 1), id: conn.RemoteAddr().String(), shard: &shardInfo{sessionShardID: -1}, prevShard: &shardInfo{sessionShardID: -1}}
+	coordinator := &Coordinator{clientchannel: clientchannel, conn: conn, ctx: ctx, done: make(chan int, 1), id: conn.RemoteAddr().String(), shard: &shardInfo{sessionShardID: -1}, prevShard: &shardInfo{sessionShardID: -1}, internalShId: ShIdUnset}
 	var err error
 	coordinator.sqlParser, err = common.NewRegexSQLParser()
 	if err != nil {
@@ -521,7 +521,7 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, crd.id, "cutover enabled. CmdSetShardID", request.Payload)
 			}
-			err = crd.processSetCoShardID(request.Payload)
+			err = crd.processSetInternalShID(request.Payload)
 		} else {
 			err = crd.processSetShardID(request.Payload)
 		}
@@ -685,7 +685,7 @@ func (crd *Coordinator) resetWorkerInfo() {
 // Helper function in cutover
 func (crd *Coordinator) getWorkerHelper(wtype HeraWorkerType, shid ShardByTwoTask, bklgtimeout bool) (*WorkerPool, *WorkerClient, string, error) {
 	if shid >= MaxDbInCutover {
-		return nil, nil, "", errors.New("invalid shard")
+		return nil, nil, "", errors.New("invalid out of bound shard")
 	}
 	workerpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtype, 0, int(shid))
 	if err != nil {
@@ -808,9 +808,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 
 	if worker == nil {
 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
-			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, crd.id, "worker == nil, sql is read and RW split enabled.")
-			}
 			if !GetConfig().EnableCutover {
 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
 				if err != nil {
@@ -831,18 +828,34 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			} else {
 				if crd.isInternal {
 					//internal queries always use src shard when cutover feature is enabled.
-					srcShardId := crd.getSrcShardByCutoverCfg()
-					if srcShardId >= MaxDbInCutover {
-						if logger.GetLogger().V(logger.Warning) {
-							logger.GetLogger().Log(logger.Warning, crd.id, "dispatchrequest: r/w split enabled, src shard ID unspecified. This should only occur during server start up")
+					var srcShId ShardByTwoTask
+					if crd.curActDb == nil {
+						// should only happen during server init
+						if crd.internalShId >= MaxDbInCutover {
+							logger.GetLogger().Log(logger.Info, crd.id, "internal sql currernt active db info nil and invalid shard")
+							return errors.New("current active db info nil and invalid shard atdispatchrequest")
 						}
-						srcShardId = crd.shId4Internal
+						srcShId = crd.internalShId
+					} else {
+						srcShId = crd.curActDb.SrcShId
+						if crd.internalShId < MaxDbInCutover {
+							if logger.GetLogger().V(logger.Debug) {
+								logger.GetLogger().Log(logger.Debug, crd.id, "RW split on, internal query use shId4Internal", crd.internalShId, "crd.curActDb.SrcShId=", srcShId)
+							}
+							srcShId = crd.internalShId
+						}
+						if srcShId >= MaxDbInCutover {
+							if logger.GetLogger().V(logger.Warning) {
+								logger.GetLogger().Log(logger.Warning, crd.id, "dispatchrequest: r/w split enabled, src shard ID unspecified. This should only occur during server start up")
+							}
+							return errors.New("current active db has invalid src shard id")
+						}
 					}
 					if logger.GetLogger().V(logger.Verbose) {
-						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover runs internal query. isRead", crd.isRead)
+						logger.GetLogger().Log(logger.Verbose, crd.id, "RW split on, internal query isRead:", crd.isRead, "srcShardId:", srcShId)
 					}
-					
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, srcShardId, false)
+
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, srcShId, false)
 					if err != nil {
 						if logger.GetLogger().V(logger.Warning) {
 							logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool", err)
@@ -855,16 +868,18 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					if err != nil {
 						return err
 					}
-
-					//func (crd *Coordinator) getWorkerHelper(wtype HeraWorkerType, shid ShardByTwoTask) (*WorkerClient, string, error)
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, crd.curActDb.ShId, true)
+					shid, err := crd.getActiveShId()
 					if err != nil {
 						return err
 					}
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRO, shid, true)
+					if err != nil {
+						return err
+					}
+					logger.GetLogger().Log(logger.Verbose, crd.id, "cutover enabled. shardToUse ", shid)
 				}
 			}
 		} else {
-			// worker nil, sql is write, or is read with disabled rw split
 			if !GetConfig().EnableCutover {
 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
 				if err != nil {
@@ -882,24 +897,36 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					return err
 				}
 			} else {
-				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "cutover process write sql or read without RW split. isRead", crd.isRead)
-				}
-				var shardToUse ShardByTwoTask
 				if crd.isInternal {
-					//internal queries always use src shard when cutover feature is enabled.
-					srcShardId := crd.getSrcShardByCutoverCfg()
-					if srcShardId >= MaxDbInCutover {
-						if logger.GetLogger().V(logger.Warning) {
-							logger.GetLogger().Log(logger.Warning, crd.id, "dispatchrequest: r/w split disabled, internal sql shard is not specified, should only occur during server start up")
+					var srcShId ShardByTwoTask
+					if crd.curActDb == nil {
+						// should only happen during server init
+						if crd.internalShId >= MaxDbInCutover {
+							if logger.GetLogger().V(logger.Info) {
+								logger.GetLogger().Log(logger.Info, crd.id, "internal sql curActDb is nil and also invalid shard id")
+							}
+							return errors.New("current active db info nil at dispatchrequest RW split off.")
 						}
-						srcShardId = crd.shId4Internal
+						srcShId = crd.internalShId
+					} else {
+						srcShId = crd.curActDb.SrcShId
+						if crd.internalShId < MaxDbInCutover { // override config
+							if logger.GetLogger().V(logger.Debug) {
+								logger.GetLogger().Log(logger.Debug, crd.id, "RW split off, internal query use shId4Internal", crd.internalShId, "crd.curActDb.SrcShId=", srcShId)
+							}
+							srcShId = crd.internalShId
+						}
+						if srcShId >= MaxDbInCutover {
+							if logger.GetLogger().V(logger.Warning) {
+								logger.GetLogger().Log(logger.Warning, crd.id, "dispatchrequest: r/w split off, internal sql src shard undefined, should only occur during server start up")
+							}
+							return errors.New("internal sql cutover shard id invalid (not during init).")
+						}
 					}
 					if logger.GetLogger().V(logger.Verbose) {
-						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover runs internal query. isRead", crd.isRead)
+						logger.GetLogger().Log(logger.Verbose, crd.id, "RW split off, internal query isRead:", crd.isRead, "srcShardId:", srcShId)
 					}
-					logger.GetLogger().Log(logger.Verbose, crd.id, "cutover enabled. shardToUse ", srcShardId)
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, srcShardId, false)
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, srcShId, false)
 					if err != nil {
 						if logger.GetLogger().V(logger.Info) {
 							logger.GetLogger().Log(logger.Info, crd.id, "cutover getWorkerHelper error", err)
@@ -909,17 +936,36 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 
 				} else {
 					// external sql, now need to check the phase
-					shardToUse, err = crd.getShardByCutoverCfg()
+					if crd.curActDb == nil {
+						// we won't allow user queries when no config is available
+						if logger.GetLogger().V(logger.Alert) {
+							logger.GetLogger().Log(logger.Alert, crd.id, "error: dispatchrequest no cutover config for the user query")
+						}
+						return errors.New("current active db info nil at dispatchrequest RW split off.")
+					}
+					if crd.isRead {
+						err = crd.ProceedReadInCutover()
+						if err != nil {
+							return err
+						}
+					} else {
+						err = crd.ProceedWriteInCutover()
+						if err != nil {
+							return err
+						}
+					}
+					shid, err := crd.getActiveShId()
 					if err != nil {
 						return err
 					}
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, shardToUse, true)
+					workerpool, worker, ticket, err = crd.getWorkerHelper(wtypeRW, shid, true)
 					if err != nil {
 						if logger.GetLogger().V(logger.Info) {
 							logger.GetLogger().Log(logger.Verbose, crd.id, "cutover external sql get wpool error:", err)
 						}
 						return err
 					}
+					logger.GetLogger().Log(logger.Verbose, crd.id, "cutover enabled. shardToUse", shid)
 				}
 			}
 		}
@@ -965,80 +1011,56 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			// 2. PRE/ENABLE, COMPLETE/BROOM: change to either two_task or two_task_cutover but this shouldn't be allowed.
 			//
 			if !crd.isInternal {
-				var shardToUse ShardByTwoTask
-				wType := wtypeRW
-				if crd.isRead && GetConfig().ReadonlyPct > 0 {
-					wType = wtypeRO
-				}
-
-				if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == FlexupPhStr {
-					shIdToGo := ShIdTns
-					if crd.curActDb.SrcTns == GetTnsCutoverName() {
-						shIdToGo = ShIdTnsCutover
-					}
-					if worker.shardID != int(ShIdTns) {
-						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, shIdToGo, true)
-						if err != nil {
-							logger.GetLogger().Log(logger.Verbose, crd.id, "cutover default sql route error:", err)
-							return err
-						}
-					}
-				}
-
-				if crd.curActDb.Phase == CutoverPhStr {
-					// already got a worker need to work on the details. We first check shard
-					if crd.isRead {
-						err = crd.ProceedReadInCutover()
-						if err != nil {
-							return err
-						}
-					} else {
-						err = crd.ProceedWriteInCutover()
-						if err != nil {
-							return err
-						}
-					}
-
-					if worker.shardID != int(crd.curActDb.ShId) {
-						evt := cal.NewCalEvent(EvtTypeMux, "cutover_switch_active", cal.TransOK, "")
-						evt.Completed()
-						shardToUse = crd.curActDb.ShId
-						workerpool, worker, ticket, err = crd.getWorkerHelper(wType, shardToUse, true)
-						if err != nil {
-							logger.GetLogger().Log(logger.Warning, crd.id, "sql switch (active) db error", err)
-							return err
-						}
-						if !crd.inTransaction {
-							if logger.GetLogger().V(logger.Alert) {
-								logger.GetLogger().Log(logger.Alert, crd.id, "Expected to be in transaction")
-							}
-						}
-					} else {
-						// shard id match, good to proceed
-						if logger.GetLogger().V(logger.Debug) {
-							logger.GetLogger().Log(logger.Debug, crd.id, "worker shid match active sh id, worker not nil, continue")
-						}
-					}
-				}
-			} else {
-				// worker not nil, shard id change, we will need to switch too
-				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, crd.id, "CUTOVER enabled, internal sql, worker not nil!")
-				}
-				shIdToGo := ShIdTns
-				if crd.curActDb.SrcTns == GetTnsCutoverName() {
-					shIdToGo = ShIdTnsCutover
-				}
-				if worker.shardID != int(ShIdTns) {
-					wType := wtypeRW
-					if crd.isRead && GetConfig().ReadonlyPct > 0 {
-						wType = wtypeRO
-					}
-					workerpool, worker, ticket, err = crd.getWorkerHelper(wType, shIdToGo, true)
+				// already got a worker need to work on the details. We first check shard
+				if crd.isRead {
+					err = crd.ProceedReadInCutover()
 					if err != nil {
-						logger.GetLogger().Log(logger.Verbose, crd.id, "cutover internal sql default sql route error:", err)
 						return err
 					}
+				} else {
+					err = crd.ProceedWriteInCutover()
+					if err != nil {
+						return err
+					}
+				}
+
+				shid, err := crd.getActiveShId()
+				if err != nil {
+					return err
+				}
+
+				if worker.shardID != int(shid) {
+					evt := cal.NewCalEvent(EvtTypeMux, "switch_active_abort_worker", cal.TransOK, "")
+					evt.Completed()
+					return errors.New("crd has worker and switch active db with different shard")
+				}
+			} else {
+				// worker not nil, internal shard change, we will need to switch too
+				// internal query we allow read to switch
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, crd.id, "internal sql, worker not nil!")
+				}
+				if crd.curActDb == nil {
+					if logger.GetLogger().V(logger.Alert) {
+						logger.GetLogger().Log(logger.Alert, crd.id, "cutover internal sql has worker but crd.curActDb is nil")
+					}
+					return errors.New("crd has worker with but crd.curActDb is nil!")
+				}
+				srcShId := crd.curActDb.SrcShId
+				if crd.internalShId < MaxDbInCutover {
+					srcShId = crd.internalShId
+				}
+				if srcShId >= MaxDbInCutover {
+					return errors.New("crd has worker with undefined source shard id")
+				}
+				if worker.shardID != int(srcShId) {
+					if logger.GetLogger().V(logger.Debug) {
+						logger.GetLogger().Log(logger.Debug, crd.id, "cutover internal sql default sql route error:", err)
+					}
+					return errors.New("crd is write and has worker with mismatched source shard")
+				}
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, crd.id, "crd internal has worker proceed.")
 				}
 			}
 		}
