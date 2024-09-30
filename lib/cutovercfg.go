@@ -692,10 +692,10 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.ActiveTns != nextcfg.ActiveTns {
 		changed = true
 		info := fmt.Sprint(curcfg.ActiveTns, "_to_", nextcfg.ActiveTns)
-		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_act_tns_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_act_tns_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "cfg ActiveTns changed", info)
+			logger.GetLogger().Log(logger.Info, "cfg ActiveTns is different", info)
 		}
 		whatchanged |= 0x0020
 	}
@@ -703,10 +703,10 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.Phase != nextcfg.Phase {
 		changed = true
 		info := fmt.Sprint(curcfg.Phase, "_to_", nextcfg.Phase)
-		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_phase_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_phase_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "cfg cutover phase changed", info)
+			logger.GetLogger().Log(logger.Info, "cfg cutover phase is different", info)
 		}
 		whatchanged |= 0x0001
 	}
@@ -714,10 +714,10 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.DbByTns[gTnsAlias] != nextcfg.DbByTns[gTnsAlias] {
 		changed = true
 		info := fmt.Sprint(gTnsAlias, "_", curcfg.DbByTns[gTnsAlias], "_to_", nextcfg.DbByTns[gTnsAlias])
-		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tns_db_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tns_db_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, gTnsAlias, "TnsAlias changed:", info)
+			logger.GetLogger().Log(logger.Info, gTnsAlias, "TnsAlias is different:", info)
 		}
 		whatchanged |= 0x0002
 	}
@@ -725,10 +725,10 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.DbByTns[gTnsAliasCutover] != nextcfg.DbByTns[gTnsAliasCutover] {
 		changed = true
 		info := fmt.Sprint(gTnsAliasCutover, "_", curcfg.DbByTns[gTnsAliasCutover], "_to_", nextcfg.DbByTns[gTnsAliasCutover])
-		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_cutover_tns_db_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_cutover_tns_db_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, gTnsAliasCutover, "TnsAliasCutover changed:", info)
+			logger.GetLogger().Log(logger.Info, gTnsAliasCutover, "TnsAliasCutover is different:", info)
 		}
 		whatchanged |= 0x0004
 	}
@@ -737,10 +737,10 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.RWstatusByDb[dbun] != nextcfg.RWstatusByDb[dbun] {
 		changed = true
 		info := fmt.Sprint(dbun, "_", curcfg.RWstatusByDb[dbun], "_to_", nextcfg.RWstatusByDb[dbun])
-		evt := cal.NewCalEvent(EvtTypeCutover, "db_rw_status_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "db_rw_status_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, dbun, "tnsalias rw status changed:", info)
+			logger.GetLogger().Log(logger.Info, dbun, "tnsalias rw status is different:", info)
 		}
 		whatchanged |= 0x0008
 	}
@@ -749,10 +749,10 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.RWstatusByDb[dbun] != nextcfg.RWstatusByDb[dbun] {
 		changed = true
 		info := fmt.Sprint(dbun, "_", curcfg.RWstatusByDb[dbun], "_to_", nextcfg.RWstatusByDb[dbun])
-		evt := cal.NewCalEvent(EvtTypeCutover, "cutoverdb_rw_status_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cutoverdb_rw_status_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, dbun, "tnsaliascutover rw status changed:", info)
+			logger.GetLogger().Log(logger.Info, dbun, "tnsaliascutover rw status is different:", info)
 		}
 		whatchanged |= 0x0010
 	}
@@ -761,10 +761,10 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.TnsByRole[Source] != nextcfg.TnsByRole[Source] {
 		changed = true
 		info := fmt.Sprint(gTnsAlias, "_", curcfg.TnsByRole[Source], "_to_", nextcfg.TnsByRole[Source])
-		evt := cal.NewCalEvent(EvtTypeCutover, "tns_role_chg", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "tns_role_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, gTnsAlias, "dbrole change changed:", info)
+			logger.GetLogger().Log(logger.Info, gTnsAlias, "dbrole change is different:", info)
 		}
 		whatchanged |= 0x00040
 
