@@ -266,6 +266,7 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 	failed := true
 
 	if c.Err != nil {
+		logger.GetLogger().Log(logger.Alert, "Write ", c.Err)
 		ct.incrementFailure(WRITE, id, CTS[n].stats, c.Err)
 		return
 	}
@@ -288,9 +289,11 @@ func (ct ClientTraffic) writeTraffic(CTS map[int64]ClientTrafficStats, n int64) 
 			err = txn.Commit()
 			failed = false
 		} else {
+			logger.GetLogger().Log(logger.Alert, "Write ", err)
 			txn.Rollback()
 		}
 	} else {
+		logger.GetLogger().Log(logger.Alert, "Write ", err)
 		txn.Rollback()
 	}
 
@@ -342,6 +345,7 @@ func (ct ClientTraffic) readTraffic(CTS map[int64]ClientTrafficStats, n int64) {
 			os.Setenv("TLS", "1")
 			return
 		} else {
+			logger.GetLogger().Log(logger.Alert, "failed in connect "+c.Err.Error())
 			ct.incrementFailure(READ, id, CTS[n].stats, c.Err)
 			return
 		}
@@ -600,7 +604,6 @@ func (ct ClientTraffic) incrementSuccess(qsType string, dbId int, stats map[stri
 }
 
 func (ct ClientTraffic) incrementFailure(qsType string, dbId int, stats map[string]map[int]*queryStats, err error) {
-	logger.GetLogger().Log(logger.Alert, qsType+" Failure: ", err)
 	m := ct.getMutexForType(qsType)
 	m.Lock()
 	stats[qsType][dbId].failureCount += 1
