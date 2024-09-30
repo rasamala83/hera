@@ -509,7 +509,7 @@ func (broker *WorkerBroker) changeMaxWorkers(notice int) {
 	}
 	if notice == 3 {
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Pre/Cutover")
+			logger.GetLogger().Log(logger.Debug, "changeMaxWorkers for Flexup/Cutover")
 		}
 		broker.resizePool(wtypeRW, wW, int(ShIdTns))
 		broker.resizePool(wtypeRW, wW, int(ShIdTnsCutover))
