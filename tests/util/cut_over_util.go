@@ -482,7 +482,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ-wrong', 'HERABOX', 'CLOC', 'yes', 'yes', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ-wrong', 'CLOC_CUTOVER', 'N', 'N', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ-wrong', 'HERABOX', 'CLOC_CUTOVER', 'N', 'N', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 

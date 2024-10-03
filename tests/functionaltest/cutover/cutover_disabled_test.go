@@ -268,11 +268,11 @@ func TestCutOverEnabledInvalidUniqueID(t *testing.T) {
 	}
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 }
 
@@ -423,11 +423,11 @@ func TestCutOverEnableWriteEnabledButNotRead(t *testing.T) {
 
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 }
 
 /*

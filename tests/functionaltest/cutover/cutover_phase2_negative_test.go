@@ -1158,8 +1158,8 @@ func TestReadWriteSplitLongRead(t *testing.T) {
 	stateLog := make(map[string]int)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 2
-	stateLog["occ.r.co"] = 2
+	stateLog["occ.w.live1"] = 2
+	stateLog["occ.r.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
@@ -1172,8 +1172,8 @@ func TestReadWriteSplitLongRead(t *testing.T) {
 	time.Sleep(15 * time.Second)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
+	stateLog["occ.w.live1"] = 13
+	stateLog["occ.r.live1"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -1193,8 +1193,8 @@ func TestReadWriteSplitLongRead(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Moved to Cutover state(stopped write in main db): ", afterServiceStop)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
+	stateLog["occ.w.live1"] = 13
+	stateLog["occ.r.live1"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)

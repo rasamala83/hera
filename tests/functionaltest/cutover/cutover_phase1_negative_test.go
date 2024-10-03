@@ -1327,11 +1327,11 @@ func TestCutOver1TargetDBDown(t *testing.T) {
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
+	if occStatus == true {
+		t.Fatalf("OCC is up - which is not expected")
 	}
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-3)
 
