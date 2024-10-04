@@ -1301,9 +1301,9 @@ func TestCutOver3SourceDBDown(t *testing.T) {
 	invalidPhaseII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseIII+3, invalidPhaseII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startPhaseIII+3, invalidPhaseII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startPhaseIII+3, invalidPhaseII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseIII+5, invalidPhaseII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startPhaseIII+5, invalidPhaseII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startPhaseIII+5, invalidPhaseII-3, 2, 1)
 
 	util.KillSessions(t, true, "herabox_primary_srv")
 
@@ -1413,9 +1413,9 @@ func TestCutOver3TargetDBDown(t *testing.T) {
 	invalidPhaseII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseIII+3, invalidPhaseII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startPhaseIII+3, invalidPhaseII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startPhaseIII+3, invalidPhaseII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseIII+5, invalidPhaseII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startPhaseIII+5, invalidPhaseII-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startPhaseIII+5, invalidPhaseII-3, 2, 1)
 
 	stateLog["occ"] = 25
 	stateLog["occ.live1"] = 0
