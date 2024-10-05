@@ -409,9 +409,12 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 	case FlexUp:
 		GiveRWToPrimary(t)
-		time.Sleep(1 * time.Second)
-		query := "update pypl_occ_cutover set cutover_phase='FLEXUP', remarks='" + comment +
-			"', wisb_roles='CLOC_RW', write_status='Y' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
+		query := "update pypl_occ_cutover set remarks='" + comment +
+			"', wisb_roles='CLOC_RW', write_status='Y' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n"
+		execute(t, query, primary, secondary, false, "False")
+		time.Sleep(3 * time.Second)
+		query = "update pypl_occ_cutover set cutover_phase='FLEXUP', remarks='" + comment +
+			"', write_status='Y' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='FLEXUP', remarks='" + comment +
 			"' where db_unique_name='HERADB_TWO' and occ_name='occ'\\n"
 		execute(t, query, primary, secondary, false, "False")
