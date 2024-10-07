@@ -71,7 +71,7 @@ func GetTnsRcutoverName() string {
 func GetCutoverCfg() CutoverCfg {
 	cfg := gCutoverCfg.Load()
 	if cfg == nil {
-		return CutoverCfg{Phase:""}
+		return CutoverCfg{Phase: ""}
 	}
 	return cfg.(CutoverCfg)
 }
@@ -349,7 +349,7 @@ func validateRecord(r1 CutoverRecord, r2 CutoverRecord) error {
 		return fmt.Errorf("error cutover cfg invalid tns_alias_role [%s, %s]", r1.tnsAliasRole.String, r2.tnsAliasRole.String)
 	}
 
-	// can't have identical occ_two_task
+	// can't have identical OCC_TNS_ALIAS
 	if r1.occTnsAlias.String == r2.occTnsAlias.String {
 		evt := cal.NewCalEvent(EvtTypeCutover, "err_same_occ_tns_alias", cal.TransOK, "")
 		evt.Completed()
@@ -486,7 +486,7 @@ db: sql.DB object, local: return local copy or update global copy.
 This function sends the sql to fetch the config records and validate the requirement before proceed further.
  1. config sql above returns exact two rows of data
  7. Not allow Null from phase, dbUname, rstatus, wstatus, wisbroles.
- 2. can't have identical value for occ_two_task
+ 2. can't have identical value for OCC_TNS_ALIAS
  3. two rows must have consistent cutover_phase
  4. cutover_phase must be among ‘Enable’, ‘Pre’, ‘Cutover’, ‘Complete’ (case insensitive)
  5. two rows' dbuname must be different

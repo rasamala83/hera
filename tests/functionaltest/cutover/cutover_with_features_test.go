@@ -28,22 +28,22 @@ func TestCutOverWithReadWriteSplit(t *testing.T) {
 	stateLog := make(map[string]int)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 1
-	stateLog["occ.r.co"] = 1
+	stateLog["occ.w.live1"] = 2
+	stateLog["occ.r.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 4, t)
 
 	startClientTraffic := time.Now().Unix()
-	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
+	stateLog["occ.w.live1"] = 13
+	stateLog["occ.r.live1"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -63,8 +63,8 @@ func TestCutOverWithReadWriteSplit(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Moved to Cutover state(stopped write in main db): ", afterServiceStop)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
+	stateLog["occ.w.live1"] = 13
+	stateLog["occ.r.live1"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -86,8 +86,8 @@ func TestCutOverWithReadWriteSplit(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Moved Read to Cutover database: ", afterReadCutOver)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
+	stateLog["occ.w.live1"] = 13
+	stateLog["occ.r.live1"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -107,8 +107,8 @@ func TestCutOverWithReadWriteSplit(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Moved Write to Cutover database: ", afterWriteCutOver)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
+	stateLog["occ.w.live1"] = 13
+	stateLog["occ.r.live1"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -119,40 +119,6 @@ func TestCutOverWithReadWriteSplit(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, readCutOverValidation, writeCutOverValidation, 2, 1)
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterWriteCutOver, writeCutOverValidation, 2, 1)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterWriteCutOver, writeCutOverValidation, 2, 1)
-
-	logger.GetLogger().Log(logger.Alert, "Moving to Complete State: ", time.Now().Unix())
-	util.MoveCutOverPhase(t, util.CutOverComplete, true, true)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
-	afterComplete := time.Now().Unix() - 3
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, writeCutOverValidation, afterComplete, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, writeCutOverValidation, afterComplete, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, writeCutOverValidation, afterComplete, 2, 1)
-	stateLog["occ.w"] = 1
-	stateLog["occ.r"] = 1
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 2, t)
-
-	logger.GetLogger().Log(logger.Alert, "Moving to Broom State: ", time.Now().Unix())
-	util.MoveCutOverPhase(t, util.CutOverBroom, true, true)
-	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
-	afterBroom := time.Now().Unix() - 3
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterComplete, afterBroom, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterComplete, afterBroom, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterComplete, afterBroom, 2, 1)
-	stateLog["occ.w"] = 1
-	stateLog["occ.r"] = 1
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 2, t)
 
 	util.CT.StopClientTraffic(respChan, RespMsg)
 }

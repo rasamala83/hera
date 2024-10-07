@@ -20,10 +20,10 @@ func moveToEnableState(t *testing.T) (chan map[int64]util.ClientTrafficStats, ch
 	util.RestartOCC(t, 90)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 	var wg sync.WaitGroup
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
@@ -32,22 +32,22 @@ func moveToEnableState(t *testing.T) (chan map[int64]util.ClientTrafficStats, ch
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 ------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase  |
 ------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
 ------------------------------------------------------------------------------
 
 **************************************
-TestCutOverPreSourceDBDown
+TestFlexUpSourceDBDown
 **************************************
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 * shutdown source DB
@@ -87,7 +87,7 @@ Validation:
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCutOverPreSourceDBDown(t *testing.T) {
+func TestFlexUpSourceDBDown(t *testing.T) {
 	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
@@ -118,15 +118,15 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	startClientTraffic := time.Now().Unix()
-	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -178,22 +178,22 @@ func TestCutOverPreSourceDBDown(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 ------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase  |
 ------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
 ------------------------------------------------------------------------------
 
 **************************************
-TestCutOverPreTargetDBDown
+TestFlexUpTargetDBDown
 **************************************
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 * shutdown target DB
@@ -250,7 +250,7 @@ Validation:
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCutOverPreTargetDBDown(t *testing.T) {
+func TestFlexUpTargetDBDown(t *testing.T) {
 	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
@@ -272,10 +272,10 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
 	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
@@ -283,8 +283,8 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
 	startClientTraffic := time.Now().Unix()
-	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -351,22 +351,22 @@ func TestCutOverPreTargetDBDown(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 ------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase  |
 ------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
 ------------------------------------------------------------------------------
 
 **************************************
-TestCutOverPreUniqNameInCorrect
+TestFlexUpUniqNameInCorrect
 **************************************
 -------------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname           | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname           | r_status | w_status | phase |
 -------------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE_INVALID | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE_INVALID | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | N        | N        | FLEXUP   |
 -------------------------------------------------------------------------------------
 
 Validation:
@@ -411,7 +411,7 @@ Validation:
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCutOverPreUniqNameInCorrect(t *testing.T) {
+func TestFlexUpUniqNameInCorrect(t *testing.T) {
 	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
@@ -433,10 +433,10 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
 	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
@@ -444,8 +444,8 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
 	startClientTraffic := time.Now().Unix()
-	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPreInValidUniqName, true, true)
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverFlexUpInValidUniqName, true, true)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -476,20 +476,20 @@ func TestCutOverPreUniqNameInCorrect(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 ------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase  |
 ------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
 ------------------------------------------------------------------------------
 
 **************************************
-TestCutOverPreUniqNameInCorrectDestDB
+TestFlexUpUniqNameInCorrectDestDB
 **************************************
 only in secondary table
 --------------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname           | r_status | w_status | phase  |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname           | r_status | w_status | phase  |
 --------------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE_INVALID | Y        | Y        | ENABLE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | N        | N        | ENABLE |
@@ -537,7 +537,7 @@ Validation:
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
+func TestFlexUpUniqNameInCorrectDestDB(t *testing.T) {
 	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
@@ -559,10 +559,10 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
 	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
@@ -570,9 +570,9 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
 	startClientTraffic := time.Now().Unix()
-	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPreInValidUniqName, false, true)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, false)
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to FLEXUP Cutover state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.CutOverFlexUpInValidUniqName, false, true)
+	util.MoveCutOverPhase(t, util.FlexUp, true, false)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -598,22 +598,22 @@ func TestCutOverPreUniqNameInCorrectDestDB(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 ------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase  |
 ------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
 ------------------------------------------------------------------------------
 
 **************************************
-TestCutOverPreUniqNameInCorrectDestDB
+TestFlexUpUniqNameInCorrectDestDB
 **************************************
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 Validation:
@@ -642,7 +642,7 @@ Validation:
 
 Rollback to Enable mode
 ------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase  |
 ------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE |
@@ -674,7 +674,7 @@ Validation:
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCutOverPreRollback(t *testing.T) {
+func TestFlexUpRollback(t *testing.T) {
 	_, logFile := util.Setup(t)
 
 	var wg sync.WaitGroup
@@ -696,10 +696,10 @@ func TestCutOverPreRollback(t *testing.T) {
 	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
@@ -708,8 +708,8 @@ func TestCutOverPreRollback(t *testing.T) {
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 5 seconds")
 	time.Sleep(5 * time.Second)
 	startClientTraffic := time.Now().Unix()
-	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to FLEXUP Cutover state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -728,9 +728,9 @@ func TestCutOverPreRollback(t *testing.T) {
 	time.Sleep(15 * time.Second)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.ResetOCCDocker(t)
@@ -748,12 +748,12 @@ func TestCutOverPreRollback(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    | wisb_role|
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    | wisb_role|
 -------------------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE      | CLOC_RW  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE      | CLOC_RO  |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP      | CLOC_RW  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP      | CLOC_RO  |
 -------------------------------------------------------------------------------------------
 
 **************************************
@@ -762,10 +762,10 @@ TestCutOver1ClosingPendingTxn
 1. Change the Role in table and remove RW give RO role
 2. Check of the write traffic stated failing
 -------------------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    | wisb_role|
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    | wisb_role|
 -------------------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE      | CLOC_RO  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE      | CLOC_RO  |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP      | CLOC_RO  |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP      | CLOC_RO  |
 -------------------------------------------------------------------------------------------
 
 Validation:
@@ -792,10 +792,10 @@ Validation:
 
 TODO: Need to add logs and CAL log verification
 */
-func TestCutOverPreValidatingRORoleCheck(t *testing.T) {
+func TestFlexUpValidatingRORoleCheck(t *testing.T) {
 	dumpChan, respChan, RespMsg, logFile := moveToEnableState(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
-	util.MoveCutOverPhase(t, util.CutOverPreInCorrectRole, true, true)
+	util.MoveCutOverPhase(t, util.CutOverFlexUpInCorrectRole, true, true)
 	afterRoleChange := time.Now().Unix()
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)

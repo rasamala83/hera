@@ -26,10 +26,10 @@ func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, 
 	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	var wg sync.WaitGroup
@@ -46,8 +46,8 @@ func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, 
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, beforeStart, afterComplete, 1, 2)
 
 	startClientTraffic := time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -81,9 +81,9 @@ func moveToCutOverPhaseI(t *testing.T) (chan map[int64]util.ClientTrafficStats, 
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -93,7 +93,7 @@ PRE-SETUP
 TestCutOver2InvalidNoOfRow
 **************************************
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
@@ -191,9 +191,9 @@ func TestCutOver2InvalidNoOfRow(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -203,7 +203,7 @@ PRE-SETUP
 TestCutOver2InvalidDBUniqueName
 **************************************
 ----------------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname           | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname           | r_status | w_status | phase    |
 ----------------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE_INVALID | N        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | Y        | N        | CUTOVER  |
@@ -302,9 +302,9 @@ func TestCutOver2InvalidDBUniqueName(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -314,7 +314,7 @@ PRE-SETUP
 TestCutOver2InvalidOCCName
 **************************************
 -----------------------------------------------------------------------------------
-| ROWS | occ_name    | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name    | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -----------------------------------------------------------------------------------
 | Row1 | occ-invalid | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
 | Row2 | occ-invalid | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
@@ -413,9 +413,9 @@ func TestCutOver2InvalidOCCName(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -425,7 +425,7 @@ PRE-SETUP
 TestCutOver2InvalidTwoTask
 **************************************
 -------------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task     | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS     | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------------
 | Row1 | occ      | TWO_TASK_INVALID | HERADB_ONE | N        | N        | CUTOVER  |
 | Row2 | occ      | TWO_TASK_INVALID | HERADB_TWO | Y        | N        | CUTOVER  |
@@ -524,9 +524,9 @@ func TestCutOver2InvalidTwoTask(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -536,7 +536,7 @@ PRE-SETUP
 TestCutOver2InvalidCutOverPhase
 **************************************
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | invalid  |
@@ -635,9 +635,9 @@ func TestCutOver2InvalidCutOverPhase(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -647,7 +647,7 @@ PRE-SETUP
 TestCutOver2TargetDBDown
 **************************************
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
@@ -723,8 +723,8 @@ func TestCutOver2TargetDBDown(t *testing.T) {
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
+	if occStatus == true {
+		t.Fatalf("OCC is up - which is not expected")
 	}
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
@@ -733,9 +733,9 @@ func TestCutOver2TargetDBDown(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -745,7 +745,7 @@ PRE-SETUP
 TestCutOver2SourceDBDown
 **************************************
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
@@ -849,9 +849,9 @@ func TestCutOver2SourceDBDown(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -861,7 +861,7 @@ PRE-SETUP
 TestCutOver2Rollback
 **************************************
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
@@ -893,7 +893,7 @@ Validation:
 
 Rollback to Cutover Phase 1
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -923,12 +923,12 @@ Validation:
     | TXN          |             | HERADB_ONE, HERADB_TWO | active |
     ----------------------------------------------------------------
 
-Rollback to Pre
+Rollback to FLEXUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 Validation:
@@ -957,10 +957,10 @@ Validation:
 
 Rollback to Enable
 ------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase  |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase  |
 ------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 Validation:
@@ -1029,8 +1029,8 @@ func TestCutOver2Rollback(t *testing.T) {
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, phaseI+5, preMode-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, phaseI+5, preMode-3)
 
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Pre Mode: ", phaseI)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover FLEXUP Mode: ", phaseI)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	preMode = time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
@@ -1052,10 +1052,10 @@ func TestCutOver2Rollback(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 	trafficStopped := time.Now().Unix()
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
@@ -1066,9 +1066,9 @@ func TestCutOver2Rollback(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
@@ -1080,7 +1080,7 @@ TestCutOver1ClosingPendingTxn
 1. Sending Long read (long is 15 seconds here)
 2. then move to CUTOVER STATE 2
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
@@ -1158,22 +1158,22 @@ func TestReadWriteSplitLongRead(t *testing.T) {
 	stateLog := make(map[string]int)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 1
-	stateLog["occ.r.co"] = 1
+	stateLog["occ.w.live1"] = 2
+	stateLog["occ.r.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 4, t)
 
 	startClientTraffic := time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
+	stateLog["occ.w.live1"] = 13
+	stateLog["occ.r.live1"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
@@ -1185,7 +1185,7 @@ func TestReadWriteSplitLongRead(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startClientTraffic, beforeCutOverStart-3, 1, 2)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startClientTraffic, beforeCutOverStart-3, 1, 2)
 
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Pre to Cutover state(stopping write in main DB): ", beforeCutOverStart)
+	logger2.GetLogger().Log(logger2.Alert, "Moving from FLEXUP to Cutover state(stopping write in main DB): ", beforeCutOverStart)
 	util.MoveCutOverPhase(t, util.CutOverPhaseI, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
@@ -1193,8 +1193,8 @@ func TestReadWriteSplitLongRead(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Moved to Cutover state(stopped write in main db): ", afterServiceStop)
 	stateLog["occ.w"] = 13
 	stateLog["occ.r"] = 12
-	stateLog["occ.w.co"] = 13
-	stateLog["occ.r.co"] = 12
+	stateLog["occ.w.live1"] = 13
+	stateLog["occ.r.live1"] = 12
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)

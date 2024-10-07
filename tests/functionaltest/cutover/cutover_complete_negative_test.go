@@ -26,10 +26,10 @@ func moveToCutOverPhaseIII(t *testing.T) (chan map[int64]util.ClientTrafficStats
 	util.RestartOCC(t, 60)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	var wg sync.WaitGroup
@@ -46,8 +46,8 @@ func moveToCutOverPhaseIII(t *testing.T) (chan map[int64]util.ClientTrafficStats
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, beforeStart, afterComplete, 1, 2)
 
 	startClientTraffic := time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -113,9 +113,9 @@ func moveToCutOverPhaseIII(t *testing.T) (chan map[int64]util.ClientTrafficStats
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -124,7 +124,7 @@ PRE-SETUP
 TestCutOverCompleteInvalidNoOfRow
 *********************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 | Row1 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | COMPLETE |
 -------------------------------------------------------------------------------
 
@@ -218,9 +218,9 @@ func TestCutOverCompleteInvalidNoOfRow(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -230,7 +230,7 @@ PRE-SETUP
 TestCutOverCompleteInvalidDBUniqueName
 **************************************
 ----------------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname           | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname           | r_status | w_status | phase    |
 ----------------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE_INVALID | N        | N        | COMPLETE |
 | Row1 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | Y        | Y        | COMPLETE |
@@ -289,10 +289,10 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	util.MoveCutOverPhase(t, util.CutOverCompletePhaseInvalidDBUniqName, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 1
+	stateLog["occ"] = 2
 	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 2, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	invalidPhaseIII := time.Now().Unix()
 	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
@@ -307,7 +307,7 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 25 seconds")
 	time.Sleep(25 * time.Second)
 
-	stateLog["occ"] = 1
+	stateLog["occ"] = 25
 	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
 
@@ -327,9 +327,9 @@ func TestCutOverCompleteInvalidDBUniqueName(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -339,7 +339,7 @@ PRE-SETUP
 TestCutOverCompleteInvalidOCCName
 **************************************
 -----------------------------------------------------------------------------------
-| ROWS | occ_name    | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name    | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -----------------------------------------------------------------------------------
 | Row1 | occ-invalid | CLOC         | HERADB_ONE | N        | N        | COMPLETE |
 | Row1 | occ-invalid | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | COMPLETE |
@@ -435,9 +435,9 @@ func TestCutOverCompleteInvalidOCCName(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -447,7 +447,7 @@ PRE-SETUP
 TestCutOverCompleteInvalidTwoTask
 **************************************
 ---------------------------------------------------------------------------------------
-| ROWS | occ_name    | occ_two_task     | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name    | OCC_TNS_ALIAS     | db_uname   | r_status | w_status | phase    |
 ---------------------------------------------------------------------------------------
 | Row1 | occ         | TWO_TASK_INVALID | HERADB_ONE | N        | N        | COMPLETE |
 | Row1 | occ         | TWO_TASK_INVALID | HERADB_TWO | Y        | Y        | COMPLETE |
@@ -544,9 +544,9 @@ func TestCutOverCompleteInvalidTwoTask(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -556,7 +556,7 @@ PRE-SETUP
 TestCutOverCompleteInvalidCutOverPhase
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid |
@@ -652,9 +652,9 @@ func TestCutOverCompleteInvalidCutOverPhase(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -664,7 +664,7 @@ PRE-SETUP
 TestCutOverCutOverInvalidReadStatus
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | X        | N        | COMPLETE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | X        | Y        | COMPLETE |
@@ -760,9 +760,9 @@ func TestCutOverCutOverInvalidReadStatus(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -772,7 +772,7 @@ PRE-SETUP
 TestCutOverCompleteInvalidWriteStatus
 **************************************
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | X        | COMPLETE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | X        | COMPLETE |
@@ -868,9 +868,9 @@ func TestCutOverCompleteInvalidWriteStatus(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -880,7 +880,7 @@ PRE-SETUP
 TestCutOverCompleteDualWriteStatus
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | Y        | COMPLETE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | COMPLETE |
@@ -976,9 +976,9 @@ func TestCutOverCompleteDualWriteStatus(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -988,7 +988,7 @@ PRE-SETUP
 TestCutOverCompleteDualReadStatus
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | COMPLETE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | COMPLETE |
@@ -1084,9 +1084,9 @@ func TestCutOverCompleteDualReadStatus(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
@@ -1096,7 +1096,7 @@ PRE-SETUP
 TestCutOverCompleteReadOffStatus
 **************************************
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | COMPLETE |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | Y        | COMPLETE |
@@ -1188,535 +1188,4 @@ func TestCutOverCompleteReadOffStatus(t *testing.T) {
 	}
 
 	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
-}
-
-/*
-PRE-SETUP
--------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
--------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
--------------------------------------------------------------------------------
-
-**************************************
-TestCutOverCompleteSourceDBDown
-**************************************
---------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
---------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | COMPLETE |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | COMPLETE |
---------------------------------------------------------------------------------
-
-* Shutdown source DB - CLOC/HERADB_ONE
-
-Validation:
- 1. Worker validation after 15 seconds
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  1             | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
-    ----------------------------------------------------
- 2. DB validation after 15 seconds
-    ---------------------------------------------------------------------
-    | db unique name | num of sessions | service name          | state  |
-    ---------------------------------------------------------------------
-    | HERADB_ONE     |  1              | herabox_primary_srv   | down   |
-    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
-    ---------------------------------------------------------------------
- 3. Traffic Validation for the whole 15 seconds
-    --------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB  | state  |
-    --------------------------------------------------------
-    | READ         |  HERADB_TWO | HERADB_ONE     | active |
-    | WRITE        |  HERADB_TWO | HERADB_ONE     | active |
-    | TXN          |  HERADB_TWO | HERADB_ONE     | active |
-    --------------------------------------------------------
- 4. Validate after forcing workers restart (by killing sessions from db's end)
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  0             | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
-    ----------------------------------------------------
- 5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
-    5.1 OCC Container should be down
-    ----------------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB          | state  |
-    ----------------------------------------------------------------
-    | READ         |   			 | HERADB_ONE, HERADB_TWO | active |
-    | WRITE        |             | HERADB_ONE, HERADB_TWO | active |
-    | TXN          |             | HERADB_ONE, HERADB_TWO | active |
-    ----------------------------------------------------------------
-
-TODO: Need to add logs and CAL log verification
-*/
-func TestCutOverCompleteSourceDBDown(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseIII(t)
-	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
-
-	util.ShutDownDBService("HERADB_ONE", "herabox_primary_srv", t)
-	stateLog := make(map[string]int)
-
-	completePhase := time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Complete Phase: ", completePhase)
-	util.MoveCutOverPhase(t, util.CutOverComplete, true, true)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 1
-	stateLog["occ.live1"] = 25
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", false, 1, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	invalidPhase := time.Now().Unix()
-	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
-
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, completePhase+3, invalidPhase-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3, 2, 1)
-
-	stateLog["occ"] = 0
-	stateLog["occ.live1"] = 25
-	util.KillSessionAndValidate(t, stateLog, "herabox_primary_srv", true)
-
-	afterRestart := util.RestartOCC(t, 90)
-
-	trafficStopped := time.Now().Unix()
-	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
-
-	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
-	}
-
-	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-3)
-}
-
-/*
-PRE-SETUP
--------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
--------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
--------------------------------------------------------------------------------
-
-**************************************
-TestCutOverCompleteTargetDBDown
-**************************************
---------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
---------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | COMPLETE |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | COMPLETE |
---------------------------------------------------------------------------------
-
-* Taget source DB - CLOC/HERADB_ONE
-
-Validation:
- 1. Worker validation after 15 seconds
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  1             | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
-    ----------------------------------------------------
- 2. DB validation after 15 seconds
-    ---------------------------------------------------------------------
-    | db unique name | num of sessions | service name          | state  |
-    ---------------------------------------------------------------------
-    | HERADB_ONE     |  1              | herabox_primary_srv   | active |
-    | HERADB_TWO     |  25             | herabox_secondary_srv | down   |
-    ---------------------------------------------------------------------
- 3. Traffic Validation for the whole 15 seconds
-    --------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB  | state  |
-    --------------------------------------------------------
-    | READ         |  HERADB_TWO | HERADB_ONE     | down   |
-    | WRITE        |  HERADB_TWO | HERADB_ONE     | down   |
-    | TXN          |  HERADB_TWO | HERADB_ONE     | down   |
-    --------------------------------------------------------
- 4. Validate after forcing workers restart (by killing sessions from db's end)
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  1             | accept+wait+busy |
-    | CLOC_CUTOVER |  0             | accept+wait+busy |
-    ----------------------------------------------------
- 5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
-    5.1 OCC Container should be down
-    ----------------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB          | state  |
-    ----------------------------------------------------------------
-    | READ         |   			 | HERADB_ONE, HERADB_TWO | down  |
-    | WRITE        |             | HERADB_ONE, HERADB_TWO | down  |
-    | TXN          |             | HERADB_ONE, HERADB_TWO | down  |
-    ----------------------------------------------------------------
-
-TODO: Need to add logs and CAL log verification
-*/
-func TestCutOverCompleteTargetDBDown(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseIII(t)
-	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
-
-	util.ShutDownDBService("HERADB_TWO", "herabox_secondary_srv", t)
-	stateLog := make(map[string]int)
-
-	completePhase := time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Cutover  to Cutover Complete Phase: ", completePhase)
-	util.MoveCutOverPhase(t, util.CutOverComplete, true, true)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 1
-	stateLog["occ.live1"] = 25
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", false, 25, t)
-	invalidPhase := time.Now().Unix()
-	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
-
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, completePhase+3, invalidPhase-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, invalidPhase-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, invalidPhase-3, 2, 1)
-
-	stateLog["occ"] = 1
-	stateLog["occ.live1"] = 0
-
-	util.KillSessionAndValidate(t, stateLog, "herabox_secondary_srv", true)
-
-	afterRestart := util.RestartOCC(t, 90)
-
-	trafficStopped := time.Now().Unix()
-	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
-
-	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
-	}
-
-	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-3)
-}
-
-/*
-PRE-SETUP
--------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
--------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER |
--------------------------------------------------------------------------------
-
-**************************************
-TestCutOverCompleteRollback
-**************************************
---------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
---------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | COMPLETE |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | COMPLETE |
---------------------------------------------------------------------------------
-
-Validation:
- 1. Worker validation after 15 seconds
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  1             | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
-    ----------------------------------------------------
- 2. DB validation after 15 seconds
-    ---------------------------------------------------------------------
-    | db unique name | num of sessions | service name          | state  |
-    ---------------------------------------------------------------------
-    | HERADB_ONE     |  1              | herabox_primary_srv   | active |
-    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
-    ---------------------------------------------------------------------
- 3. Traffic Validation for the whole 15 seconds
-    --------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB  | state  |
-    --------------------------------------------------------
-    | READ         |  HERADB_TWO | HERADB_ONE     | active |
-    | WRITE        |  HERADB_TWO | HERADB_ONE     | active |
-    | TXN          |  HERADB_TWO | HERADB_ONE     | active |
-    --------------------------------------------------------
-
-# ROLLBACK TO CUTOVER PHASE III
-
---------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
---------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER  |
---------------------------------------------------------------------------------
-
-Validation:
- 1. Worker validation after 15 seconds
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
-    ----------------------------------------------------
- 2. DB validation after 15 seconds
-    ---------------------------------------------------------------------
-    | db unique name | num of sessions | service name          | state  |
-    ---------------------------------------------------------------------
-    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
-    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
-    ---------------------------------------------------------------------
- 3. Traffic Validation for the whole 15 seconds
-    --------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB  | state  |
-    --------------------------------------------------------
-    | READ         |  HERADB_TWO | HERADB_ONE     | active |
-    | WRITE        |  HERADB_TWO | HERADB_ONE     | active |
-    | TXN          |  HERADB_TWO | HERADB_ONE     | active |
-    --------------------------------------------------------
-
-# ROLLBACK TO CUTOVER PHASE II
-
---------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
---------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
---------------------------------------------------------------------------------
-
-Validation:
- 1. Worker validation after 15 seconds
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
-    ----------------------------------------------------
- 2. DB validation after 15 seconds
-    ---------------------------------------------------------------------
-    | db unique name | num of sessions | service name          | state  |
-    ---------------------------------------------------------------------
-    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
-    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
-    ---------------------------------------------------------------------
- 3. Traffic Validation for the whole 15 seconds
-    --------------------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB              | state  |
-    --------------------------------------------------------------------
-    | READ         |  HERADB_TWO | HERADB_ONE                 | active |
-    | WRITE        |             | HERADB_ONE, HERADB_TWO     | active |
-    | TXN          |             | HERADB_ONE, HERADB_TWO     | active |
-    --------------------------------------------------------------------
-
-# ROLLBACK TO CUTOVER PHASE I
-
---------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
---------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
---------------------------------------------------------------------------------
-
-Validation:
- 1. Worker validation after 15 seconds
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
-    ----------------------------------------------------
- 2. DB validation after 15 seconds
-    ---------------------------------------------------------------------
-    | db unique name | num of sessions | service name          | state  |
-    ---------------------------------------------------------------------
-    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
-    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
-    ---------------------------------------------------------------------
- 3. Traffic Validation for the whole 15 seconds
-    --------------------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB              | state  |
-    --------------------------------------------------------------------
-    | READ         |  HERADB_ONE | HERADB_TWO                 | active |
-    | WRITE        |             | HERADB_ONE, HERADB_TWO     | active |
-    | TXN          |             | HERADB_ONE, HERADB_TWO     | active |
-    --------------------------------------------------------------------
-
-# ROLLBACK TO PRE
-
---------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
---------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE      |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE      |
---------------------------------------------------------------------------------
-
-Validation:
- 1. Worker validation after 15 seconds
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
-    ----------------------------------------------------
- 2. DB validation after 15 seconds
-    ---------------------------------------------------------------------
-    | db unique name | num of sessions | service name          | state  |
-    ---------------------------------------------------------------------
-    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
-    | HERADB_TWO     |  25             | herabox_secondary_srv | active |
-    ---------------------------------------------------------------------
- 3. Traffic Validation for the whole 15 seconds
-    --------------------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB  | state  |
-    --------------------------------------------------------------------
-    | READ         |  HERADB_ONE | HERADB_TWO     | active |
-    | WRITE        |  HERADB_ONE | HERADB_TWO     | active |
-    | TXN          |  HERADB_ONE | HERADB_TWO     | active |
-    --------------------------------------------------------------------
-
-# ROLLBACK TO ENABLE
-
---------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
---------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE   |
---------------------------------------------------------------------------------
-
-Validation:
- 1. Worker validation after 15 seconds
-    ----------------------------------------------------
-    | two task     | num of workers | state            |
-    ----------------------------------------------------
-    | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  1             | accept+wait+busy |
-    ----------------------------------------------------
- 2. DB validation after 15 seconds
-    ---------------------------------------------------------------------
-    | db unique name | num of sessions | service name          | state  |
-    ---------------------------------------------------------------------
-    | HERADB_ONE     |  25             | herabox_primary_srv   | active |
-    | HERADB_TWO     |  1              | herabox_secondary_srv | active |
-    ---------------------------------------------------------------------
- 3. Traffic Validation for the whole 15 seconds
-    --------------------------------------------------------------------
-    | Traffic Type | Success DB  | No Traffic DB  | state  |
-    --------------------------------------------------------------------
-    | READ         |  HERADB_ONE | HERADB_TWO     | active |
-    | WRITE        |  HERADB_ONE | HERADB_TWO     | active |
-    | TXN          |  HERADB_ONE | HERADB_TWO     | active |
-    --------------------------------------------------------------------
-
-TODO: Need to add logs and CAL log verification
-*/
-func TestCutOverCompleteRollback(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPhaseIII(t)
-	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
-
-	stateLog := make(map[string]int)
-
-	completePhase := time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Cutover to Cutover Complete Phase: ", completePhase)
-	util.MoveCutOverPhase(t, util.CutOverComplete, true, true)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 1
-	stateLog["occ.live1"] = 25
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	startPhaseIII := time.Now().Unix()
-	trafficStats := util.CT.DumpTrafficStat(dumpChan, RespMsg)
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, completePhase+3, startPhaseIII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, completePhase+3, startPhaseIII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, completePhase+3, startPhaseIII-3, 2, 1)
-
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Cutover to Cutover phase III: ", startPhaseIII)
-	util.MoveCutOverPhase(t, util.CutOverPhaseIII, true, true)
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 25
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	phaseII := time.Now().Unix()
-	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
-
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, startPhaseIII+3, phaseII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, startPhaseIII+3, phaseII-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, startPhaseIII+3, phaseII-3, 2, 1)
-
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase II: ", phaseII)
-	util.MoveCutOverPhase(t, util.CutOverPhaseII, true, true)
-	phaseII = time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 25
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
-	phaseI := time.Now().Unix()
-
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, phaseII+3, phaseI-3, 2, 1)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, phaseII+3, phaseI-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, phaseII+3, phaseI-3)
-
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase I: ", phaseI)
-	util.MoveCutOverPhase(t, util.CutOverPhaseI, true, true)
-	phaseI = time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 25
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
-	preMode := time.Now().Unix()
-
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, phaseI+3, preMode-3, 1, 2)
-	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, phaseI+3, preMode-3)
-	util.ValidateFailureTraffic(t, trafficStats, util.TXN, phaseI+3, preMode-3)
-
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Pre Mode: ", phaseI)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
-	preMode = time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 25
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
-	enableMode := time.Now().Unix()
-
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, preMode+3, enableMode-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, preMode+3, enableMode-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, preMode+3, enableMode-3, 1, 2)
-
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Enable Mode: ", enableMode)
-	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
-	enableMode = time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
-	time.Sleep(15 * time.Second)
-	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
-	util.ValidateStateLog(t, stateLog, true)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
-	trafficStopped := time.Now().Unix()
-	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
-
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, enableMode+3, trafficStopped-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, enableMode+3, trafficStopped-3, 1, 2)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, enableMode+3, trafficStopped-3, 1, 2)
-
 }

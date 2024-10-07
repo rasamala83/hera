@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func moveToCutOverPrePhase(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string, *os.File) {
+func moveToFlexUp(t *testing.T) (chan map[int64]util.ClientTrafficStats, chan map[int64]util.ClientTrafficStats, chan string, *os.File) {
 	_, logFile := util.Setup(t)
 
 	stateLog := make(map[string]int)
@@ -26,10 +26,10 @@ func moveToCutOverPrePhase(t *testing.T) (chan map[int64]util.ClientTrafficStats
 	util.RestartOCC(t, 30)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	var wg sync.WaitGroup
@@ -46,8 +46,8 @@ func moveToCutOverPrePhase(t *testing.T) (chan map[int64]util.ClientTrafficStats
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, beforeStart, afterComplete, 1, 2)
 
 	startClientTraffic := time.Now().Unix()
-	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -65,19 +65,19 @@ func moveToCutOverPrePhase(t *testing.T) (chan map[int64]util.ClientTrafficStats
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1InvalidNoOfRow
 **************************************
 --------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase    |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
@@ -125,7 +125,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidNoOfRow(t *testing.T) {
-	dumpChan, respChan, RunMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RunMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, respChan, dumpChan, RunMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -173,19 +173,19 @@ func TestCutOver1InvalidNoOfRow(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1InvalidUniqName
 **************************************
 ---------------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname           | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname           | r_status | w_status | phase   |
 ---------------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE_INVALID | Y        | Y        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | N        | N        | CUTOVER |
@@ -193,7 +193,7 @@ TestCutOver1InvalidUniqName
 
 After validation
 ----------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname      | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname      | r_status | w_status | phase   |
 ----------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE    | Y        | Y        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_ONE    | N        | N        | CUTOVER |
@@ -242,7 +242,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidUniqName(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -311,19 +311,19 @@ func TestCutOver1InvalidUniqName(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1InvalidTwoTask
 **************************************
 -----------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task     | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS     | db_uname   | r_status | w_status | phase   |
 -----------------------------------------------------------------------------------
 | Row1 | occ      | TWO_TASK_INVALID | HERADB_ONE | Y        | Y        | CUTOVER |
 | Row2 | occ      | TWO_TASK_INVALID | HERADB_TWO | N        | N        | CUTOVER |
@@ -372,7 +372,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidTwoTask(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -423,19 +423,19 @@ func TestCutOver1InvalidTwoTask(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1InvalidOCCName
 **************************************
 ----------------------------------------------------------------------------------
-| ROWS | occ_name    | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name    | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 ----------------------------------------------------------------------------------
 | Row1 | occ-invalid | CLOC         | HERADB_ONE | Y        | Y        | CUTOVER |
 | Row2 | occ-invalid | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER |
@@ -484,7 +484,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidOCCName(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -535,19 +535,19 @@ func TestCutOver1InvalidOCCName(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1InvalidPhase
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | invalid |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | invalid |
@@ -596,7 +596,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidPhase(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -647,19 +647,19 @@ func TestCutOver1InvalidPhase(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1InvalidWriteStatus
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | X        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | X        | CUTOVER |
@@ -685,7 +685,7 @@ Validation:
     | Traffic Type | Success DB  | No Traffic DB | state  |
     -------------------------------------------------------
     | READ         |  HERADB_ONE | HERADB_TWO    | active |
-    | WRITE        |  HERADB_ONE | HERADB_TWO    | active | TODO Failing
+    | WRITE        |  HERADB_ONE | HERADB_TWO    | active |
     | TXN          |  HERADB_ONE | HERADB_TWO    | active |
     -------------------------------------------------------
  4. Validate after forcing workers restart (by killing sessions from db's end)
@@ -708,7 +708,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidWriteStatus(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -759,19 +759,19 @@ func TestCutOver1InvalidWriteStatus(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1InvalidReadStatus
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | X        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | X        | N        | CUTOVER |
@@ -820,7 +820,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1InvalidReadStatus(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -871,19 +871,19 @@ func TestCutOver1InvalidReadStatus(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1DualWrite
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | Y        | CUTOVER |
@@ -932,7 +932,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualWrite(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -983,19 +983,19 @@ func TestCutOver1DualWrite(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1DualRead
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER |
@@ -1044,7 +1044,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1DualRead(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1095,19 +1095,19 @@ func TestCutOver1DualRead(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1ReadOff
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER |
@@ -1156,7 +1156,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1ReadOff(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1207,19 +1207,19 @@ func TestCutOver1ReadOff(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1TargetDBDown
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER |
@@ -1270,7 +1270,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1TargetDBDown(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1327,30 +1327,30 @@ func TestCutOver1TargetDBDown(t *testing.T) {
 	trafficStats = util.CT.StopClientTraffic(respChan, RespMsg)
 
 	occStatus := util.IsContainerUp(t, "occ")
-	if occStatus != true {
-		t.Fatalf("OCC is down - which is not expected")
+	if occStatus == true {
+		t.Fatalf("OCC is up - which is not expected")
 	}
 
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3, 1, 2)
+	util.ValidateFailureTraffic(t, trafficStats, util.READ, afterRestart+3, trafficStopped-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, afterRestart+3, trafficStopped-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, afterRestart+3, trafficStopped-3)
 
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1SourceDBDown
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER |
@@ -1401,7 +1401,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1SourceDBDown(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1471,19 +1471,19 @@ func TestCutOver1SourceDBDown(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
 TestCutOver1Rollback
 **************************************
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER |
@@ -1513,12 +1513,12 @@ Validation:
     | TXN          |             | HERADB_ONE, HERADB_TWO | active |
     ----------------------------------------------------------------
 
-Moving to PRE PHASE
+Moving to FLEXUP PHASE
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE     |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE     |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP     |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP     |
 -------------------------------------------------------------------------------
 
 Validation:
@@ -1547,7 +1547,7 @@ Validation:
 
 Moving to ENABLE PHASE
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE  |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE  |
@@ -1580,7 +1580,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1Rollback(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	stateLog := make(map[string]int)
@@ -1602,7 +1602,7 @@ func TestCutOver1Rollback(t *testing.T) {
 	util.ValidateFailureTraffic(t, trafficStats, util.WRITE, start+3, end-3)
 	util.ValidateFailureTraffic(t, trafficStats, util.TXN, start+3, end-3)
 
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	start = time.Now().Unix()
 	time.Sleep(15 * time.Second)
@@ -1622,10 +1622,10 @@ func TestCutOver1Rollback(t *testing.T) {
 	start = time.Now().Unix()
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 	end = time.Now().Unix()
 
 	util.ValidateSuccessTraffic(t, trafficStats, util.READ, start+3, end-3, 1, 2)
@@ -1642,12 +1642,12 @@ func TestCutOver1Rollback(t *testing.T) {
 }
 
 /*
-PRE-SETUP
+FLEXUP-SETUP
 -----------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
-| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | PRE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | PRE   |
+| Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
+| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 **************************************
@@ -1656,7 +1656,7 @@ TestCutOver1ClosingPendingTxn
 1. Sending Long read and Long Txn (long is 15 seconds here)
 2. then move to CUTOVER STATE
 -------------------------------------------------------------------------------
-| ROWS | occ_name | occ_two_task | db_uname   | r_status | w_status | phase   |
+| ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER |
 | Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER |
@@ -1688,7 +1688,7 @@ Validation:
 TODO: Need to add logs and CAL log verification
 */
 func TestCutOver1ClosingPendingTxn(t *testing.T) {
-	dumpChan, respChan, RespMsg, logFile := moveToCutOverPrePhase(t)
+	dumpChan, respChan, RespMsg, logFile := moveToFlexUp(t)
 	defer util.TearDown(t, dumpChan, respChan, RespMsg, logFile)
 
 	util.CT.StopClientTraffic(respChan, RespMsg)
