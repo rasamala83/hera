@@ -737,7 +737,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.RWstatusByDb[dbun] != nextcfg.RWstatusByDb[dbun] {
 		changed = true
 		info := fmt.Sprint(dbun, "_", curcfg.RWstatusByDb[dbun], "_to_", nextcfg.RWstatusByDb[dbun])
-		evt := cal.NewCalEvent(EvtTypeCutover, "db_rw_status_diff", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "tns_rw_status_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, dbun, "tnsalias rw status is different:", info)
@@ -749,7 +749,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.RWstatusByDb[dbun] != nextcfg.RWstatusByDb[dbun] {
 		changed = true
 		info := fmt.Sprint(dbun, "_", curcfg.RWstatusByDb[dbun], "_to_", nextcfg.RWstatusByDb[dbun])
-		evt := cal.NewCalEvent(EvtTypeCutover, "cutoverdb_rw_status_diff", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "tnscutover_rw_status_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, dbun, "tnsaliascutover rw status is different:", info)
@@ -760,8 +760,8 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	// Tns key and role definition are fixed so if tns for source changes, it means tns for target also changes.
 	if curcfg.TnsByRole[Source] != nextcfg.TnsByRole[Source] {
 		changed = true
-		info := fmt.Sprint(gTnsAlias, "_", curcfg.TnsByRole[Source], "_to_", nextcfg.TnsByRole[Source])
-		evt := cal.NewCalEvent(EvtTypeCutover, "tns_role_diff", cal.TransOK, info)
+		info := fmt.Sprint(curcfg.TnsByRole[Source], "_to_", nextcfg.TnsByRole[Source])
+		evt := cal.NewCalEvent(EvtTypeCutover, "tns_src_role_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, gTnsAlias, "dbrole change is different:", info)
@@ -811,8 +811,7 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 			if !(stopR || stopW) { // nothing to stop
 				return
 			}
-			stopRwCalName := fmt.Sprint("stop_R", stopR, "_W", stopW)
-
+			stopRwCalName := fmt.Sprint("read-", stopR, "_write-", stopW)
 			// sent the status to current active db.
 			shid := int(curcfg.ActiveShardId)
 			maxtype := int(wtypeRW)
@@ -871,7 +870,7 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 					}
 				} else {
 					if wpool != nil {
-						evt := cal.NewCalEvent(EvtTypeCutover, "stop_rw", cal.TransOK, "")
+						evt := cal.NewCalEvent(EvtTypeCutover, "notify_wp_rw_status", cal.TransOK, "")
 						evt.Completed()
 						wpool.StopWorker(stopR, stopW)
 					} else {

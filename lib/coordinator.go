@@ -738,7 +738,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 			// TODO: we should also empty the bindevict map
 		} else {
-			// check bind throttle
+			// biz as usual, check bind throttle
 			GetBindEvict().lock.Lock()
 			_, ok = GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
 			GetBindEvict().lock.Unlock()
@@ -1036,10 +1036,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				}
 			} else {
 				// worker not nil, internal shard change, we will need to switch too
-				// internal query we allow read to switch
-				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "internal sql, worker not nil!")
-				}
 				if crd.curActDb == nil {
 					if logger.GetLogger().V(logger.Alert) {
 						logger.GetLogger().Log(logger.Alert, crd.id, "cutover internal sql has worker but crd.curActDb is nil")
@@ -1055,12 +1051,12 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				}
 				if worker.shardID != int(srcShId) {
 					if logger.GetLogger().V(logger.Debug) {
-						logger.GetLogger().Log(logger.Debug, crd.id, "cutover internal sql default sql route error:", err)
+						logger.GetLogger().Log(logger.Debug, crd.id, "cutover internal sql not allow to swtich. current shard id:", worker.shardID, "src shard id:", int(srcShId))
 					}
 					return errors.New("crd is write and has worker with mismatched source shard")
 				}
 				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "crd internal has worker proceed.")
+					logger.GetLogger().Log(logger.Verbose, crd.id, "crd internal has the worker to proceed. srcShId:", int(srcShId))
 				}
 			}
 		}
