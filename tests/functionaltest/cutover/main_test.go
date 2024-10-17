@@ -16,28 +16,30 @@ func TestCutOverPositive(t *testing.T) {
 	//OCC running with only one db in TNS, no env set for cut over, cut over table is empty
 	_, logFile := util.Setup(t)
 
+	// send client traffic
+	var wg sync.WaitGroup
+	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
+	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
+	time.Sleep(time.Duration(10) * time.Second)
+	util.CT.DumpStats(util.CT.DumpTrafficStat(dumpChan, RespMsg))
+
 	// enable cut over env and tns changes
 	util.EnableCutOver(t, false, false)
 	util.MoveCutOverPhase(t, util.CreateTable, true, true)
 	util.MoveCutOverPhase(t, util.CutOverEnable, true, true)
 	util.RestartOCC(t, 90)
 
-	// send client traffic
-	var wg sync.WaitGroup
-	respChan, dumpChan, RespMsg := util.CT.SendClientTraffic(&wg)
-	defer util.TearDown(t, respChan, dumpChan, RespMsg, logFile)
-
 	stateLog := make(map[string]int)
 	stateLog["occ"] = 25
-	stateLog["occ.live1"] = 1
+	stateLog["occ.live1"] = 2
 	util.ValidateStateLog(t, stateLog, true)
 
 	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 1, t)
+	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 2, t)
 
 	startClientTraffic := time.Now().Unix()
-	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Pre Cutover state: ", startClientTraffic)
-	util.MoveCutOverPhase(t, util.CutOverPre, true, true)
+	logger.GetLogger().Log(logger.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
+	util.MoveCutOverPhase(t, util.FlexUp, true, true)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -112,35 +114,31 @@ func TestCutOverPositive(t *testing.T) {
 	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterWriteCutOver+3, writeCutOverValidation, 2, 1)
 	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterWriteCutOver+3, writeCutOverValidation, 2, 1)
 
-	logger.GetLogger().Log(logger.Alert, "Moving to Complete State: ", time.Now().Unix())
-	util.MoveCutOverPhase(t, util.CutOverComplete, true, true)
+	logger.GetLogger().Log(logger.Alert, "Changing SRC and TGT database: ", afterWriteCutOver)
+	util.MoveCutOverPhase(t, util.SourceTargetFlip, true, true)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
-	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
-	afterComplete := time.Now().Unix() - 3
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, writeCutOverValidation, afterComplete, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, writeCutOverValidation, afterComplete, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, writeCutOverValidation, afterComplete, 2, 1)
-	stateLog["occ"] = 1
+	stateLog["occ"] = 25
 	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 25, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
 
-	logger.GetLogger().Log(logger.Alert, "Moving to Broom State: ", time.Now().Unix())
-	util.MoveCutOverPhase(t, util.CutOverBroom, true, true)
+	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
+	srcTgtFlip := time.Now().Unix() - 3
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, writeCutOverValidation, srcTgtFlip, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, writeCutOverValidation, srcTgtFlip, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, writeCutOverValidation, srcTgtFlip, 2, 1)
+
+	logger.GetLogger().Log(logger.Alert, "Moving to Flip Enable: ", srcTgtFlip)
+	util.MoveCutOverPhase(t, util.FlipEnable, true, true)
 	logger.GetLogger().Log(logger.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
-	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
-	afterBroom := time.Now().Unix() - 3
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, afterComplete, afterBroom, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, afterComplete, afterBroom, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, afterComplete, afterBroom, 2, 1)
-	stateLog["occ"] = 1
+	stateLog["occ"] = 2
 	stateLog["occ.live1"] = 25
 	util.ValidateStateLog(t, stateLog, true)
+	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 2, t)
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
-	util.ValidateWorkerCountFromDatabase("HERADB_ONE", "herabox_primary_srv", true, 1, t)
 
 	util.CT.StopClientTraffic(respChan, RespMsg)
 }
