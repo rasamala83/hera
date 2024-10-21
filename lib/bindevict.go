@@ -116,7 +116,7 @@ func (entry *BindThrottle) incrAllowEveryX() {
 	}
 }
 
-func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavyUsage bool) (bool, *BindThrottle) {
+func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavyUsage bool, inCutover bool) (bool, *BindThrottle) {
 	GetBindEvict().lock.Lock()
 	sqlBinds := GetBindEvict().BindThrottle[sqlhash]
 	GetBindEvict().lock.Unlock()
@@ -140,7 +140,11 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 		// check if not used in a while
 		now := time.Now()
 		recent := entry.RecentAttempt.Load().(*time.Time)
-		gap := now.Sub(*recent).Seconds() * GetConfig().BindEvictionDecrPerSec
+		rate := GetConfig().BindEvictionDecrPerSec
+		if inCutover {
+			rate = 10000
+		}
+		gap := now.Sub(*recent).Seconds() * rate
 		entry.decrAllowEveryX(int(gap))
 		if entry.AllowEveryX == 0 {
 			return false, nil

@@ -726,34 +726,27 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	ticket := crd.ticket
 	xShardRead := false
 
-	ok := false
+	inCutover := false
 	if GetConfig().EnableCutover {
+		// diable throttle if status unknown or during cutover
 		if crd.curActDb == nil {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, crd.id, "may be at init, cutover is enabled, continue but disable bind eviction")
 			}
-		} else if crd.curActDb.Phase == CutoverPhStr { // diable throttle during cutover
+			inCutover = true
+		} else if crd.curActDb.Phase == CutoverPhStr {
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, crd.id, "active cutover phase, skip bind eviction")
 			}
-			// TODO: we should also empty the bindevict map
-		} else {
-			// biz as usual, check bind throttle
-			GetBindEvict().lock.Lock()
-			_, ok = GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
-			GetBindEvict().lock.Unlock()
+			inCutover = true
 		}
-	} else {
-		// check bind throttle
-		GetBindEvict().lock.Lock()
-		_, ok = GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
-		GetBindEvict().lock.Unlock()
 	}
+	// check bind throttle
+	GetBindEvict().lock.Lock()
+	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
+	GetBindEvict().lock.Unlock()
 
 	if ok {
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "crd.curActInfo is nil in dispatchRequest")
-		}
 		wType := wtypeRW
 		cfg := GetNumWorkers(crd.shard.shardID)
 		if GetConfig().ReadonlyPct > 0 {
@@ -784,7 +777,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				logger.GetLogger().Log(logger.Debug, msg)
 			}
 		}
-		needBlock, throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage)
+		needBlock, throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage, inCutover)
 		if needBlock {
 			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
 				throttleEntry.Name,
