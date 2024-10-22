@@ -86,7 +86,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -104,7 +104,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy | TODO Failing
+    | CLOC_STG1 |  25            | accept+wait+busy | TODO Failing
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -126,7 +126,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
     5.1 OCC Container should be down
@@ -196,7 +196,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -206,7 +206,7 @@ TestCutOver2InvalidDBUniqueName
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname           | r_status | w_status | phase    |
 ----------------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE_INVALID | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO_INVALID | Y        | N        | CUTOVER  |
 ----------------------------------------------------------------------------------------
 
 Validation:
@@ -215,7 +215,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -237,7 +237,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
     5.1 OCC Container should be down
@@ -307,7 +307,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -317,7 +317,7 @@ TestCutOver2InvalidOCCName
 | ROWS | occ_name    | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -----------------------------------------------------------------------------------
 | Row1 | occ-invalid | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ-invalid | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ-invalid | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 -----------------------------------------------------------------------------------
 
 Validation:
@@ -326,7 +326,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -348,7 +348,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy | TODO Failing
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
     5.1 OCC Container should be down
@@ -418,7 +418,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -437,7 +437,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -459,7 +459,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy | TODO Failing
+    | CLOC_STG1 |  25            | accept+wait+busy | TODO Failing
     ----------------------------------------------------
  5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
     5.1 OCC Container should be down
@@ -529,7 +529,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -539,7 +539,7 @@ TestCutOver2InvalidCutOverPhase
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | invalid  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | invalid  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -548,7 +548,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -570,7 +570,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
     5.1 OCC Container should be down
@@ -640,7 +640,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -650,7 +650,7 @@ TestCutOver2TargetDBDown
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 * shutdown target DB
@@ -661,7 +661,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -738,7 +738,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -748,7 +748,7 @@ TestCutOver2SourceDBDown
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 * shutdown source DB
@@ -759,7 +759,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -781,7 +781,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  0             | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  5. Validate after forcing occ restart (including mux) - wait for 25 seconds before validation
     5.1 OCC Container should be up and failing to connect to target db
@@ -854,7 +854,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -864,7 +864,7 @@ TestCutOver2Rollback
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -873,7 +873,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -896,7 +896,7 @@ Rollback to Cutover Phase 1
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -905,7 +905,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -928,7 +928,7 @@ Rollback to FLEXUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase |
 -----------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 Validation:
@@ -937,7 +937,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -960,7 +960,7 @@ Rollback to Enable
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase  |
 ------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP   |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | FLEXUP   |
 -----------------------------------------------------------------------------
 
 Validation:
@@ -969,7 +969,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1071,7 +1071,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -1083,7 +1083,7 @@ TestCutOver1ClosingPendingTxn
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 3.
 
@@ -1093,7 +1093,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
