@@ -401,7 +401,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'HERABOX', 'CLOC', 'Y', 'Y', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_CUTOVER', 'N', 'N', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_STG1', 'N', 'N', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -486,7 +486,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ-wrong', 'HERABOX', 'CLOC', 'yes', 'yes', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ-wrong', 'HERABOX', 'CLOC_CUTOVER', 'N', 'N', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ-wrong', 'HERABOX', 'CLOC_STG1', 'N', 'N', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -500,7 +500,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE_INVALID', 'occ', 'HERABOX', 'CLOC', 'yes', 'yes', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO_INVALID', 'occ', 'HERABOX', 'CLOC_CUTOVER', 'no', 'no', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO_INVALID', 'occ', 'HERABOX', 'CLOC_STG1', 'no', 'no', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -514,7 +514,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'HERABOX', 'CLOC_INVALID', 'yes', 'yes', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_CUTOVER_INVALID', 'no', 'no', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_STG1_INVALID', 'no', 'no', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -528,7 +528,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'HERABOX', 'CLOC', 'yes', 'yes', 'invalid', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_CUTOVER', 'no', 'no', 'invalid', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_STG1', 'no', 'no', 'invalid', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -554,7 +554,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'HERABOX', 'CLOC', 'X', 'yes', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_CUTOVER', 'X', 'no', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_STG1', 'X', 'no', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -568,7 +568,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'HERABOX', 'CLOC', 'yes', 'X', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_CUTOVER', 'no', 'X', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_STG1', 'no', 'X', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -582,7 +582,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'HERABOX', 'CLOC', 'no', 'yes', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_CUTOVER', 'no', 'no', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_STG1', 'no', 'no', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -596,7 +596,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'HERABOX', 'CLOC', 'yes', 'yes', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_CUTOVER', 'no', 'yes', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_STG1', 'no', 'yes', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -610,7 +610,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE', 'occ', 'HERABOX', 'CLOC', 'yes', 'yes', 'ENABLE', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_CUTOVER', 'yes', 'no', 'ENABLE', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO', 'occ', 'HERABOX', 'CLOC_STG1', 'yes', 'no', 'ENABLE', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 
@@ -623,7 +623,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 
 		query = "insert into pypl_occ_cutover values ('HERADB_ONE_INVALID', 'occ', 'HERABOX', 'CLOC', 'yes', 'yes', 'FLEXUP', '" +
 			comment + "', 'CLOC_RW', '', 'SRC');\\n" +
-			"insert into pypl_occ_cutover values ('HERADB_TWO_INVALID', 'occ', 'HERABOX', 'CLOC_CUTOVER', 'no', 'no', 'FLEXUP', '" +
+			"insert into pypl_occ_cutover values ('HERADB_TWO_INVALID', 'occ', 'HERABOX', 'CLOC_STG1', 'no', 'no', 'FLEXUP', '" +
 			comment + "', 'CLOC_RO', '', 'TGT')"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -641,7 +641,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_ONE_INVALID', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_TWO_INVALID', write_status='N', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 	case CutOverPhaseICorrectUniqName:
@@ -649,7 +649,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_ONE', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_TWO', write_status='N', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 	case CutOverPhaseIInvalidOCCName:
@@ -657,7 +657,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', write_status='N', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -666,7 +666,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='invalid', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='invalid', write_status='N', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -702,7 +702,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='X', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='X', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 	case CutOverPhaseIInvalidReadStatus:
@@ -710,7 +710,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='X', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='X', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -719,7 +719,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', OCC_TNS_ALIAS='TWO_TASK_INVALID', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', OCC_TNS_ALIAS='TWO_TASK_INVALID', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -734,7 +734,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_ONE_INVALID', read_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_TWO_INVALID', read_status='Y', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -742,7 +742,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', read_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', read_status='N', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -750,7 +750,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='invalid', read_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='invalid', read_status='N', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -758,7 +758,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', OCC_TNS_ALIAS='TWO_TASK_INVALID', read_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', OCC_TNS_ALIAS='TWO_TASK_INVALID', read_status='N', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -775,7 +775,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_ONE_INVALID', write_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', db_unique_name='HERADB_TWO_INVALID', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -784,7 +784,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', write_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', occ_name='occ-invalid', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -793,7 +793,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set read_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set read_status='N', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -802,7 +802,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set read_status='Y', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set read_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -811,7 +811,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set write_status='Y', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -820,7 +820,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set write_status='X', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set write_status='X', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -829,7 +829,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='invalid', write_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='invalid', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -838,7 +838,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set read_status='X', write_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set read_status='X', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -847,7 +847,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', OCC_TNS_ALIAS='TWO_TASK_INVALID', write_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', OCC_TNS_ALIAS='TWO_TASK_INVALID', write_status='Y', wisb_roles='CLOC_RW', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -873,7 +873,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query = "update pypl_occ_cutover set cutover_phase='ENABLE', db_unique_name='HERADB_ONE_INVALID',  remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='ENABLE', db_unique_name='HERADB_TWO_INVALID',  remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -886,7 +886,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query = "update pypl_occ_cutover set cutover_phase='ENABLE', occ_name='occ-invalid', write_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='ENABLE', occ_name='occ-invalid', write_status='Y', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -899,7 +899,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query = "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='N', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -912,7 +912,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query = "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='Y', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='Y', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -925,7 +925,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query = "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='Y', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -938,7 +938,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query = "update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='X', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', write_status='X', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -951,7 +951,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query = "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='X', write_status='N', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='X', write_status='Y', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -964,7 +964,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query = "update pypl_occ_cutover set cutover_phase='invalid', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='invalid', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -977,7 +977,7 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query = "update pypl_occ_cutover set cutover_phase='ENABLE', OCC_TNS_ALIAS='TWO_TASK_INVALID', remarks='" + comment +
 			"' where OCC_TNS_ALIAS='CLOC' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='ENABLE', OCC_TNS_ALIAS='TWO_TASK_INVALID', remarks='" + comment +
-			"' where OCC_TNS_ALIAS='CLOC_CUTOVER' and occ_name='occ'"
+			"' where OCC_TNS_ALIAS='CLOC_STG1' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
 
@@ -1254,7 +1254,7 @@ func EnableSharding(t *testing.T) {
 /*
 1. Stop OCC Docker container
 2. Push default TNS File (without cutover)
-3. Disable CLOC_CUTOVER env variable to disable cutover
+3. Disable CLOC_STG1 env variable to disable cutover
 4. Start OCC Docker
 */
 func ResetOCCDocker(t *testing.T) {
