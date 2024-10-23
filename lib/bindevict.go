@@ -140,11 +140,10 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 		// check if not used in a while
 		now := time.Now()
 		recent := entry.RecentAttempt.Load().(*time.Time)
-		rate := GetConfig().BindEvictionDecrPerSec
+		gap := now.Sub(*recent).Seconds() * GetConfig().BindEvictionDecrPerSec 
 		if inCutover {
-			rate = 10000
+			gap = 10000
 		}
-		gap := now.Sub(*recent).Seconds() * rate
 		entry.decrAllowEveryX(int(gap))
 		if entry.AllowEveryX == 0 {
 			return false, nil
