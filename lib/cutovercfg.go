@@ -725,7 +725,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.DbByTns[gTnsAliasCutover] != nextcfg.DbByTns[gTnsAliasCutover] {
 		changed = true
 		info := fmt.Sprint(gTnsAliasCutover, "_", curcfg.DbByTns[gTnsAliasCutover], "_to_", nextcfg.DbByTns[gTnsAliasCutover])
-		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_cutover_tns_db_diff", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tnscutover_db_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, gTnsAliasCutover, "TnsAliasCutover is different:", info)
@@ -737,7 +737,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.RWstatusByDb[dbun] != nextcfg.RWstatusByDb[dbun] {
 		changed = true
 		info := fmt.Sprint(dbun, "_", curcfg.RWstatusByDb[dbun], "_to_", nextcfg.RWstatusByDb[dbun])
-		evt := cal.NewCalEvent(EvtTypeCutover, "tns_rw_status_diff", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tns_rw_status_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, dbun, "tnsalias rw status is different:", info)
@@ -749,7 +749,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.RWstatusByDb[dbun] != nextcfg.RWstatusByDb[dbun] {
 		changed = true
 		info := fmt.Sprint(dbun, "_", curcfg.RWstatusByDb[dbun], "_to_", nextcfg.RWstatusByDb[dbun])
-		evt := cal.NewCalEvent(EvtTypeCutover, "tnscutover_rw_status_diff", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tnscutover_rw_status_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, dbun, "tnsaliascutover rw status is different:", info)
@@ -761,7 +761,7 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 	if curcfg.TnsByRole[Source] != nextcfg.TnsByRole[Source] {
 		changed = true
 		info := fmt.Sprint(curcfg.TnsByRole[Source], "_to_", nextcfg.TnsByRole[Source])
-		evt := cal.NewCalEvent(EvtTypeCutover, "tns_src_role_diff", cal.TransOK, info)
+		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_src_role_tns_diff", cal.TransOK, info)
 		evt.Completed()
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, gTnsAlias, "dbrole change is different:", info)

@@ -900,24 +900,16 @@ func (pool *WorkerPool) decBacklogCnt() {
 	}
 }
 
-// CUTOVER phase: apply to both two_task and two_task_cutover shards
-// PRE phase: apply to only two_task_cutover shard
-// COMPLETE phase: apply to only two_task shard
-// What kind of error should we return ?
+/* enforce pool-db integrity. At phase "cutover" and "flexup", it should be only called to enforce on two_task_cutover shard. */
 func (pool *WorkerPool) enforceIntegrity() {
 	if pool == nil {
 		evt := cal.NewCalEvent(EvtTypeCutover, "wp_nil_dbun_skip", cal.TransOK, "")
 		evt.Completed()
 		return
 	}
-	if pool.phase == EnablePhStr { // won't check and enforce at all
-		return
-	}
 
-	warnOnly := true // warning only unless for Cutover workerpool at flexup and cutover phase
-	if pool.phase == CutoverPhStr || pool.phase == FlexupPhStr {
-		// cutover phase, enforce on the target pool only
-		warnOnly = false
+	if !(pool.phase == CutoverPhStr || pool.phase == FlexupPhStr)  {
+		return
 	}
 
 	cnt := 0
@@ -940,29 +932,21 @@ func (pool *WorkerPool) enforceIntegrity() {
 			logger.GetLogger().Log(logger.Info, "error: dbuname mismatched. workerpool coshard=", pool.CoShardID, ", shard=", pool.ShardID, ", terminate worker: pid =",
 				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
 		}
-		if warnOnly {
-			//add calevent
-			calname := fmt.Sprintf("warn_diff_dbun_%d_%d_%d", int(pool.CoShardID), int(w.Type), w.instID)
-			evt := cal.NewCalEvent(EvtTypeCutover, calname, cal.TransOK, "")
-			evt.Completed()
-		} else {
-			calname := fmt.Sprintf("kill_diff_dbun_%d_%d_%d", int(pool.CoShardID), int(w.Type), w.instID)
-			evt := cal.NewCalEvent(EvtTypeCutover, calname, cal.TransOK, "")
-			evt.Completed()
-			w.Terminate()
-		}
+		calname := fmt.Sprintf("kill_diff_dbun_%d_%d_%d", int(pool.CoShardID), int(w.Type), w.instID)
+		evt := cal.NewCalEvent(EvtTypeCutover, calname, cal.TransOK, "")
+		evt.Completed()
+		w.Terminate()
 	}
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "enforceIntegrity done.", pool.phase, pool.dbUname)
 	}
 }
 
-// workerpool integrity ensured in ways
+// workerpool integrity ensured in following ways
 // 1. when cfg change, it invokes the function to check all workers' info
 // 2. workerpool will track the current setting, and enforce at attachWorker() in case the worker is restarted/recycled outside condition 1.
-// At Enable ignore all mismatch (still logs)
-// At Pre ignore the TWO_TASK pool DBUNAME mismatch
-// At Complete ignore TWO_TASK_CUTOVER pool DBUNAME mismatch
+// At "enable" ignore all mismatch
+// At "flexup" and "cutover" enforces TWO_TASK_CUTOVER pool DBUNAME mismatch
 
 func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string, isSrc bool) {
 	if pool.phase == newPhase && pool.dbUname == newDbUname {
@@ -970,7 +954,7 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string, is
 		return
 	}
 
-	evt := cal.NewCalEvent(EvtTypeCutover, "update_wp_cfg_change", cal.TransOK, "")
+	evt := cal.NewCalEvent(EvtTypeCutover, "update_wp_cfg_change", cal.TransOK, pool.dbUname)
 	evt.Completed()
 
 	logger.GetLogger().Log(logger.Warning, "workerpool", pool.Type, pool.ShardID, "phase and dbuname before: [",
@@ -978,7 +962,7 @@ func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string, is
 
 	pool.phase = newPhase
 	pool.dbUname = newDbUname
-	// only enforce two_task_cutover pool's dbuname integrity at PRE and CUTOVER
+	// only enforce two_task_cutover pool's dbuname integrity at "flexup" and "cutover" phases.
 	if !isSrc && (pool.phase == CutoverPhStr || pool.phase == FlexupPhStr) {
 		pool.enforceIntegrity()
 	}
