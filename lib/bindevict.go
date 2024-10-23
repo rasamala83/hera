@@ -131,7 +131,7 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 		we stop searching and should return something */
 
 		// update based on usage
-		if heavyUsage {
+		if heavyUsage && !inCutover {
 			entry.incrAllowEveryX()
 		} else {
 			entry.decrAllowEveryX(2)
