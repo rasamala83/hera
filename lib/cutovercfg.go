@@ -811,7 +811,7 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 			if !(stopR || stopW) { // nothing to stop
 				return
 			}
-			stopRwCalName := fmt.Sprint("read-", stopR, "_write-", stopW)
+			stopRwCalName := fmt.Sprint("same_act_R-", !stopR, "_W-", !stopW)
 			// sent the status to current active db.
 			shid := int(curcfg.ActiveShardId)
 			maxtype := int(wtypeRW)
@@ -851,7 +851,7 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 			}
 			stopR = true
 			stopW = true
-			stopRwCalName := fmt.Sprint("stop_R", stopR, "_W", stopW)
+			stopRwCalName := fmt.Sprint("act_chg_stop_RW_", curActTns)
 			shid := int(curcfg.ActiveShardId)
 			maxtype := int(wtypeRW)
 			if GetConfig().ReadonlyPct > 0 {
@@ -998,7 +998,7 @@ func setPermTwoTaskName() error {
 		}
 		if gTnsAliasCutoverR == "" || gTnsAliasCutover == "" {
 			// can't proceed
-			return fmt.Errorf("error incomplete read-only utover env setup [%s] [%s]", gTnsAliasR, gTnsAliasCutoverR)
+			return fmt.Errorf("error incomplete read-only cutover env setup [%s] [%s]", gTnsAliasR, gTnsAliasCutoverR)
 		}
 	}
 	return nil

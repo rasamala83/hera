@@ -303,7 +303,11 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 
 func (crd *Coordinator) ProceedReadInCutover() error {
 	if (crd.curActDb.Phase == CutoverPhStr) && ((crd.curActDb.RwStatus & ReadOk) != ReadOk) {
-		logger.GetLogger().Log(logger.Alert, crd.id, "OCC-500: active db cutover no read allowed")
+		evt := cal.NewCalEvent(EvtTypeCutover, "no_read_to_act_db", cal.TransOK, "")
+		evt.Completed()
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, crd.id, "OCC-500: active db cutover no read allowed")
+		}
 		return ErrCutoverReadNotAllowed
 	}
 	return nil
@@ -311,7 +315,11 @@ func (crd *Coordinator) ProceedReadInCutover() error {
 
 func (crd *Coordinator) ProceedWriteInCutover() error {
 	if (crd.curActDb.Phase == CutoverPhStr) && ((crd.curActDb.RwStatus & WriteOk) != WriteOk) {
-		logger.GetLogger().Log(logger.Alert, crd.id, "OCC-501: active db cutover no write allowed")
+		evt := cal.NewCalEvent(EvtTypeCutover, "no_write_to_act_db", cal.TransOK, "")
+		evt.Completed()
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, crd.id, "OCC-501: active db cutover no write allowed")
+		}
 		return ErrCutoverWriteNotAllowed
 	}
 	return nil
@@ -319,7 +327,9 @@ func (crd *Coordinator) ProceedWriteInCutover() error {
 
 func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
 	if crd.curActDb == nil {
-		logger.GetLogger().Log(logger.Warning, crd.id, "unknown source, ignore during server init")
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, crd.id, "unknown source, ignore during server init")
+		}
 		// we don't know yet
 		return ShIdUnset
 	}

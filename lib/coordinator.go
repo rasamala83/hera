@@ -326,12 +326,6 @@ func (crd *Coordinator) Run() {
 }
 
 func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
-	// if state is not cutover in progress, we will not change dispatch logic
-	// at non-cutover states, we will only ensure the worker integrity sanity check
-	// why TAF has its own DispatchTAFSession? it's because it can be retrying the same request
-	// instead of pre-determined condition like shard(key), cutover(state)
-	// Therefore I think cutover preprocess should be able to apply idea similar to sharding.
-
 	if GetConfig().EnableTAF && (crd.worker == nil) {
 		taferr := crd.DispatchTAFSession(request)
 		crd.processError(taferr)
