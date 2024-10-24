@@ -102,7 +102,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -113,7 +113,7 @@ TestCutOver3InvalidNoOfRow
 --------------------------------------------------------------------------------
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | Y        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -122,7 +122,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -147,7 +147,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -214,7 +214,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -225,7 +225,7 @@ TestCutOver3InvalidDBUniqueName
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname           | r_status | w_status | phase    |
 ----------------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE_INVALID | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO_INVALID | Y        | Y        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO_INVALID | Y        | Y        | CUTOVER  |
 ----------------------------------------------------------------------------------------
 
 Validation:
@@ -234,7 +234,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -259,7 +259,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -326,7 +326,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -337,7 +337,7 @@ TestCutOver3InvalidOCCName
 | ROWS | occ_name     | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -----------------------------------------------------------------------------------
 | Row1 | occ-invalid  | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ-invalid  | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER  |
+| Row2 | occ-invalid  | CLOC_STG1 | HERADB_TWO | Y        | Y        | CUTOVER  |
 -----------------------------------------------------------------------------------
 
 Validation:
@@ -346,7 +346,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -371,7 +371,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -438,7 +438,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -458,7 +458,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -483,7 +483,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -550,7 +550,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -561,7 +561,7 @@ TestCutOver3InvalidCutOverPhase
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | Y        | invalid  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -570,7 +570,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -595,7 +595,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -662,7 +662,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -673,7 +673,7 @@ TestCutOver3InvalidReadStatus
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | X        | N        | invalid  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | X        | Y        | invalid  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | X        | Y        | invalid  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -682,7 +682,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -707,7 +707,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -774,7 +774,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -785,7 +785,7 @@ TestCutOver3InvalidWriteStatus
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | X        | invalid  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | X        | invalid  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | X        | invalid  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -794,7 +794,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -819,7 +819,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -886,7 +886,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -897,7 +897,7 @@ TestCutOver3DualWriteStatus
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | Y        | invalid  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | Y        | invalid  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -906,7 +906,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -931,7 +931,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -998,7 +998,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -1009,7 +1009,7 @@ TestCutOver3DualReadStatus
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | invalid  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | Y        | invalid  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1018,7 +1018,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1043,7 +1043,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -1110,7 +1110,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -1121,7 +1121,7 @@ TestCutOver3ReadOffStatus
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | Y        | invalid  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | Y        | invalid  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1130,7 +1130,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1155,7 +1155,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -1222,7 +1222,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -1233,7 +1233,7 @@ TestCutOver3SourceDBDown
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | Y        | invalid  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1242,7 +1242,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1267,7 +1267,7 @@ Worker validation after killing random sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -1334,7 +1334,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 **************************************
@@ -1345,7 +1345,7 @@ TestCutOver3TargetDBDown
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | invalid  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | invalid  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | Y        | invalid  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1354,7 +1354,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1379,7 +1379,7 @@ Worker validation after killing all sessions
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  0             | accept+wait+busy |
+    | CLOC_STG1 |  0             | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after killing random sessions
     ---------------------------------------------------------------------
@@ -1443,7 +1443,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER |
 -------------------------------------------------------------------------------
 
 **************************************
@@ -1454,7 +1454,7 @@ TestCutOver3Rollback
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | Y        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1463,7 +1463,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1487,7 +1487,7 @@ Validation:
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1496,7 +1496,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1520,7 +1520,7 @@ Validation:
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1529,7 +1529,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1553,7 +1553,7 @@ Validation:
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | FLEXUP      |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | FLEXUP      |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | FLEXUP      |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1562,7 +1562,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1586,7 +1586,7 @@ Validation:
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | Y        | Y        | ENABLE   |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | N        | N        | ENABLE   |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | N        | N        | ENABLE   |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1595,7 +1595,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  1             | accept+wait+busy |
+    | CLOC_STG1 |  1             | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
@@ -1714,7 +1714,7 @@ FLEXUP-SETUP
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase   |
 -------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | N        | CUTOVER |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | N        | CUTOVER |
 -------------------------------------------------------------------------------
 
 **************************************
@@ -1725,7 +1725,7 @@ First update the table and then wait for 10 sec and grant RW role to cutover db
 | ROWS | occ_name | OCC_TNS_ALIAS | db_uname   | r_status | w_status | phase    |
 --------------------------------------------------------------------------------
 | Row1 | occ      | CLOC         | HERADB_ONE | N        | N        | CUTOVER  |
-| Row2 | occ      | CLOC_CUTOVER | HERADB_TWO | Y        | Y        | CUTOVER  |
+| Row2 | occ      | CLOC_STG1 | HERADB_TWO | Y        | Y        | CUTOVER  |
 --------------------------------------------------------------------------------
 
 Validation:
@@ -1734,7 +1734,7 @@ Validation:
     | two task     | num of workers | state            |
     ----------------------------------------------------
     | CLOC         |  25            | accept+wait+busy |
-    | CLOC_CUTOVER |  25            | accept+wait+busy |
+    | CLOC_STG1 |  25            | accept+wait+busy |
     ----------------------------------------------------
  2. DB validation after 15 seconds
     ---------------------------------------------------------------------
