@@ -283,6 +283,7 @@ private:
 	bool m_enable_cutover;
 	std::string m_cutovercfg_tns;
 	bool cutover_role_alarm_set;
+	int m_set_role_retry;
 	int m_last_user_role_check;
 public:
 	// need to pass in a server socket which is already bound to the correct port

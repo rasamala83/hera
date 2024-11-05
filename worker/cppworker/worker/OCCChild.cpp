@@ -249,6 +249,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	bits_to_match(1),
 	bit_mask(0),
 	m_enable_cutover(false),
+	m_set_role_retry(0),
 	m_last_user_role_check(0),
 	cutover_role_alarm_set(false)
 {
@@ -5812,14 +5813,13 @@ int OCCChild::set_role_for_the_session (){
 	std::string my_role;
 	// now handle role mismatch, set the role
 	if (m_cutovercfg_tns.empty()) {
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "set_role_for_the_session() TWO_TASK is NULL");
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "set_role TWO_TASK is unset");
 		return -1;
 	}
 	
 	char set_role_SQL[1024] = {'\0'};
 	sprintf(set_role_SQL, 
-"DECLARE cursor c1 is SELECT wisb_roles FROM pypl_occ_cutover WHERE upper(occ_tns_alias) = upper('%s') AND upper(occ_name) = upper('%s') AND wisb_roles = (select listagg(role,',') within group ( order by role asc) from session_roles);cnt integer := 0;wiri_roles pypl_occ_cutover.wisb_roles%%type;final_wiri pypl_occ_cutover.wisb_roles%%type;BEGIN FOR i in c1 LOOP cnt := cnt + 1;wiri_roles := i.wisb_roles;END LOOP;IF cnt = 1 THEN dbms_application_info.set_client_info(wiri_roles);ELSE FOR i in (select wisb_roles FROM pypl_occ_cutover WHERE upper(occ_tns_alias) = upper('%s') AND upper(occ_name) = upper('%s') AND rownum=1) loop execute immediate 'set role '||i.wisb_roles; END LOOP;select listagg(role,',') within group ( order by role asc) into final_wiri from session_roles;dbms_application_info.set_client_info(final_wiri);END IF;END;", m_cutovercfg_tns.c_str(), m_module_info.c_str(), m_cutovercfg_tns.c_str(), m_module_info.c_str());
-
+	"DECLARE cfg_wisb_roles pypl_occ_cutover.wisb_roles%%type; wiri_roles pypl_occ_cutover.wisb_roles%%type; BEGIN select wisb_roles into cfg_wisb_roles from pypl_occ_cutover where upper(occ_tns_alias) = upper('%s') AND upper(occ_name) = upper('%s') and upper(db_unique_name) = upper('%s'); select listagg(role,',') within group (order by role asc) into wiri_roles from session_roles; IF cfg_wisb_roles != wiri_roles THEN execute immediate 'set role '||cfg_wisb_roles; select listagg(role,',') within group ( order by role asc) into wiri_roles from session_roles; END IF; dbms_application_info.set_client_info(wiri_roles); END;", m_cutovercfg_tns.c_str(), m_module_info.c_str(), m_db_uname.c_str());
 
 	CalTransaction cal_trans("CUTOVER");
 	cal_trans.SetName("role_op");
@@ -5842,13 +5842,13 @@ int OCCChild::set_role_for_the_session (){
 	if (rc != OCI_SUCCESS) {
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
 		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "set_role failed to prepare statement.", LOG_INFO);
+		log_oracle_error(rc, "set_role failed to set_role execute statement.", LOG_INFO);
 		return -1;
 	}
 
 	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
 		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "Failed to free (maint)statement handle.");
+		log_oracle_error(rc, "Failed to free set_role statement handle.");
 		return -1;
 	}
 
@@ -5858,16 +5858,16 @@ int OCCChild::set_role_for_the_session (){
 
 
 // HBSender calls this function to start/stop role setting during cutover
-// m_set_user_role is the flag indicating if we should check for user role correctness
-// 1. when the flag is set to true, it means we should run at every 2 second
-//    a. Run validate sql to see if user role is matching expected roles
-//    b. Set the user role if mismatch. No retry on failure but exit.
-//    c. Entire Validate-Set-Verification is given max 2 sec, otherwise exit.
+// m_set_user_role is the flag indicating if we start/stop checking for user role correctness
 int OCCChild::enable_set_user_role(bool enable) {
 	m_set_user_role = enable;
 	if (m_set_user_role) {
+		CalEvent ev(CAL_EVENT_CUTOVER, "enable_role_update", CAL::TRANS_OK);
+		ev.Completed();
 		WRITE_LOG_ENTRY(logfile, LOG_INFO, "enable_set_user_role is set to True");
 	} else {
+		CalEvent ev(CAL_EVENT_CUTOVER, "disable_role_update", CAL::TRANS_OK);
+		ev.Completed();
 		WRITE_LOG_ENTRY(logfile, LOG_INFO, "enable_set_user_role is set to False");
 	}
 	
@@ -5883,20 +5883,25 @@ void OCCChild::cutover_support() {
 	if (m_set_user_role) {
         	struct timeval tv_now, tv_expire;
 		gettimeofday(&tv_now, NULL);
-		if ((tv_now.tv_sec - m_last_user_role_check) >= 3) {
+		if ((tv_now.tv_sec - m_last_user_role_check) >= 5) {
 			m_last_user_role_check = tv_now.tv_sec;
 			cutover_role_alarm_set = true;
-			
-			alarm(1); // allow total 1 seconds before forcing a recycling.
+			int role_timeout = 1 + rand()%5;
+			alarm(role_timeout); // alarm to force a recycle
 			int rc = set_role_for_the_session(); // if failure, exit already
 			cutover_role_alarm_set = false;
 			alarm(0);
-
+			// allow retry to 3 times 
 			if (rc == 1) {
-				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set_role_for_the_session() comeplete successfully"); 
+				m_set_role_retry = 0;
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "successful set_role_for_the_session"); 
 			} else {
-				WRITE_LOG_ENTRY(logfile, LOG_ALERT, "set_role_for_the_session() done unsuccessfully, exiting");
-				exit(0);	
+				m_set_role_retry++;
+				WRITE_LOG_ENTRY(logfile, LOG_ALERT, "err_set_role");
+				if (m_set_role_retry >= 3) {
+					WRITE_LOG_ENTRY(logfile, LOG_ALERT, "recycle_on_set_role_error");
+					exit(0);
+				}
 			}
 		}
 	}
