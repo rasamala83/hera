@@ -294,9 +294,9 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
 			if GetConfig().EnableCutover && worker.ConnTwoTask == ShIdTnsCutover {
-				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R_CUTOVER")
-				envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_CUTOVER", dbHostName))
-				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER CUTOVER %d", worker.ID))
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R_LIVE1")
+				envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_LIVE1", dbHostName))
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER LIVE1 %d", worker.ID))
 			} else {
 				// standard RO setup
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R")
@@ -370,9 +370,9 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
 			if GetConfig().EnableCutover && worker.ConnTwoTask == ShIdTnsCutover {
-				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_CUTOVER")
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_LIVE1")
 				envUpsert(&attr, envDbHostName, dbHostName)
-				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER CUTOVER %d", worker.ID))
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER LIVE1 %d", worker.ID))
 			} else {
 				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION")
 				envUpsert(&attr, envDbHostName, dbHostName)
