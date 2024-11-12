@@ -434,6 +434,9 @@ private:
 	// an internal error with the OCC
 	void occ_error(const char *str);
 
+	// oracle err logger without logging API
+	void log_oracle_err_helper(int status, const char* str, LogLevelEnum level = LOG_ALERT);
+
 	// returns a string representation of an oracle error
 	// stores into buffer (overwrites)
 	int get_oracle_error(int rc, std::string& buffer);

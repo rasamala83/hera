@@ -5833,7 +5833,7 @@ int OCCChild::set_role_for_the_session (){
 	if (rc != OCI_SUCCESS) {
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
 		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "set_role failed to prepare statement.", LOG_INFO);
+		log_oracle_err_helper(rc, "set_role failed to prepare statement.", LOG_INFO);
 		return -1;
 	}
 
@@ -5842,13 +5842,13 @@ int OCCChild::set_role_for_the_session (){
 	if (rc != OCI_SUCCESS) {
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
 		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "set_role failed to set_role execute statement.", LOG_INFO);
+		log_oracle_err_helper(rc, "set_role failed to set_role execute statement.", LOG_INFO);
 		return -1;
 	}
 
 	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
 		cal_trans.Completed(CAL::TRANS_OK);
-		log_oracle_error(rc, "Failed to free set_role statement handle.");
+		log_oracle_err_helper(rc, "Failed to free set_role statement handle.");
 		return -1;
 	}
 
@@ -5894,16 +5894,39 @@ void OCCChild::cutover_support() {
 			// allow retry to 3 times 
 			if (rc == 1) {
 				m_set_role_retry = 0;
+				CalEvent ev(CAL_EVENT_CUTOVER, "set_role_success", CAL::TRANS_OK);
+				ev.Completed();
 				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "successful set_role_for_the_session"); 
 			} else {
 				m_set_role_retry++;
-				WRITE_LOG_ENTRY(logfile, LOG_ALERT, "err_set_role");
-				if (m_set_role_retry >= 3) {
-					WRITE_LOG_ENTRY(logfile, LOG_ALERT, "recycle_on_set_role_error");
+				WRITE_LOG_ENTRY(logfile, LOG_INFO, "err_set_role");
+				CalEvent ev(CAL_EVENT_CUTOVER, "fail_set_role", CAL::TRANS_OK);
+				ev.Completed();
+				if (m_set_role_retry >= 60) {
+					CalEvent ev(CAL_EVENT_CUTOVER, "fail_set_role_recycle", CAL::TRANS_OK);
+					ev.Completed();
+					WRITE_LOG_ENTRY(logfile, LOG_WARNING, "recycle_on_set_role_error");
 					exit(0);
 				}
 			}
 		}
 	}
 	return;
+}
+
+// without API SESSION
+void OCCChild::log_oracle_err_helper(int status, const char * str, LogLevelEnum level /* = LOG_ALERT */)
+{
+        std::string ora_text;
+        const std::string *cal_trans_severity, *cal_error_type;
+
+        int ora_error = get_oracle_error(status, ora_text);
+        std::string ora_event_name;
+        char tmp[16];
+        sprintf(tmp, "ORA-%05d", ora_error);
+        ora_event_name = tmp;
+        std::ostringstream msg;
+        msg << "m_err=Oracle Error " << status << ": " << str << " [" << ora_text << "]";
+        WRITE_LOG_ENTRY(logfile, level, "%s", msg.str().c_str());
+
 }
