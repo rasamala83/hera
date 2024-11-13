@@ -80,6 +80,7 @@ const std::string CAL_EVENT_STDBY = "STDBY";
 const std::string CAL_EVENT_SCN = "SCN";
 const uint DEFAULT_STBY_SCN_FETCH_INTERVAL = 1;
 const int DEFAULT_RAC_SQL_INTERVAL = 10; // second
+const std::string MGMT_TBL_PREFIX = "HERA";
 
 static const uint MAX_ORACLE_LOBPREFETCH_SIZE = 4000;
 
@@ -502,7 +503,13 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		if (m_enable_cutover) {
 			if (tns_for_cutover) {
 				m_cutovercfg_tns = tns_for_cutover;
-				WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s", m_cutovercfg_tns.c_str());
+				std::string tbl_prefix = config->get_string("management_table_prefix", MGMT_TBL_PREFIX);
+				std::string cutovercfg_tbl =  tbl_prefix + "_cutover";
+				WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s, table name %s", m_cutovercfg_tns.c_str(), cutovercfg_tbl.c_str());
+
+				m_role_sql = "DECLARE cfg_wisb_roles "+ cutovercfg_tbl+ ".wisb_roles%type; wiri_roles "+ cutovercfg_tbl + ".wisb_roles%type; BEGIN select wisb_roles into cfg_wisb_roles from "+cutovercfg_tbl+ " where upper(occ_tns_alias) = upper('" + m_cutovercfg_tns + "') AND upper(occ_name) = upper('" + m_module_info + "'); select listagg(role,',') within group (order by role asc) into wiri_roles from session_roles; IF cfg_wisb_roles != wiri_roles THEN execute immediate 'set role '||cfg_wisb_roles; select listagg(role,',') within group ( order by role asc) into wiri_roles from session_roles; END IF; dbms_application_info.set_client_info(wiri_roles); END;";
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "role SQL: %s", m_role_sql.c_str());
+
 			} else {
 				m_enable_cutover = false;
 				WRITE_LOG_ENTRY(logfile, LOG_WARNING, "cutover_two_task_key not set, disable cutover");
@@ -5817,10 +5824,6 @@ int OCCChild::set_role_for_the_session (){
 		return -1;
 	}
 	
-	char set_role_SQL[1024] = {'\0'};
-	sprintf(set_role_SQL, 
-	"DECLARE cfg_wisb_roles pypl_occ_cutover.wisb_roles%%type; wiri_roles pypl_occ_cutover.wisb_roles%%type; BEGIN select wisb_roles into cfg_wisb_roles from pypl_occ_cutover where upper(occ_tns_alias) = upper('%s') AND upper(occ_name) = upper('%s') and upper(db_unique_name) = upper('%s'); select listagg(role,',') within group (order by role asc) into wiri_roles from session_roles; IF cfg_wisb_roles != wiri_roles THEN execute immediate 'set role '||cfg_wisb_roles; select listagg(role,',') within group ( order by role asc) into wiri_roles from session_roles; END IF; dbms_application_info.set_client_info(wiri_roles); END;", m_cutovercfg_tns.c_str(), m_module_info.c_str(), m_db_uname.c_str());
-
 	CalTransaction cal_trans("CUTOVER");
 	cal_trans.SetName("role_op");
 	OCIStmt *stmthp = NULL;
@@ -5829,7 +5832,7 @@ int OCCChild::set_role_for_the_session (){
 		return -1;
 	}
 
-	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(set_role_SQL), strlen(set_role_SQL), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(m_role_sql.c_str()), m_role_sql.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS) {
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
 		cal_trans.Completed(CAL::TRANS_OK);
