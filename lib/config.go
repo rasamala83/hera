@@ -378,6 +378,16 @@ func InitConfig() error {
 	}
 	gAppConfig.CutoverCfgReloadInterval = cdb.GetOrDefaultInt("cutover_cfg_reload_interval", 2)
 
+	if gAppConfig.EnableCutover {
+		err = cutoverSetup()
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "cutover config init error")
+			}
+			return err
+		}
+	}
+
 	var numWorkers int
 	numWorkers = 6
 	//err = config.InitOpsConfigWithName("../opscfg/hera.txt")
@@ -687,37 +697,12 @@ func GetNumWWorkers(shard int) int {
 	return num
 }
 
-/*func CutoverPhaseResize(min bool, shid ShardByTwoTask) {
-	cfg := config.GetOpsConfig()
-	numWorkers, err := cfg.GetInt(ConfigMaxWorkers)
-	if min {
-		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "Error reading max_connections when running minimal cutover size", err.Error())
-			}
-		} else {
-			if int(shid) < int(MaxDbInCutover) {
-				//gAppConfig.numWorkersCh <- numWorkers
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, "running minimal max_connections")
-				}
-				gAppConfig.numWorkersCh <- int(shid)
-			} else {
-				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, "error running minimal max_connections", shid)
-				}
-			}
-		}
-	} else {
-		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "Error reading max_connections when running normal cutover size", err.Error())
-			}
-		} else {
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "Changing max_connections from", gOpsConfig.numWorkers, "to", numWorkers)
-			}
-			gAppConfig.numWorkersCh <- numWorkers
+func cutoverSetup() error {
+	loadEnvErr := setPermTwoTaskName()
+	if loadEnvErr == nil {
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "mux starts up - cutover env ready")
 		}
 	}
-}*/
+	return loadEnvErr
+}

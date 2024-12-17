@@ -97,7 +97,7 @@ type WorkerClient struct {
 	workerOOBConn net.Conn         // the connection over which it sends out-of-band messages
 	pid           int              // worker pid, needed to check terminated worker before recycling a new one
 	instID        int              // currently 0 or 1
-	shardID       int              // also reused in cutover
+	shardID       int              // used in both sharding and cutover
 	racID         int              // for RAC maintenance, the rac ID where the worker connected
 	dbUname       string           // the database name where the worker connected
 	roleCheck     int

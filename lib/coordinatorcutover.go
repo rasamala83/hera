@@ -341,7 +341,7 @@ func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
 	}
 	logger.GetLogger().Log(logger.Debug, crd.id, "ActiveDb source tns", srcShId)
 	// reset the internal
-	crd.internalShId = ShIdUnset
+	crd.intSessionShId = ShIdUnset
 	return srcShId
 }
 
@@ -392,7 +392,7 @@ func (crd *Coordinator) getActiveShId() (ShardByTwoTask, error) {
 // only for internal write queries. When read cfg always use tns alias shard, write uses tns alias shard and cutover shard
 func (crd *Coordinator) processSetInternalShID(val []byte) error {
 	if !GetConfig().EnableCutover { // no need to pass
-		crd.internalShId = ShIdUnset
+		crd.intSessionShId = ShIdUnset
 		return nil
 	}
 	if !crd.isInternal { // not allow external connections
@@ -411,14 +411,13 @@ func (crd *Coordinator) processSetInternalShID(val []byte) error {
 		return ErrBadShardID
 	}
 
-	crd.internalShId = ShardByTwoTask(sh)
+	crd.intSessionShId = ShardByTwoTask(sh)
 	if crd.inTransaction && (crd.worker != nil) {
-		// crd.worker.shardID is used by cutover feature so we check if we need switch.
-		// this is unlikely since internal sql don't use persistent connection.
+		// crd.worker.shardID is always used so check if we need switch. (unlikely if we don't reuse connection)
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, crd.id, "processSetInternalShID crd.shId4Internal", crd.internalShId, "crd.worker.shardID", crd.worker.shardID)
+			logger.GetLogger().Log(logger.Debug, crd.id, "processSetInternalShID", crd.intSessionShId, "crd.worker.shardID", crd.worker.shardID)
 		}
-		if int(crd.internalShId) != crd.worker.shardID {
+		if int(crd.intSessionShId) != crd.worker.shardID {
 			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
 			evt.AddDataInt("cur_shard_id", int64(crd.worker.shardID))
 			evt.AddDataStr("requested_shard_id", string(val))

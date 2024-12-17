@@ -95,27 +95,6 @@ func Run() {
 	//
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
-	// enable_cutover is the cdb switch
-	// Later the query to pypl_occ_cutover requires two_task and two_task_cutover key names so quit starting up if any is missing
-	// e.g. TWO_TASK=HERA, TWO_TASK_CUTOVER=HERA_CUTOVER
-	if GetConfig().EnableCutover {
-		loadEnvErr := setPermTwoTaskName()
-		if loadEnvErr != nil {
-			evt := cal.NewCalEvent(EvtTypeCutover, "env_error", cal.TransOK, loadEnvErr.Error())
-			evt.Completed()
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, loadEnvErr.Error())
-			}
-			FullShutdown()
-		} else {
-			evt := cal.NewCalEvent(EvtTypeCutover, "env_ready", cal.TransOK, "")
-			evt.Completed()
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "mux starts up - cutover env ready")
-			}
-		}
-	}
-
 	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
@@ -162,6 +141,25 @@ func Run() {
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
+
+	// some features with rw split instance, it must have at least a read worker available
+	if (GetConfig().EnableCutover || GetConfig().EnableSharding) && GetConfig().ReadonlyPct > 0 { 
+		pool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, 0)
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RO, 0, 0:", err)
+			}
+			FullShutdown()
+		}
+
+		for {
+			if pool.GetHealthyWorkersCount() > 0 {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+	}
+
 
 	var lsn Listener
 	if GetConfig().KeyFile != "" {

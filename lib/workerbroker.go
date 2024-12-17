@@ -105,7 +105,7 @@ func GetWorkerBrokerInstance() *WorkerBroker {
 func (broker *WorkerBroker) init() error {
 	broker.stopped = make(chan struct{})
 	broker.maxShardSize = GetConfig().NumOfShards
-	if broker.maxShardSize == 0 {
+	if (broker.maxShardSize == 0) || !(GetConfig().EnableSharding) {
 		broker.maxShardSize = 1
 	}
 

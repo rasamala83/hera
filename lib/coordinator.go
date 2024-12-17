@@ -63,8 +63,8 @@ type Coordinator struct {
 	prevShard *shardInfo
 
 	//for cutover support so the coordinator knows where to dispatch.
-	curActDb     *ActiveDbInfo  // maybe we don't need this, just use the CutoverInfo (atomic) directly
-	internalShId ShardByTwoTask // internal requests only, the shard set for the session
+	curActDb     *ActiveDbInfo 
+	intSessionShId ShardByTwoTask // internal sql only, the shard set for the session
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
 	worker        *WorkerClient // if it is in transaction/in cursor, the worker attached
@@ -80,7 +80,7 @@ type Coordinator struct {
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
 func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstring, conn net.Conn) *Coordinator {
-	coordinator := &Coordinator{clientchannel: clientchannel, conn: conn, ctx: ctx, done: make(chan int, 1), id: conn.RemoteAddr().String(), shard: &shardInfo{sessionShardID: -1}, prevShard: &shardInfo{sessionShardID: -1}, internalShId: ShIdUnset}
+	coordinator := &Coordinator{clientchannel: clientchannel, conn: conn, ctx: ctx, done: make(chan int, 1), id: conn.RemoteAddr().String(), shard: &shardInfo{sessionShardID: -1}, prevShard: &shardInfo{sessionShardID: -1}, intSessionShId: ShIdUnset}
 	var err error
 	coordinator.sqlParser, err = common.NewRegexSQLParser()
 	if err != nil {
@@ -818,18 +818,18 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					var srcShId ShardByTwoTask
 					if crd.curActDb == nil {
 						// should only happen during server init
-						if crd.internalShId >= MaxDbInCutover {
+						if crd.intSessionShId >= MaxDbInCutover {
 							logger.GetLogger().Log(logger.Info, crd.id, "internal sql currernt active db info nil and invalid shard")
 							return errors.New("current active db info nil and invalid shard atdispatchrequest")
 						}
-						srcShId = crd.internalShId
+						srcShId = crd.intSessionShId
 					} else {
 						srcShId = crd.curActDb.SrcShId
-						if crd.internalShId < MaxDbInCutover {
+						if crd.intSessionShId < MaxDbInCutover {
 							if logger.GetLogger().V(logger.Debug) {
-								logger.GetLogger().Log(logger.Debug, crd.id, "RW split on, internal query use shId4Internal", crd.internalShId, "crd.curActDb.SrcShId=", srcShId)
+								logger.GetLogger().Log(logger.Debug, crd.id, "RW split on, internal query use shId4Internal", crd.intSessionShId, "crd.curActDb.SrcShId=", srcShId)
 							}
-							srcShId = crd.internalShId
+							srcShId = crd.intSessionShId
 						}
 						if srcShId >= MaxDbInCutover {
 							if logger.GetLogger().V(logger.Warning) {
@@ -888,20 +888,20 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					var srcShId ShardByTwoTask
 					if crd.curActDb == nil {
 						// should only happen during server init
-						if crd.internalShId >= MaxDbInCutover {
+						if crd.intSessionShId >= MaxDbInCutover {
 							if logger.GetLogger().V(logger.Info) {
 								logger.GetLogger().Log(logger.Info, crd.id, "internal sql curActDb is nil and also invalid shard id")
 							}
 							return errors.New("current active db info nil at dispatchrequest RW split off.")
 						}
-						srcShId = crd.internalShId
+						srcShId = crd.intSessionShId
 					} else {
 						srcShId = crd.curActDb.SrcShId
-						if crd.internalShId < MaxDbInCutover { // override config
+						if crd.intSessionShId < MaxDbInCutover { // override config
 							if logger.GetLogger().V(logger.Debug) {
-								logger.GetLogger().Log(logger.Debug, crd.id, "RW split off, internal query use shId4Internal", crd.internalShId, "crd.curActDb.SrcShId=", srcShId)
+								logger.GetLogger().Log(logger.Debug, crd.id, "RW split off, internal query use shId4Internal", crd.intSessionShId, "crd.curActDb.SrcShId=", srcShId)
 							}
-							srcShId = crd.internalShId
+							srcShId = crd.intSessionShId
 						}
 						if srcShId >= MaxDbInCutover {
 							if logger.GetLogger().V(logger.Warning) {
@@ -1030,8 +1030,8 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 					return errors.New("crd has worker with but crd.curActDb is nil!")
 				}
 				srcShId := crd.curActDb.SrcShId
-				if crd.internalShId < MaxDbInCutover {
-					srcShId = crd.internalShId
+				if crd.intSessionShId < MaxDbInCutover {
+					srcShId = crd.intSessionShId
 				}
 				if srcShId >= MaxDbInCutover {
 					return errors.New("crd has worker with undefined source shard id")
