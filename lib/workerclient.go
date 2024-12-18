@@ -1160,9 +1160,6 @@ func (worker *WorkerClient) isProcessRunning() bool {
 	}
 	err = process.Signal(syscall.Signal(0))
 	if err != nil {
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg", ns.Cmd, ns.Payload)
-		}
 		return false
 	}
 	return true
