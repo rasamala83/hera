@@ -333,13 +333,16 @@ func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
 		// we don't know yet
 		return ShIdUnset
 	}
-
-	logger.GetLogger().Log(logger.Debug, crd.id, "get ActiveDb source tns", crd.curActDb.SrcTns)
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, crd.id, "get ActiveDb source tns", crd.curActDb.SrcTns)
+	}
 	srcShId := ShIdTns
 	if crd.curActDb.SrcTns == GetTnsCutoverName() {
 		srcShId = ShIdTnsCutover
 	}
-	logger.GetLogger().Log(logger.Debug, crd.id, "ActiveDb source tns", srcShId)
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, crd.id, "ActiveDb source tns", srcShId)
+	}
 	// reset the internal
 	crd.intSessionShId = ShIdUnset
 	return srcShId
@@ -377,8 +380,8 @@ func (crd *Coordinator) getActiveShId() (ShardByTwoTask, error) {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, crd.id, "enable/flexupi phase, crd dispatch to ", int(shardToUse), "workers")
 		}
-		if shardToUse >= MaxDbInCutover {
-			// we can't default sql routing by unknown source
+		if !isValidShToCutover(shardToUse) {
+			// we can't default sql routing by unknown actual config
 			shardToUse = ShIdUnset
 			return shardToUse, ErrSrcUnknown
 		}
@@ -426,4 +429,8 @@ func (crd *Coordinator) processSetInternalShID(val []byte) error {
 		}
 	}
 	return nil
+}
+
+func isValidShToCutover(sh ShardByTwoTask) bool {
+	return (sh == 0 || sh == 1)
 }
