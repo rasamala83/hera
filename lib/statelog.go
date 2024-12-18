@@ -546,9 +546,6 @@ func (sl *StateLog) init() error {
 		sl.maxShardSize = 1
 		if GetConfig().EnableCutover {
 			sl.maxShardSize = int(MaxDbInCutover)
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Verbose, "init statelog maxShardSize", sl.maxShardSize)
-			}
 		}
 	}
 

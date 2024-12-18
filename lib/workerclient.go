@@ -677,15 +677,13 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 					}
 
 					if worker.ConnTwoTask == tgtShId {
-						logger.GetLogger().Log(logger.Alert, "tns_role_tgt_dbuname mismatch in flexup/cutover phase [", cfgDbun, "][", worker.dbUname, "]")
 						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
 						et := cal.NewCalEvent(EvtTypeCutover, "new_wkr_tgt_dbun_mismatch", cal.TransOK, msg)
 						et.Completed()
-						errmsg := fmt.Sprintf("new workerclient integrity check failed at flexup/cutover. Expect dbname [%s], %s, %d, %d", cfgDbun, worker.dbUname, worker.Type, worker.ConnTwoTask)
+						errmsg := fmt.Sprintf("new workerclient conn integrity failed at flexup/cutover. Expect [%s], got [%s], %d, %d", cfgDbun, worker.dbUname, worker.Type, worker.ConnTwoTask)
 						return errors.New(errmsg)
 					} else {
 						// only warning
-						logger.GetLogger().Log(logger.Alert, "tns_role_src dbuname mismatch in flexup/cutover phase [", cfgDbun, "][", worker.dbUname, "]")
 						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
 						et := cal.NewCalEvent(EvtTypeCutover, "warn_new_wkr_src_dbun_mismatch", cal.TransOK, msg)
 						et.Completed()
@@ -1162,6 +1160,9 @@ func (worker *WorkerClient) isProcessRunning() bool {
 	}
 	err = process.Signal(syscall.Signal(0))
 	if err != nil {
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg", ns.Cmd, ns.Payload)
+		}
 		return false
 	}
 	return true
@@ -1170,6 +1171,8 @@ func (worker *WorkerClient) isProcessRunning() bool {
 func (worker *WorkerClient) sendUserRoleMsg(_enable uint) {
 	buff := []byte{byte(_enable)}
 	ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
-	logger.GetLogger().Log(logger.Alert, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg", ns.Cmd, ns.Payload)
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg", ns.Cmd, ns.Payload)
+	}
 	worker.workerOOBConn.Write(ns.Serialized)
 }
