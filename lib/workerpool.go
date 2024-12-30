@@ -236,7 +236,12 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 	pool.workers[worker.ID] = worker
 
 	if GetConfig().EnableCutover {
-		worker.sendUserRoleMsg(pool.checkSetUserRole)
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "pool::WorkerReday", pool.Type, pool.InstID, " pool userRole=", pool.checkSetUserRole, "worker rolecheck=", worker.roleCheck)
+		}
+		if pool.checkSetUserRole != uint(worker.roleCheck) {
+			worker.sendUserRoleMsg(pool.checkSetUserRole)
+		}
 	}
 
 	// Adding size check given the pool size change can happen during init too (rapid cutover)
