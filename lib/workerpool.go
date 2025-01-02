@@ -237,7 +237,7 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 
 	if GetConfig().EnableCutover {
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "pool::WorkerReday", pool.Type, pool.InstID, " pool userRole=", pool.checkSetUserRole, "worker rolecheck=", worker.roleCheck)
+			logger.GetLogger().Log(logger.Debug, "pool::WorkerReady", pool.Type, pool.InstID, " pool userRole=", pool.checkSetUserRole, "worker rolecheck=", worker.roleCheck)
 		}
 		if pool.checkSetUserRole != uint(worker.roleCheck) {
 			worker.sendUserRoleMsg(pool.checkSetUserRole)

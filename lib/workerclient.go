@@ -100,7 +100,7 @@ type WorkerClient struct {
 	shardID       int              // used in both sharding and cutover
 	racID         int              // for RAC maintenance, the rac ID where the worker connected
 	dbUname       string           // the database name where the worker connected
-	roleCheck     int
+	roleCheck     uint
 	// when coordinator uses this worker via GetWorker(), we will reset this.
 	crdIsRead bool
 
@@ -622,18 +622,14 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 							return fmt.Errorf("cutover enabled but attachToWorker can't get workerpool")
 						}
 
-						if pool.checkSetUserRole != uint(flag) {
-							var wpflag uint
-							if pool.phase == CutoverPhStr {
-								wpflag = pool.checkSetUserRole
-							} else {
-								wpflag = 0 // disable
-							}
+						wpflag := pool.checkSetUserRole
+						if wpflag != uint(flag) {
 							evt := cal.NewCalEvent(EvtTypeCutover, "update_wkr_role_flag", cal.TransOK, strconv.Itoa(int(wpflag)))
 							evt.Completed()
 							buff := []byte{byte(wpflag)}
 							ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
 							worker.workerOOBConn.Write(ns.Serialized)
+							worker.roleCheck = wpflag
 						}
 					}
 				}
@@ -1172,4 +1168,5 @@ func (worker *WorkerClient) sendUserRoleMsg(_enable uint) {
 		logger.GetLogger().Log(logger.Info, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg", ns.Cmd, ns.Payload)
 	}
 	worker.workerOOBConn.Write(ns.Serialized)
+	worker.roleCheck = _enable
 }

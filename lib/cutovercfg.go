@@ -1004,6 +1004,7 @@ func setPermTwoTaskName() error {
 	return nil
 }
 
+
 func setCheckUserRoleFlag(nextcfg *CutoverCfg) {
 	if nextcfg == nil {
 		if logger.GetLogger().V(logger.Alert) {
@@ -1014,7 +1015,6 @@ func setCheckUserRoleFlag(nextcfg *CutoverCfg) {
 
 	var execSetUserRole uint = 0 // 0 disable, >0 enable
 	if nextcfg.Phase == CutoverPhStr {
-		// init and next phase is not cutover.
 		execSetUserRole = 1
 	}
 	maxtype := int(wtypeRW)

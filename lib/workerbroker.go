@@ -341,7 +341,7 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 		for {
 			select {
 			case flex := <-cfgWorkerChange:
-				logger.GetLogger().Log(logger.Verbose, "worker size change, flexdown notice:", flex)
+				logger.GetLogger().Log(logger.Verbose, "worker size change channel notice:", flex)
 				broker.changeMaxWorkers(flex)
 			//
 			// Block until a signal is received.
