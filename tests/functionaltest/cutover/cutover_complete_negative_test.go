@@ -48,6 +48,7 @@ func moveToCutOverPhaseIII(t *testing.T) (chan map[int64]util.ClientTrafficStats
 	startClientTraffic := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
 	util.MoveCutOverPhase(t, util.FlexUp, true, true)
+	startClientTraffic += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
