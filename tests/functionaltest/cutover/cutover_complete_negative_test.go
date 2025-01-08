@@ -179,6 +179,7 @@ func TestCutOverCompleteInvalidNoOfRow(t *testing.T) {
 	completePhase := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Complete Phase: ", completePhase)
 	util.MoveCutOverPhase(t, util.CutOverCompletePhaseInvalidRowCount, true, true)
+	completePhase += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
