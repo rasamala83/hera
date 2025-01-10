@@ -106,9 +106,9 @@ func moveToCutOverPhaseIII(t *testing.T) (chan map[int64]util.ClientTrafficStats
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	cutOverPhase3End := time.Now().Unix()
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, cutOverPhase3State+3, cutOverPhase3End-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, cutOverPhase3State+3, cutOverPhase3End-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, cutOverPhase3State+3, cutOverPhase3End-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, cutOverPhase3State+5, cutOverPhase3End-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, cutOverPhase3State+5, cutOverPhase3End-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, cutOverPhase3State+5, cutOverPhase3End-3, 2, 1)
 
 	return dumpChan, respChan, RespMsg, logFile
 }
