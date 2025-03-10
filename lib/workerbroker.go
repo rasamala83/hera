@@ -24,8 +24,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/paypal/hera/config" // Need this ?
-	"github.com/paypal/hera/utility" // Need this ?
+	"github.com/paypal/hera/config"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -477,7 +476,6 @@ func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, sha
 	}
 }
 
-<<<<<<< HEAD
 /*
 changeMaxWorkers is called when the dynamic config changed, it calls resizePool() for all the pools
  1 -> minimize tns_cutover pool size

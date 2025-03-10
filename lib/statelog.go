@@ -593,7 +593,7 @@ func (sl *StateLog) init() error {
 	if GetWorkerBrokerInstance() == nil {
 		return errors.New("broker not initialized")
 	}
-	sl.workerPoolCfg = GetWorkerBrokerInstance().GetWorkerPoolCfgs()
+	workerpoolcfg := GetWorkerBrokerInstance().GetWorkerPoolCfgs()
 
 	//
 	// allocate array for each shard
