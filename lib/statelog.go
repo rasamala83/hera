@@ -187,9 +187,21 @@ func GetStateLog() *StateLog {
 
 // PublishStateEvent sends the event to the channel, so it will be processed by the state log routine
 func (sl *StateLog) PublishStateEvent(_evt StateEvent) error {
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "publish state event", _evt.eType)
-	}
+	//	if logger.GetLogger().V(logger.Verbose) {
+	//		logger.GetLogger().Log(logger.Verbose, "publish state event", _evt.eType)
+	//	}
+
+	/*       eType     StateEventType
+	shardID   int
+	wType     HeraWorkerType
+	instID    int
+	workerID  int
+	newWState HeraWorkerStatus
+	oldCState ConnState
+	newCState ConnState
+	newWSize  int
+	*/
+
 	// missing event could cause unbalanced statelog output.
 	sl.mEventChann <- _evt
 	return nil
@@ -212,8 +224,58 @@ func (sl *StateLog) GetStartTime() int64 {
 	return sl.mServerStartTime
 }
 
+// Support cutover enabled activeworker check.
+func (sl *StateLog) HasActiveWorkerForCutover() bool {
+	//When cutover is enabled, internally we have two shards but we only check the active shard.
+	activeSh := 0
+	cocfg := GetCutoverCfg()
+	if cocfg.Phase == "" {
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "active worker check but empty cutover cfg")
+		}
+		return false
+	}
+
+	if cocfg.Phase == EnablePhStr || cocfg.Phase == FlexupPhStr {
+		//activeSh = 0
+		if cocfg.TnsByRole[Source] == GetTnsName() {
+			activeSh = int(ShIdTns)
+		} else if cocfg.TnsByRole[Source] == GetTnsCutoverName() {
+			activeSh = int(ShIdTnsCutover)
+		} else {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "Enable/flexup, no valid active src shard")
+			}
+			// shouldn't get here.
+			return false
+		}
+	} else if cocfg.Phase == CutoverPhStr {
+		activeSh = int(ShIdTns)
+		if cocfg.ActiveShardId == ShIdTnsCutover {
+			activeSh = int(ShIdTnsCutover)
+		}
+		if cocfg.ActiveShardId == ShIdUnset {
+			return false
+		}
+	}
+	rwpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, activeSh)
+	if err == nil {
+		return rwpool.GetHealthyWorkersCount() > 0
+	}
+
+	roPool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, activeSh)
+	if err == nil {
+		return roPool.GetHealthyWorkersCount() > 0
+	}
+	return true
+}
+
 // HasActiveWorker is a best effort, without thread locking, telling if at least a worker is active
 func (sl *StateLog) HasActiveWorker() bool {
+	if GetConfig().EnableCutover {
+		return sl.HasActiveWorkerForCutover()
+	}
+
 	shdCnt := sl.maxShardSize
 	if GetConfig().EnableWhitelistTest {
 		shdCnt = 1
@@ -325,8 +387,57 @@ func (sl *StateLog) GetWorkerCountForPool(workerState HeraWorkerStatus, shardID 
 	return cnt
 }
 
+// helper for cutover enabled version
+func (sl *StateLog) ProxyHasCapacityForCutover(_wlimit int, _rlimit int) (bool, int) {
+	activeSh := 0
+	cocfg := GetCutoverCfg()
+	if cocfg.Phase == "" {
+		return false, 0
+	}
+
+	if cocfg.Phase == EnablePhStr || cocfg.Phase == FlexupPhStr {
+		if cocfg.TnsByRole[Source] == GetTnsName() {
+			activeSh = int(ShIdTns)
+		} else if cocfg.TnsByRole[Source] == GetTnsCutoverName() {
+			activeSh = int(ShIdTnsCutover)
+		} else {
+			return false, 128
+		}
+	} else if cocfg.Phase == CutoverPhStr {
+		activeSh = int(ShIdTns)
+		if cocfg.ActiveShardId == ShIdTnsCutover {
+			activeSh = int(ShIdTnsCutover)
+		}
+		if cocfg.ActiveShardId == ShIdUnset {
+			return false, 128
+		}
+	} else {
+		// can't be here
+		return false, 0
+	}
+	var wbacklog = 0
+	var rbacklog = 0
+	var readerCnt = 0
+	instCnt := len(sl.mWorkerStates[activeSh][wtypeRW])
+	for n := 0; n < instCnt; n++ {
+		wbacklog += sl.mConnStates[activeSh][wtypeRW][n].perStateCnt[Backlog]
+	}
+
+	//logger.GetLogger().Log(logger.Verbose, "proxyhascap wba ", wbacklog, _wlimit)
+	instCnt = len(sl.mWorkerStates[activeSh][wtypeRO])
+	for n := 0; n < instCnt; n++ {
+		readerCnt += len(sl.mWorkerStates[activeSh][wtypeRO][n])
+		rbacklog += sl.mConnStates[activeSh][wtypeRO][n].perStateCnt[Backlog]
+	}
+	return (wbacklog <= _wlimit) && ((rbacklog <= _rlimit) || (readerCnt == 0)), wbacklog + rbacklog
+}
+
 // ProxyHasCapacity checks if there is enough capacity
 func (sl *StateLog) ProxyHasCapacity(_wlimit int, _rlimit int) (bool, int) {
+	if GetConfig().EnableCutover {
+		return sl.ProxyHasCapacityForCutover(_wlimit, _rlimit)
+	}
+
 	shdCnt := sl.maxShardSize
 	if GetConfig().EnableWhitelistTest {
 		shdCnt = 1
@@ -444,7 +555,11 @@ func (sl *StateLog) init() error {
 	sl.maxShardSize = GetConfig().NumOfShards
 	if sl.maxShardSize == 0 || !(GetConfig().EnableSharding) {
 		sl.maxShardSize = 1
+		if GetConfig().EnableCutover {
+			sl.maxShardSize = int(MaxDbInCutover)
+		}
 	}
+
 	sl.maxStndbySize = GetConfig().NumStdbyDbs
 	if sl.maxStndbySize > 10 {
 		sl.maxStndbySize = 10
@@ -547,6 +662,9 @@ func (sl *StateLog) init() error {
 	}
 	sl.mStateHeader = buf.String()
 
+	// cutover
+	// workertype title will need to replace sh with cutover
+	//
 	for idx, val := range typeTitlePrefix {
 		typeTitlePrefix[idx] = GetConfig().StateLogPrefix + val
 	}
@@ -555,15 +673,22 @@ func (sl *StateLog) init() error {
 	}
 	for s := 0; s < sl.maxShardSize; s++ {
 		for t := wtypeRW; t < wtypeTotalCount; t++ {
-			var suffix = ".sh" + strconv.Itoa(s)
-			instCnt := sl.workerPoolCfg[s][HeraWorkerType(t)].instCnt
+			var suffix string
+			if GetConfig().EnableCutover {
+				if s == int(ShIdTnsCutover) {
+					suffix = ".live1"
+				}
+			} else {
+				suffix = ".sh" + strconv.Itoa(s)
+			}
+			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
 
 			for i := 0; i < instCnt; i++ {
 				sl.mTypeTitles[s][t][i] = typeTitlePrefix[t]
 				if instCnt > 1 {
 					sl.mTypeTitles[s][t][i] += strconv.Itoa(i + 1)
 				}
-				if shardEnabled {
+				if shardEnabled || GetConfig().EnableCutover {
 					sl.mTypeTitles[s][t][i] += suffix
 				}
 				sl.workerDimensionTitle[sl.mTypeTitles[s][t][i]] = strings.Replace(sl.mTypeTitles[s][t][i], GetConfig().StateLogPrefix, otelconfig.OTelConfigData.PoolName, 1)
@@ -638,7 +763,7 @@ func (sl *StateLog) init() error {
 
 /**
  * client should not call these "private" none-threadsafe functions directly.
- * use PublishStateEvent instead.
+ * use eublishStateEvent instead.
  *
  * @TODO test
  *

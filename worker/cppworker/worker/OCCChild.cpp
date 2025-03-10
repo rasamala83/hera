@@ -70,6 +70,7 @@ const std::string CAL_DATA_SQL_TEXT = "SQL_Text";
 const std::string CAL_EVENT_TRANS_START = "TRANSSTART";
 const std::string CAL_STATUS_SUCCESS_WITH_INFO = "Success With Info";
 const std::string CAL_EVENT_ORACLE = "Oracle";
+const std::string CAL_EVENT_CUTOVER = "CUTOVER";
 const int MAX_VSESSION_BIND_DATA = 63;
 const uint DEFAULT_WINDOW = 240;
 const std::string CAL_EVENT_DATETIME = "Datetime";
@@ -79,6 +80,7 @@ const std::string CAL_EVENT_STDBY = "STDBY";
 const std::string CAL_EVENT_SCN = "SCN";
 const uint DEFAULT_STBY_SCN_FETCH_INTERVAL = 1;
 const int DEFAULT_RAC_SQL_INTERVAL = 10; // second
+const std::string MGMT_TBL_PREFIX = "HERA";
 
 static const uint MAX_ORACLE_LOBPREFETCH_SIZE = 4000;
 
@@ -246,7 +248,11 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	m_sql_rewritten(false),
 	m_enable_sql_rewrite(false),
 	bits_to_match(1),
-	bit_mask(0)
+	bit_mask(0),
+	m_enable_cutover(false),
+	m_set_role_retry(0),
+	m_last_user_role_check(0),
+	cutover_role_alarm_set(false)
 {
 
 	std::string cval;
@@ -277,7 +283,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		constructor_success = 0; // ensure flag it
 		return;
 	}
-	
+
 	// initialize markdown system
 	if (tns_name)
 		host_name = tns_name;
@@ -459,6 +465,8 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	MAX_ARRAY_DATA_SIZE = config->get_ulong("max_batch_col_size", MAX_ARRAY_DATA_SIZE);
 
 	m_enable_sharding = config->get_bool("enable_sharding", false);
+	const char* tns_for_cutover = getenv("cutover_two_task_key");
+	WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s", tns_for_cutover); 
 	if (m_enable_sharding) {
 		m_max_scuttle_buckets = config->get_int("max_scuttle", ABS_MAX_SCUTTLE_BUCKETS);
 		m_scuttle_attr_name = config->get_string("scuttle_col_name", DEFAULT_SCUTTLE_ATTR_NAME);
@@ -490,6 +498,25 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		
 		m_shardcfg_postfix.clear();
 		m_shardcfg_postfix = config->get_string("sharding_postfix", "");
+	} else {
+		m_enable_cutover = config->get_bool("enable_cutover", false);
+		if (m_enable_cutover) {
+			if (tns_for_cutover) {
+				m_cutovercfg_tns = tns_for_cutover;
+				std::string tbl_prefix = config->get_string("management_table_prefix", MGMT_TBL_PREFIX);
+				std::string cutovercfg_tbl =  tbl_prefix + "_cutover";
+				WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s, table name %s", m_cutovercfg_tns.c_str(), cutovercfg_tbl.c_str());
+
+				m_role_sql = "DECLARE cfg_wisb_roles "+ cutovercfg_tbl+ ".wisb_roles%type; wiri_roles "+ cutovercfg_tbl + ".wisb_roles%type; BEGIN select wisb_roles into cfg_wisb_roles from "+cutovercfg_tbl+ " where upper(occ_tns_alias) = upper('" + m_cutovercfg_tns + "') AND upper(occ_name) = upper('" + m_module_info + "'); select listagg(role,',') within group (order by role asc) into wiri_roles from session_roles; IF cfg_wisb_roles != wiri_roles THEN execute immediate 'set role '||cfg_wisb_roles; select listagg(role,',') within group ( order by role asc) into wiri_roles from session_roles; END IF; dbms_application_info.set_client_info(wiri_roles); END;";
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "role SQL: %s", m_role_sql.c_str());
+
+			} else {
+				m_enable_cutover = false;
+				WRITE_LOG_ENTRY(logfile, LOG_WARNING, "cutover_two_task_key not set, disable cutover");
+				CalEvent ev(CAL_EVENT_CUTOVER, "wkr_cutover_tns_unset", CAL::TRANS_OK, "disable cutover in worker");
+				ev.Completed();
+			}
+		}
 	}
 	client_session.set_status(CAL::TRANS_OK); // internal queries' error overwrite status so reset it.
 	client_session.end_session(); // end the CalClientSession
@@ -555,6 +582,8 @@ void OCCChild::on_idle(void)
 {
 	// expire old statements from the cache (if enough time has passed)
 	cache_expire(false);
+
+	cutover_support();
 
 	// check that we're still connected to oracle (if enough time has passed)
 	oracle_heartbeat();
@@ -1040,9 +1069,11 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			if (m_scuttle_id.empty())
 				StringUtil::fmt_int(m_scuttle_id, -1);
 			
-			OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_scuttle_id.c_str()), 
+			if (!m_enable_cutover) { // OCI_ATTR_CLIENT_INFO is used for user role in cutover	
+				OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_scuttle_id.c_str()), 
 						   m_scuttle_id.length(), OCI_ATTR_CLIENT_INFO, errhp);
-
+			}
+			
 			execute(rc);
 			if (cur_stmt)
 			{
@@ -1418,6 +1449,12 @@ void OCCChild::sigfunc(int _sig)
 		// and then exit.
 		WRITE_LOG_ENTRY(logfile, LOG_WARNING, "caught alarm during OCIServerVersion heartbeat -- exiting");
 		m_client_session.end_db_txn();
+		exit(0);
+	}
+
+	if ((_sig == SIGALRM) && cutover_role_alarm_set)
+	{
+		WRITE_LOG_ENTRY(logfile, LOG_WARNING, "caught alarm during cutover role setting -- exiting");
 		exit(0);
 	}
 
@@ -5773,4 +5810,126 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover unknown", fo_event);
 	}
 	return 0;
+}
+
+
+int OCCChild::set_role_for_the_session (){
+	if (!m_enable_cutover) {
+		return 1;
+	}
+	std::string my_role;
+	// now handle role mismatch, set the role
+	if (m_cutovercfg_tns.empty()) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "set_role TWO_TASK is unset");
+		return -1;
+	}
+	
+	CalTransaction cal_trans("CUTOVER");
+	cal_trans.SetName("role_op");
+	OCIStmt *stmthp = NULL;
+	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+	if (rc != OCI_SUCCESS) {
+		return -1;
+	}
+
+	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(m_role_sql.c_str()), m_role_sql.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	if (rc != OCI_SUCCESS) {
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		cal_trans.Completed(CAL::TRANS_OK);
+		log_oracle_err_helper(rc, "set_role failed to prepare statement.", LOG_INFO);
+		return -1;
+	}
+
+	// execute the statement
+	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
+	if (rc != OCI_SUCCESS) {
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		cal_trans.Completed(CAL::TRANS_OK);
+		log_oracle_err_helper(rc, "set_role failed to set_role execute statement.", LOG_INFO);
+		return -1;
+	}
+
+	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
+		cal_trans.Completed(CAL::TRANS_OK);
+		log_oracle_err_helper(rc, "Failed to free set_role statement handle.");
+		return -1;
+	}
+
+	cal_trans.Completed(CAL::TRANS_OK);
+	return 1;
+}
+
+
+// HBSender calls this function to start/stop role setting during cutover
+// m_set_user_role is the flag indicating if we start/stop checking for user role correctness
+int OCCChild::enable_set_user_role(bool enable) {
+	m_set_user_role = enable;
+	if (m_set_user_role) {
+		CalEvent ev(CAL_EVENT_CUTOVER, "enable_role_update", CAL::TRANS_OK);
+		ev.Completed();
+		WRITE_LOG_ENTRY(logfile, LOG_INFO, "enable_set_user_role is set to True");
+	} else {
+		CalEvent ev(CAL_EVENT_CUTOVER, "disable_role_update", CAL::TRANS_OK);
+		ev.Completed();
+		WRITE_LOG_ENTRY(logfile, LOG_INFO, "enable_set_user_role is set to False");
+	}
+	
+	return 0;
+}
+
+// on_idle() invokes this function.
+void OCCChild::cutover_support() {
+	if (!m_enable_cutover) {
+		return;
+	}
+
+	if (m_set_user_role) {
+        	struct timeval tv_now, tv_expire;
+		gettimeofday(&tv_now, NULL);
+		if ((tv_now.tv_sec - m_last_user_role_check) >= 5) {
+			m_last_user_role_check = tv_now.tv_sec;
+			cutover_role_alarm_set = true;
+			int role_timeout = 1 + rand()%5;
+			alarm(role_timeout); // alarm to force a recycle
+			int rc = set_role_for_the_session(); // if failure, exit already
+			cutover_role_alarm_set = false;
+			alarm(0);
+			// allow retry to 3 times 
+			if (rc == 1) {
+				m_set_role_retry = 0;
+				CalEvent ev(CAL_EVENT_CUTOVER, "set_role_success", CAL::TRANS_OK);
+				ev.Completed();
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "successful set_role_for_the_session"); 
+			} else {
+				m_set_role_retry++;
+				WRITE_LOG_ENTRY(logfile, LOG_INFO, "err_set_role");
+				CalEvent ev(CAL_EVENT_CUTOVER, "fail_set_role", CAL::TRANS_OK);
+				ev.Completed();
+				if (m_set_role_retry >= 60) {
+					CalEvent ev(CAL_EVENT_CUTOVER, "fail_set_role_recycle", CAL::TRANS_OK);
+					ev.Completed();
+					WRITE_LOG_ENTRY(logfile, LOG_WARNING, "recycle_on_set_role_error");
+					exit(0);
+				}
+			}
+		}
+	}
+	return;
+}
+
+// without API SESSION
+void OCCChild::log_oracle_err_helper(int status, const char * str, LogLevelEnum level /* = LOG_ALERT */)
+{
+        std::string ora_text;
+        const std::string *cal_trans_severity, *cal_error_type;
+
+        int ora_error = get_oracle_error(status, ora_text);
+        std::string ora_event_name;
+        char tmp[16];
+        sprintf(tmp, "ORA-%05d", ora_error);
+        ora_event_name = tmp;
+        std::ostringstream msg;
+        msg << "m_err=Oracle Error " << status << ": " << str << " [" << ora_text << "]";
+        WRITE_LOG_ENTRY(logfile, level, "%s", msg.str().c_str());
+
 }

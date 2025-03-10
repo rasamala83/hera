@@ -131,14 +131,6 @@ func Run() {
 		GetStateLog().SetStartTime(time.Now())
 	}
 
-	go func() {
-		sleep := time.Duration(GetConfig().ConfigReloadTimeMs)
-		for {
-			time.Sleep(time.Millisecond * sleep)
-			CheckOpsConfigChange()
-		}
-	}()
-
 	//This logs the configured parameter with the feature name in the CAL log periodically based on ConfigLoggingReloadTimeHours.
 	LogOccConfigs()
 	configLoggingTicker := time.NewTicker(time.Duration(GetConfig().ConfigLoggingReloadTimeHours) * time.Hour)
@@ -171,6 +163,7 @@ func Run() {
 		}
 		FullShutdown()
 	}
+
 	for {
 		if pool.GetHealthyWorkersCount() > 0 {
 			break
@@ -184,6 +177,26 @@ func Run() {
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
+
+	// some features with rw split instance, it must have at least a read worker available
+	if (GetConfig().EnableCutover || GetConfig().EnableSharding) && GetConfig().ReadonlyPct > 0 { 
+		pool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, 0)
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RO, 0, 0:", err)
+			}
+			FullShutdown()
+		}
+
+		for {
+			if pool.GetHealthyWorkersCount() > 0 {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+	}
+
+
 	var lsn Listener
 	if GetConfig().KeyFile != "" {
 		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
@@ -195,11 +208,21 @@ func Run() {
 		err = InitShardingCfg()
 		if err != nil {
 			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to initialize sharding config:", err)
+				logger.GetLogger().Log(logger.Alert, "failed to initialize sharding config:", err.Error())
+			}
+			FullShutdown()
+		}
+	} else if GetConfig().EnableCutover {
+		time.Sleep(time.Second * 1)
+		err = InitCutoverCfg(*namePtr)
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err.Error())
 			}
 			FullShutdown()
 		}
 	}
+
 	InitRacMaint(*namePtr)
 
 	srv := NewServer(lsn, HandleConnection)
