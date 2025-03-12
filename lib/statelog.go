@@ -621,8 +621,8 @@ func (sl *StateLog) init() error {
 		// for each workertype, initialize two dimension array
 		//
 		for t := 0; t < int(wtypeTotalCount); t++ {
-			instCnt := sl.workerPoolCfg[s][HeraWorkerType(t)].instCnt
-			workerCnt := sl.workerPoolCfg[s][HeraWorkerType(t)].maxWorkerCnt
+			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
+			workerCnt := workerpoolcfg[s][HeraWorkerType(t)].maxWorkerCnt
 			totalWorkersCount += workerCnt
 			sl.mWorkerStates[s][HeraWorkerType(t)] = make([][]*WorkerStateInfo, instCnt)
 			sl.mConnStates[s][HeraWorkerType(t)] = make([]*ConnStateInfo, instCnt)
@@ -958,6 +958,7 @@ func (sl *StateLog) genReport() {
 				}
 
 				//Send statelog data to OTEL statsdata channel
+				workerpoolcfg := GetWorkerBrokerInstance().GetWorkerPoolCfgs()
 				if otelconfig.OTelConfigData.Enabled {
 					for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
 						buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))
@@ -968,7 +969,7 @@ func (sl *StateLog) genReport() {
 					workerStatesData.StateData["resp"] = respCnt - sl.mLastRspCnt[s][HeraWorkerType(t)][n]
 
 					//Total workers
-					workerStatesData.StateData["totalConnections"] = int64(sl.workerPoolCfg[s][HeraWorkerType(t)].maxWorkerCnt)
+					workerStatesData.StateData["totalConnections"] = int64(workerpoolcfg[s][HeraWorkerType(t)].maxWorkerCnt)
 					totalConectionData := otel_logger.GaugeMetricData{
 						WorkerStateInfo: &workerStateInfoData,
 						StateData:       workerStatesData.StateData["totalConnections"],
