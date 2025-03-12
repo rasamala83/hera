@@ -79,6 +79,7 @@ type Coordinator struct {
 	response string
 	writeToCache bool
 	isMultiReq bool
+	isMultiReqNs string
 }
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
@@ -327,8 +328,10 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 	var getErr error
 	var cache_ttl uint32
 	crd.isMultiReq = false
+	crd.isMultiReqNs = ""
 	if crd.worker != nil {
 		crd.isMultiReq = true
+		crd.isMultiReqNs = string(request.Serialized)
 	}
 	if GetConfig().EnableCaching && (crd.worker == nil) {
 		logger.GetLogger().Log(logger.Verbose, "Inside dispatch...Caching is enabled")
@@ -1278,6 +1281,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 							evt.AddDataStr("corrId", crd.extractedcorrId)
 							evt.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(crd.sqlhash)))
 							evt.AddDataStr("client", crd.poolName)
+							evt.AddDataStr("requestNs", crd.isMultiReqNs)
 							evt.Completed()
 						}
 					}
