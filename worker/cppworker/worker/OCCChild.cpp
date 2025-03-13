@@ -361,6 +361,11 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		constructor_success = 0;
 		return;
 	}
+     
+	//Give precedence to existing statement cache, if both "enable_cache" and "enable_oci_stmt_cache" are enabled.
+	if enable_cache && enable_oci_stmt_cache {
+		enable_oci_stmt_cache = false;
+	}
 
     //MAX OCI statement cache size parameter and it should be > 0
 	if(config->get_value("max_oci_stmt_cache_size", cval))
@@ -5845,5 +5850,4 @@ void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
 	//Assign the fetched SQL_ID to the std::string member variable
 	sql_id.assign(hex_sql_id.str());
 	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc: %d, sql_id_len: %d, sql_id is: %s", rc, sql_id.length(), sql_id.c_str());
-	free(sqlid);
 }
