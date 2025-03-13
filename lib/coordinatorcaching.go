@@ -67,7 +67,7 @@ func parseRequest(request *netstring.Netstring) (hasPrepare bool, hasExec bool, 
 }
 
 // getKey is a utility to construct the cache key based on a request
-func getKey(request *netstring.Netstring, corrId string, sqlHash int32) ([]byte, string, error) {
+func getKey(request *netstring.Netstring, corrId string, sqlHash int32, cacheByCorrId bool) ([]byte, string, error) {
 	dice := rand.Intn(GetConfig().numCalThreads)
 	calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
 	// Check if the request is valid for caching
@@ -81,7 +81,7 @@ func getKey(request *netstring.Netstring, corrId string, sqlHash int32) ([]byte,
 	}
 	if hasPrepare && hasExec && hasFetch {
 		var key string
-		if GetConfig().CacheByCorrId {
+		if cacheByCorrId {
 			// Return err if corrid is NotSet
 			if corrId == "NotSet" || corrId == "" || corrId == "unset" {
 				evt := cal.NewCalEvent("getKeyErr", "ErrCacheCorridNotSet", cal.TransWarning, "", calThreadGroupName)
@@ -133,13 +133,13 @@ func getKey(request *netstring.Netstring, corrId string, sqlHash int32) ([]byte,
 }
 
 // setRecordToCache tries to write the data to cache
-func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint32, corrId string, sqlHash int32) {
+func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint32, corrId string, sqlHash int32, cacheByCorrId bool) {
 	cli, _ := GetJunoClient()
 	logger.GetLogger().Log(logger.Verbose, "SET junoClientReady:", cli.junoClientReady)
 	if cli.junoClientReady && cli != nil {
 		dice := rand.Intn(GetConfig().numCalThreads)
 		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
-		keyHash, key, keyerr := getKey(request, corrId, sqlHash)
+		keyHash, key, keyerr := getKey(request, corrId, sqlHash, cacheByCorrId)
 		if keyerr != nil {
 			evt := cal.NewCalEvent("setRecordToCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
 			evt.AddDataStr("corr_id_", corrId)
@@ -173,13 +173,13 @@ func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint
 }
 
 // getRecordFromCache tries to fetch data from cache. It responds to the client if the lookup is successful. If not, it returns the error.
-func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExit <-chan error, shadowTest bool) error {
+func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExit <-chan error, shadowTest bool, cacheByCorrId bool) error {
 	cli, _ := GetJunoClient()
 	logger.GetLogger().Log(logger.Verbose, "GET junoClientReady:", cli.junoClientReady)
 	if cli.junoClientReady && cli != nil {
 		dice := rand.Intn(GetConfig().numCalThreads)
 		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
-		keyHash, key, keyerr := getKey(request, crd.extractedcorrId, crd.sqlhash)
+		keyHash, key, keyerr := getKey(request, crd.extractedcorrId, crd.sqlhash, cacheByCorrId)
 		if keyerr != nil {
 			evt := cal.NewCalEvent("getRecordFromCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
 			evt.AddDataStr("corr_id_", crd.extractedcorrId)
@@ -279,7 +279,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 }
 
 // doCacheRequest tries to fetch the data from cache. It also monitors the client channel for timeouts, request cancellations.
-func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.Netstring, enableShadowTest bool) error {
+func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.Netstring, enableShadowTest bool, enableCacheByCorrId bool) error {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator doCacheRequest: starting")
 	}
@@ -356,7 +356,7 @@ func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.N
 		}
 	}()
 
-	err := crd.getRecordFromCache(request, respExit, enableShadowTest)
+	err := crd.getRecordFromCache(request, respExit, enableShadowTest, enableCacheByCorrId)
 
 	select {
 	case <-quit:
@@ -369,7 +369,7 @@ func (crd *Coordinator) doCacheRequest(ctx context.Context, request *netstring.N
 }
 
 // DispatchCachingSession checks if a SQL is enabled for caching. If yes, it tries to GET the record from cache. If not, the request is sent to the database.
-func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, reqType string) (uint32, error) {
+func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, reqType string) (uint32, bool, error) {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for", reqType, ": starting")
 	}
@@ -388,24 +388,28 @@ func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, req
 	cacheCfg.lock.Unlock()
 	logger.GetLogger().Log(logger.Verbose, uint32(crd.sqlhash), "CachingEnabled for ", reqType, ":", ok)
 	if ok {
-		logger.GetLogger().Log(logger.Verbose, "cacheRecord:", "sqlHash", rec.sqlHash, "sqlText", rec.sqlText, "ttl", rec.ttl, "cache enabled", rec.cachingEnabled)
+		logger.GetLogger().Log(logger.Verbose, "cacheRecord:", "sqlHash", rec.sqlHash, "sqlText", rec.sqlText, "ttl", rec.ttl, "cache enabled", rec.cachingEnabled, "cacheByCorrid", rec.cacheByCorrId)
+		cacheByCorrId := true
 		if rec.cachingEnabled == "Y" {
 			if reqType == "GET" {
+				if rec.cacheByCorrId == "N" {
+					cacheByCorrId = false
+				}
 				if rec.enableShadowTest == "Y" {
-					err := crd.doCacheRequest(crd.ctx, request, true)
-					return rec.ttl, err
+					err := crd.doCacheRequest(crd.ctx, request, true, cacheByCorrId)
+					return rec.ttl, cacheByCorrId, err
 				} else {
-					err := crd.doCacheRequest(crd.ctx, request, false)
-					return rec.ttl, err
+					err := crd.doCacheRequest(crd.ctx, request, false, cacheByCorrId)
+					return rec.ttl, cacheByCorrId, err
 				}
 			} else {
 				err := fmt.Errorf("Unsupported reqType...It must be GET")
-				return rec.ttl, err
+				return rec.ttl, cacheByCorrId, err
 			}
 		} else {
 			logger.GetLogger().Log(logger.Verbose, "sqlHash is disabled for caching:", rec.sqlHash, rec.cachingEnabled)
-			return rec.ttl, ErrCacheDisabled
+			return rec.ttl, cacheByCorrId, ErrCacheDisabled
 		}
 	}
-	return 0, ErrCacheNotEnabled
+	return 0, true, ErrCacheNotEnabled // Default for cacheByCorrId is true. Should be a no/op.
 }

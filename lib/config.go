@@ -173,7 +173,6 @@ type Config struct {
 
 	// Caching
 	EnableCaching bool
-	CacheByCorrId bool
 	CachingCfgReloadInterval int
 	CacheEndPoint string
 	CacheDefaultTTL int
@@ -493,7 +492,6 @@ func InitConfig() error {
 
 	// Caching related configs
 	gAppConfig.EnableCaching = cdb.GetOrDefaultBool("enable_caching", false)
-	gAppConfig.CacheByCorrId = cdb.GetOrDefaultBool("cache_by_corrid", true)
 	gAppConfig.CachingCfgReloadInterval = cdb.GetOrDefaultInt("caching_cfg_reload_interval", 10)
 	gAppConfig.CacheEndPoint = cdb.GetOrDefaultString("cache_endpoint", "127.0.0.1:5080")
 	gAppConfig.EnableCompression = cdb.GetOrDefaultBool("cache_enable_compression", false)
