@@ -116,8 +116,8 @@ func InitCutoverCfg(modulename string) error {
 					} else {
 						evt := cal.NewCalEvent(EvtTypeCutover, "init_success_"+retryInfo, cal.TransOK, "")
 						evt.Completed()
-						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, "successful init cutovercfg sh:", shid, ", ", tmpcfg)
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, "successful init cutovercfg sh:", shid, ", ", tmpcfg)
 						}
 						startData <- &tmpcfg
 						break // break the inner retry loop
@@ -173,8 +173,9 @@ func InitCutoverCfg(modulename string) error {
 		return errors.New(errmsg)
 	}
 	initUpdateGlobalCfg(&firstcfg[0])
-	logger.GetLogger().Log(logger.Info, "successful cutovercfg init at start up", GetCutoverCfg())
-
+	if logger.GetLogger().V(logger.Warning) {
+		logger.GetLogger().Log(logger.Warning, "successful cutovercfg init at start up", GetCutoverCfg())
+	}
 	hostname, _ := os.Hostname()
 	go func() {
 		var db *sql.DB
@@ -694,8 +695,8 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 		info := fmt.Sprint(curcfg.ActiveTns, "_to_", nextcfg.ActiveTns)
 		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_act_tns_diff", cal.TransOK, info)
 		evt.Completed()
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "cfg ActiveTns is different", info)
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "cfg ActiveTns is different", info)
 		}
 		whatchanged |= 0x0020
 	}
@@ -705,8 +706,8 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 		info := fmt.Sprint(curcfg.Phase, "_to_", nextcfg.Phase)
 		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_phase_diff", cal.TransOK, info)
 		evt.Completed()
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "cfg cutover phase is different", info)
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "cfg cutover phase is different", info)
 		}
 		whatchanged |= 0x0001
 	}
@@ -716,8 +717,8 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 		info := fmt.Sprint(gTnsAlias, "_", curcfg.DbByTns[gTnsAlias], "_to_", nextcfg.DbByTns[gTnsAlias])
 		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tns_db_diff", cal.TransOK, info)
 		evt.Completed()
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, gTnsAlias, "TnsAlias is different:", info)
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, gTnsAlias, "TnsAlias is different:", info)
 		}
 		whatchanged |= 0x0002
 	}
@@ -727,8 +728,8 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 		info := fmt.Sprint(gTnsAliasCutover, "_", curcfg.DbByTns[gTnsAliasCutover], "_to_", nextcfg.DbByTns[gTnsAliasCutover])
 		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tnscutover_db_diff", cal.TransOK, info)
 		evt.Completed()
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, gTnsAliasCutover, "TnsAliasCutover is different:", info)
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, gTnsAliasCutover, "TnsAliasCutover is different:", info)
 		}
 		whatchanged |= 0x0004
 	}
@@ -739,8 +740,8 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 		info := fmt.Sprint(dbun, "_", curcfg.RWstatusByDb[dbun], "_to_", nextcfg.RWstatusByDb[dbun])
 		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tns_rw_status_diff", cal.TransOK, info)
 		evt.Completed()
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, dbun, "tnsalias rw status is different:", info)
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, dbun, "tnsalias rw status is different:", info)
 		}
 		whatchanged |= 0x0008
 	}
@@ -751,8 +752,8 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 		info := fmt.Sprint(dbun, "_", curcfg.RWstatusByDb[dbun], "_to_", nextcfg.RWstatusByDb[dbun])
 		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_tnscutover_rw_status_diff", cal.TransOK, info)
 		evt.Completed()
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, dbun, "tnsaliascutover rw status is different:", info)
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, dbun, "tnsaliascutover rw status is different:", info)
 		}
 		whatchanged |= 0x0010
 	}
@@ -763,8 +764,8 @@ func CheckCfgChange(curcfg CutoverCfg, nextcfg CutoverCfg) (bool, int) {
 		info := fmt.Sprint(curcfg.TnsByRole[Source], "_to_", nextcfg.TnsByRole[Source])
 		evt := cal.NewCalEvent(EvtTypeCutover, "cfg_src_role_tns_diff", cal.TransOK, info)
 		evt.Completed()
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, gTnsAlias, "dbrole change is different:", info)
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, gTnsAlias, "dbrole change is different:", info)
 		}
 		whatchanged |= 0x00040
 
@@ -819,15 +820,15 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 				maxtype += 1
 			}
 			for t := 0; t <= maxtype; t++ {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Alert, "same active two_task, stop in-progress request. stopR =", stopR, ", stopW =", stopW)
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "same active two_task, stop in-progress request. stopR =", stopR, ", stopW =", stopW)
 				}
 				wpool, err := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 				if err != nil {
 					evt := cal.NewCalEvent(EvtTypeCutover, "err_wpool_stopRW", cal.TransOK, stopRwCalName)
 					evt.Completed()
-					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, "error: can't get workerpool", t, "error:", err.Error())
+					if logger.GetLogger().V(logger.Alert) {
+						logger.GetLogger().Log(logger.Alert, "error: can't get workerpool", t, "error:", err.Error())
 					}
 				} else {
 					if wpool != nil {
@@ -858,15 +859,15 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 				maxtype += 1
 			}
 			for t := 0; t <= maxtype; t++ {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, "active two_task changes, stop in-progress request. stopR =", stopR, ", stopW =", stopW)
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "active two_task changes, stop in-progress request. stopR =", stopR, ", stopW =", stopW)
 				}
 				wpool, err := GetWorkerBrokerInstance().GetWorkerPool(HeraWorkerType(t), 0, shid)
 				if err != nil {
 					evt := cal.NewCalEvent(EvtTypeCutover, "err_wpool_stopRW_diff_tns", cal.TransOK, stopRwCalName)
 					evt.Completed()
-					if logger.GetLogger().V(logger.Info) {
-						logger.GetLogger().Log(logger.Info, "err_wpool_stopRW_diff_tns", t, "error:", err.Error())
+					if logger.GetLogger().V(logger.Alert) {
+						logger.GetLogger().Log(logger.Alert, "err_wpool_stopRW_diff_tns", t, "error:", err.Error())
 					}
 				} else {
 					if wpool != nil {
@@ -874,8 +875,8 @@ func immediateStopReq(curcfg *CutoverCfg, nextcfg *CutoverCfg) {
 						evt.Completed()
 						wpool.StopWorker(stopR, stopW)
 					} else {
-						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, "workerpool nil. [shid, type] [", shid, ",", t, "]")
+						if logger.GetLogger().V(logger.Alert) {
+							logger.GetLogger().Log(logger.Alert, "workerpool nil. [shid, type] [", shid, ",", t, "]")
 						}
 					}
 					wpool = nil
@@ -1033,16 +1034,16 @@ func setCheckUserRoleFlag(nextcfg *CutoverCfg) {
 				}
 			} else {
 				if wpool != nil {
-					if logger.GetLogger().V(logger.Info) {
-						logger.GetLogger().Log(logger.Info, "cutover set_user_role_flag [", shid, ",", t, "] to ", execSetUserRole)
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, "cutover set_user_role_flag [", shid, ",", t, "] to ", execSetUserRole)
 					}
 					wpool.CheckSetUserRole(execSetUserRole)
 				} else {
 					evtn := fmt.Sprint("err_wpool_user_flag", shid, "_", t)
 					evt := cal.NewCalEvent(EvtTypeCutover, evtn, cal.TransOK, "wpool nil")
 					evt.Completed()
-					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, "error cutover set_user_role_flag nil wpool [", shid, ",", t, "]")
+					if logger.GetLogger().V(logger.Alert) {
+						logger.GetLogger().Log(logger.Alert, "error cutover set_user_role_flag nil wpool [", shid, ",", t, "]")
 					}
 				}
 			}
