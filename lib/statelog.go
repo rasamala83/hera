@@ -607,7 +607,7 @@ func (sl *StateLog) init() error {
 	//
 	// for each shard, initialize map
 	//
-	var totalWorkersCount int //Use this value to initialize bufferred channel for statelog metrics
+	maxWorkerCnt := -1
 	//
 	// for each shard, initialize map
 	//
@@ -623,7 +623,9 @@ func (sl *StateLog) init() error {
 		for t := 0; t < int(wtypeTotalCount); t++ {
 			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
 			workerCnt := workerpoolcfg[s][HeraWorkerType(t)].maxWorkerCnt
-			totalWorkersCount += workerCnt
+			if workerCnt > maxWorkerCnt {
+				maxWorkerCnt = workerCnt
+			}
 			sl.mWorkerStates[s][HeraWorkerType(t)] = make([][]*WorkerStateInfo, instCnt)
 			sl.mConnStates[s][HeraWorkerType(t)] = make([]*ConnStateInfo, instCnt)
 			sl.mTypeTitles[s][HeraWorkerType(t)] = make([]string, instCnt)
@@ -651,6 +653,8 @@ func (sl *StateLog) init() error {
 			}
 		}
 	}
+	var totalWorkersCount int //Use this value to initialize bufferred channel for statelog metrics
+	totalWorkersCount = maxWorkerCnt*sl.maxShardSize*int(wtypeTotalCount) 
 	//
 	// prepare horizontal (state) and vertical (workertype) titles.
 	//
