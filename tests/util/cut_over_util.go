@@ -25,12 +25,14 @@ var statMutex sync.Mutex
 var readMutex sync.Mutex
 var writeMutex sync.Mutex
 var txnMutex sync.Mutex
+var lockMutex sync.Mutex
 
 var maxRetryCount = 10
 var binaryPushDone = make(map[string]bool)
 var READ = "ReadType"
 var WRITE = "WriteType"
 var TXN = "TXNType"
+var UPDATELOCK = "UpdateLock"
 var STOP = "stop"
 var KILL = "kill"
 var DumpLogs = "dumpLogs"
@@ -49,6 +51,7 @@ var CutOverEnableWriteNoRead = "CUT_OVER_ENABLE_WRITE_NO_READ"
 var FlexUp = "FLEXUP"
 var CutOverFlexUpInValidUniqName = "CUT_OVER_FLEXUP_INVALID_UNIQ_NAME"
 var CutOverPhaseI = "CUT_OVER_PHASE_1"
+var CutOverPhaseAlone = "CUT_OVER_ALONE"
 var CutOverFlexUpInCorrectRole = "CUT_OVER_FLEXUP_INCORRECT_ROLE"
 var CutOverPhaseIInvalidRowCount = "CUT_OVER_PHASE_1_INVALID_ROW_CNT"
 var CutOverPhaseIIInvalidRowCount = "CUT_OVER_PHASE_2_INVALID_ROW_CNT"
@@ -329,21 +332,25 @@ func execute(t *testing.T, query string, primary bool, secondary bool, ignoreORA
 func GiveROToPrimary(t *testing.T) {
 	query := "GRANT CLOC_RW TO CLOCAPP;\\nREVOKE CLOC_RW FROM CLOCAPP;\\nGRANT CLOC_RO TO CLOCAPP"
 	execute(t, query, true, false, false, "True")
+	time.Sleep(10 * time.Second)
 }
 
 func GiveRWToPrimary(t *testing.T) {
 	query := "GRANT CLOC_RO TO CLOCAPP;\\nREVOKE CLOC_RO FROM CLOCAPP;\\nGRANT CLOC_RW TO CLOCAPP"
 	execute(t, query, true, false, false, "True")
+	time.Sleep(10 * time.Second)
 }
 
 func GiveRWToSecondary(t *testing.T) {
 	query := "GRANT CLOC_RO TO CLOCAPP;\\nREVOKE CLOC_RO FROM CLOCAPP;\\nGRANT CLOC_RW TO CLOCAPP"
 	execute(t, query, false, true, false, "True")
+	time.Sleep(10 * time.Second)
 }
 
 func GiveROToSecondary(t *testing.T) {
 	query := "GRANT CLOC_RW TO CLOCAPP;\\nREVOKE CLOC_RW FROM CLOCAPP;\\nGRANT CLOC_RO TO CLOCAPP"
 	execute(t, query, false, true, false, "True")
+	time.Sleep(10 * time.Second)
 }
 
 func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) {
@@ -426,6 +433,14 @@ func MoveCutOverPhase(t *testing.T, phase string, primary bool, secondary bool) 
 		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='Y', write_status='N', wisb_roles='CLOC_RO', remarks='" + comment +
 			"' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
 			"update pypl_occ_cutover set cutover_phase='CUTOVER', read_status='N', write_status='N', remarks='" + comment +
+			"' where db_unique_name='HERADB_TWO' and occ_name='occ'"
+		execute(t, query, primary, secondary, false, "False")
+		break
+
+	case CutOverPhaseAlone:
+		query := "update pypl_occ_cutover set cutover_phase='CUTOVER', remarks='" + comment +
+			"' where db_unique_name='HERADB_ONE' and occ_name='occ';\\n" +
+			"update pypl_occ_cutover set cutover_phase='CUTOVER', remarks='" + comment +
 			"' where db_unique_name='HERADB_TWO' and occ_name='occ'"
 		execute(t, query, primary, secondary, false, "False")
 		break
@@ -1495,7 +1510,7 @@ func validateDBID(dbTxn *DBTxn, dbId int, dbName string) {
 	}
 }
 
-func sortStats(trafficStats map[int64]ClientTrafficStats) []int64 {
+func SortStats(trafficStats map[int64]ClientTrafficStats) []int64 {
 	keys := make([]int64, 0)
 	for k, _ := range trafficStats {
 		keys = append(keys, k)
@@ -1509,7 +1524,7 @@ func sortStats(trafficStats map[int64]ClientTrafficStats) []int64 {
 func ValidateFailureTraffic(t *testing.T, trafficStats map[int64]ClientTrafficStats, queryType string,
 	startTime int64, endTime int64) {
 	logger.GetLogger().Log(logger.Alert, "Validating Failure traffic for ", queryType, " from ", startTime, " to ", endTime)
-	for _, utc := range sortStats(trafficStats) {
+	for _, utc := range SortStats(trafficStats) {
 
 		if utc < startTime || utc > endTime {
 			continue
@@ -1536,7 +1551,7 @@ func ValidateSuccessTraffic(t *testing.T, trafficStats map[int64]ClientTrafficSt
 	startTime int64, endTime int64, dbIdWithTraffic int, dbIdNoTraffic int) {
 
 	logger.GetLogger().Log(logger.Alert, "Validating Success traffic for ", queryType, " in DB:", dbIdWithTraffic, "from ", startTime, " to ", endTime)
-	for _, utc := range sortStats(trafficStats) {
+	for _, utc := range SortStats(trafficStats) {
 
 		if utc < startTime || utc > endTime {
 			continue

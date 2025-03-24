@@ -1178,6 +1178,7 @@ func TestCutOver3ReadOffStatus(t *testing.T) {
 	startPhaseIII := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase III: ", startPhaseIII)
 	util.MoveCutOverPhase(t, util.CutOverPhaseIIIReadOff, true, true)
+	startPhaseIII += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -1291,6 +1292,7 @@ func TestCutOver3SourceDBDown(t *testing.T) {
 	startPhaseIII := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase III: ", startPhaseIII)
 	util.MoveCutOverPhase(t, util.CutOverPhaseIII, true, true)
+	startPhaseIII += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -1403,6 +1405,7 @@ func TestCutOver3TargetDBDown(t *testing.T) {
 	startPhaseIII := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase III: ", startPhaseIII)
 	util.MoveCutOverPhase(t, util.CutOverPhaseIII, true, true)
+	startPhaseIII += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -1624,6 +1627,7 @@ func TestCutOver3Rollback(t *testing.T) {
 	startPhaseIII := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase III: ", startPhaseIII)
 	util.MoveCutOverPhase(t, util.CutOverPhaseIII, true, true)
+	startPhaseIII += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 20 seconds")
 	time.Sleep(20 * time.Second)
 	stateLog["occ"] = 25

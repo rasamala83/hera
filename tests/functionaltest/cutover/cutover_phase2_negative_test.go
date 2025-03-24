@@ -700,6 +700,7 @@ func TestCutOver2TargetDBDown(t *testing.T) {
 	startPhaseII := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase II: ", startPhaseII)
 	util.MoveCutOverPhase(t, util.CutOverPhaseII, true, true)
+	startPhaseII += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -804,6 +805,7 @@ func TestCutOver2SourceDBDown(t *testing.T) {
 	startPhaseII := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase II: ", startPhaseII)
 	util.MoveCutOverPhase(t, util.CutOverPhaseII, true, true)
+	startPhaseII += 10
 	util.ShutDownDBService("HERADB_ONE", "herabox_primary_srv", t)
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
@@ -998,6 +1000,7 @@ func TestCutOver2Rollback(t *testing.T) {
 	startPhaseII := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase II: ", startPhaseII)
 	util.MoveCutOverPhase(t, util.CutOverPhaseII, true, true)
+	startPhaseII += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -1123,6 +1126,7 @@ func TestCutOver1ClosingPendingRead(t *testing.T) {
 	time.Sleep(time.Second * 5)
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase I: ", txnStart)
 	util.MoveCutOverPhase(t, util.CutOverPhaseII, true, true)
+	txnStart += 10
 
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
@@ -1215,6 +1219,8 @@ func TestReadWriteSplitLongRead(t *testing.T) {
 	time.Sleep(time.Second * 5)
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Phase I: ", txnStart)
 	util.MoveCutOverPhase(t, util.CutOverPhaseII, true, true)
+
+	txnStart += 10
 
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)

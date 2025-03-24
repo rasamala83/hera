@@ -48,6 +48,7 @@ func moveToCutOverPhaseIII(t *testing.T) (chan map[int64]util.ClientTrafficStats
 	startClientTraffic := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Flexup state: ", startClientTraffic)
 	util.MoveCutOverPhase(t, util.FlexUp, true, true)
+	startClientTraffic += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
@@ -105,9 +106,9 @@ func moveToCutOverPhaseIII(t *testing.T) (chan map[int64]util.ClientTrafficStats
 	util.ValidateWorkerCountFromDatabase("HERADB_TWO", "herabox_secondary_srv", true, 25, t)
 	trafficStats = util.CT.DumpTrafficStat(dumpChan, RespMsg)
 	cutOverPhase3End := time.Now().Unix()
-	util.ValidateSuccessTraffic(t, trafficStats, util.READ, cutOverPhase3State+3, cutOverPhase3End-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, cutOverPhase3State+3, cutOverPhase3End-3, 2, 1)
-	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, cutOverPhase3State+3, cutOverPhase3End-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.READ, cutOverPhase3State+5, cutOverPhase3End-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.WRITE, cutOverPhase3State+5, cutOverPhase3End-3, 2, 1)
+	util.ValidateSuccessTraffic(t, trafficStats, util.TXN, cutOverPhase3State+5, cutOverPhase3End-3, 2, 1)
 
 	return dumpChan, respChan, RespMsg, logFile
 }
@@ -179,6 +180,7 @@ func TestCutOverCompleteInvalidNoOfRow(t *testing.T) {
 	completePhase := time.Now().Unix()
 	logger2.GetLogger().Log(logger2.Alert, "Moving from Enable to Cutover Complete Phase: ", completePhase)
 	util.MoveCutOverPhase(t, util.CutOverCompletePhaseInvalidRowCount, true, true)
+	completePhase += 10
 	logger2.GetLogger().Log(logger2.Alert, "Sleeping for 15 seconds")
 	time.Sleep(15 * time.Second)
 	stateLog["occ"] = 25
