@@ -593,7 +593,7 @@ func (sl *StateLog) init() error {
 	if GetWorkerBrokerInstance() == nil {
 		return errors.New("broker not initialized")
 	}
-	workerpoolcfg := GetWorkerBrokerInstance().GetWorkerPoolCfgs()
+	sl.workerPoolCfg = GetWorkerBrokerInstance().GetWorkerPoolCfgs()
 
 	//
 	// allocate array for each shard
@@ -621,8 +621,8 @@ func (sl *StateLog) init() error {
 		// for each workertype, initialize two dimension array
 		//
 		for t := 0; t < int(wtypeTotalCount); t++ {
-			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
-			workerCnt := workerpoolcfg[s][HeraWorkerType(t)].maxWorkerCnt
+			instCnt := sl.workerPoolCfg[s][HeraWorkerType(t)].instCnt
+			workerCnt := sl.workerPoolCfg[s][HeraWorkerType(t)].maxWorkerCnt
 			if workerCnt > maxWorkerCnt {
 				maxWorkerCnt = workerCnt
 			}
@@ -685,7 +685,7 @@ func (sl *StateLog) init() error {
 			} else {
 				suffix = ".sh" + strconv.Itoa(s)
 			}
-			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
+			instCnt := sl.workerPoolCfg[s][HeraWorkerType(t)].instCnt
 
 			for i := 0; i < instCnt; i++ {
 				sl.mTypeTitles[s][t][i] = typeTitlePrefix[t]
@@ -962,7 +962,6 @@ func (sl *StateLog) genReport() {
 				}
 
 				//Send statelog data to OTEL statsdata channel
-				workerpoolcfg := GetWorkerBrokerInstance().GetWorkerPoolCfgs()
 				if otelconfig.OTelConfigData.Enabled {
 					for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
 						buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))
@@ -973,7 +972,7 @@ func (sl *StateLog) genReport() {
 					workerStatesData.StateData["resp"] = respCnt - sl.mLastRspCnt[s][HeraWorkerType(t)][n]
 
 					//Total workers
-					workerStatesData.StateData["totalConnections"] = int64(workerpoolcfg[s][HeraWorkerType(t)].maxWorkerCnt)
+					workerStatesData.StateData["totalConnections"] = int64(sl.workerPoolCfg[s][HeraWorkerType(t)].maxWorkerCnt)
 					totalConectionData := otel_logger.GaugeMetricData{
 						WorkerStateInfo: &workerStateInfoData,
 						StateData:       workerStatesData.StateData["totalConnections"],
