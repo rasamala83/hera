@@ -187,21 +187,9 @@ func GetStateLog() *StateLog {
 
 // PublishStateEvent sends the event to the channel, so it will be processed by the state log routine
 func (sl *StateLog) PublishStateEvent(_evt StateEvent) error {
-	//	if logger.GetLogger().V(logger.Verbose) {
-	//		logger.GetLogger().Log(logger.Verbose, "publish state event", _evt.eType)
-	//	}
-
-	/*       eType     StateEventType
-	shardID   int
-	wType     HeraWorkerType
-	instID    int
-	workerID  int
-	newWState HeraWorkerStatus
-	oldCState ConnState
-	newCState ConnState
-	newWSize  int
-	*/
-
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "publish state event", _evt.eType)
+	}
 	// missing event could cause unbalanced statelog output.
 	sl.mEventChann <- _evt
 	return nil
@@ -767,7 +755,7 @@ func (sl *StateLog) init() error {
 
 /**
  * client should not call these "private" none-threadsafe functions directly.
- * use eublishStateEvent instead.
+ * use PublishStateEvent instead.
  *
  * @TODO test
  *

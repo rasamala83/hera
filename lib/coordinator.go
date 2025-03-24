@@ -503,10 +503,6 @@ func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, e
 		crd.respond([]byte("41:2 fetch requested but no statement exists,"))
 	case common.CmdPrepare, common.CmdPrepareV2, common.CmdPrepareSpecial:
 		return false, nil
-	// DB by role: source or target
-	case common.CmdSetDBbyRole:
-		//ToDo
-		return false, nil
 	// sharding commands
 	case common.CmdSetShardID:
 		var err error

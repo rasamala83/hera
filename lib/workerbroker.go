@@ -98,7 +98,7 @@ func GetWorkerBrokerInstance() *WorkerBroker {
  * private method to set up different worker pools
  *
  * @TODO pull types and sizes from config
- * 2/1/2024 with cutover enabled, we can't flex up to full yet.
+ * with cutover enabled, we can't flex up to full yet.
  * We don't know which phase it is in.
  */
 func (broker *WorkerBroker) init() error {
@@ -107,7 +107,6 @@ func (broker *WorkerBroker) init() error {
 	if (broker.maxShardSize == 0) || !(GetConfig().EnableSharding) {
 		broker.maxShardSize = 1
 	}
-
 	//
 	// MAX_NUM_STANDBY = 10
 	//
@@ -115,7 +114,7 @@ func (broker *WorkerBroker) init() error {
 	if maxStndbySize > 10 {
 		maxStndbySize = 10
 	}
-	/* comment this out as we don't send data during config init for max_connections
+	/* we don't send data during config init for max_connections
 	MaxWorkerSize := <-GetConfig().NumWorkersCh()
 	*/
 	cfg := config.GetOpsConfig()
@@ -123,8 +122,6 @@ func (broker *WorkerBroker) init() error {
 		logger.GetLogger().Log(logger.Alert, "GetOpsConfig return nil")
 	}
 	MaxWorkerSize, err := config.GetOpsConfig().GetInt(ConfigMaxWorkers)
-	//MaxWorkerSize := 10
-	//var err error = nil
 
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "error loading max_connections from opscfg", err.Error())
