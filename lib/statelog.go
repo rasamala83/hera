@@ -654,9 +654,6 @@ func (sl *StateLog) init() error {
 	}
 	sl.mStateHeader = buf.String()
 
-	// cutover
-	// workertype title will need to replace sh with cutover
-	//
 	for idx, val := range typeTitlePrefix {
 		typeTitlePrefix[idx] = GetConfig().StateLogPrefix + val
 	}

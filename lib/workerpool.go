@@ -57,8 +57,6 @@ type WorkerPool struct {
 	currentSize int // the number of workers in the pool
 	desiredSize int // the desired number of workers in the pool, usually equal to currentSize, different for a
 
-	tranSize int // brief period when the pool is dynamically resized in cutover
-
 	moduleName string // basically the application name as it comes from the command line
 	// the number of worker not in INIT state, atomically maintained
 	numHealthyWorkers int32
@@ -105,7 +103,6 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, siz
 	pool.ShardID = shardID
 	pool.currentSize = 0
 	pool.desiredSize = size
-	pool.tranSize = size
 	pool.moduleName = moduleName
 	pool.CoShardID = ShIdUnset
 	pool.checkSetUserRole = 0

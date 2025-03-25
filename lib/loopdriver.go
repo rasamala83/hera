@@ -54,7 +54,6 @@ func RegisterLoopDriver(f ConnHandlerFunc) {
 /*
 *
 URL: <ShardID>:<PoolType>:<PoolID>
-New: URL: <Role>:<ShardID>:<PoolType>:<PoolId>
 TODO: add another parameter for debugging/troubleshooting, IDing the client
 */
 func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {

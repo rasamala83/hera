@@ -37,7 +37,6 @@ var gTnsAliasR string        //e.g. MONEY_OCC
 var gTnsAliasCutoverR string // e.g. MONEY_OCC_CUTOVER
 
 // a comphrehensive version of the state
-// maybe we should look up on RWstatus by two_task + DBuname so it allows both two_task and two_task_cutover point to the same DB like in ENABLE and BROOM state
 type CutoverCfg struct {
 	Phase         string            // current cutover phase
 	ActiveTns     string            // FOO or FOO_CUTOVER is the active. If no active, set to UnsetStr ("NONE")
@@ -474,8 +473,8 @@ func populateNewCfg(rcrds [2]CutoverRecord) (CutoverCfg, error) {
 		outcfg.ActiveShardId = ShIdUnset
 		evt = cal.NewCalEvent(EvtTypeCutover, "no_active_db", cal.TransOK, "")
 		evt.Completed()
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "no active DB at Cutover phase")
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "no active DB at Cutover phase")
 		}
 	}
 
@@ -614,8 +613,8 @@ func loadCutoverCfg(db *sql.DB, localonly bool) (CutoverCfg, error) {
 		var curCfg CutoverCfg
 		copyCutoverCfg(&curCfg, &precfg) // create a deep copy
 		if changed {
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "cutovercfg has new change", changed, changedAttr)
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "cutovercfg has new change", changed, changedAttr)
 			}
 			evt := cal.NewCalEvent(EvtTypeCutover, "detect_cfg_change", cal.TransOK, "")
 			evt.Completed()

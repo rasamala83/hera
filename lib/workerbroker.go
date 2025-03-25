@@ -98,8 +98,6 @@ func GetWorkerBrokerInstance() *WorkerBroker {
  * private method to set up different worker pools
  *
  * @TODO pull types and sizes from config
- * with cutover enabled, we can't flex up to full yet.
- * We don't know which phase it is in.
  */
 func (broker *WorkerBroker) init() error {
 	broker.stopped = make(chan struct{})
@@ -146,8 +144,8 @@ func (broker *WorkerBroker) init() error {
 	broker.poolCfgs = make([](map[HeraWorkerType]*WorkerPoolCfg), broker.maxShardSize)
 	var workercnt int
 
-	if logger.GetLogger().V(logger.Info) {
-		logger.GetLogger().Log(logger.Info, "MaxShardSize", broker.maxShardSize)
+	if logger.GetLogger().V(logger.Warning) {
+		logger.GetLogger().Log(logger.Warning, "MaxShardSize", broker.maxShardSize)
 	}
 	for s := 0; s < broker.maxShardSize; s++ {
 		//
@@ -159,9 +157,6 @@ func (broker *WorkerBroker) init() error {
 		broker.poolCfgs[s][wtypeRO].maxWorkerCnt = GetNumRWorkers(s)
 		if broker.poolCfgs[s][wtypeRO].maxWorkerCnt > 0 {
 			broker.poolCfgs[s][wtypeRO].instCnt = 1
-		}
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "RO MaxWorkerCnt", broker.poolCfgs[s][wtypeRO].maxWorkerCnt, ", sh =", s)
 		}
 
 		if GetConfig().EnableCutover {
@@ -180,20 +175,17 @@ func (broker *WorkerBroker) init() error {
 				broker.poolCfgs[s][wtypeRO].p2t = ShIdTnsCutover
 
 			default:
-				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset // ??
+				broker.poolCfgs[s][wtypeRO].p2t = ShIdUnset
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "Cutover overwrite RO MaxWorkerCnt", broker.poolCfgs[s][wtypeRO].maxWorkerCnt, ", s=", s)
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "Cutover overwrite RO MaxWorkerCnt at init", broker.poolCfgs[s][wtypeRO].maxWorkerCnt, ", s=", s)
 			}
 		}
 
 		broker.poolCfgs[s][wtypeRW] = new(WorkerPoolCfg)
 		broker.poolCfgs[s][wtypeRW].maxWorkerCnt = GetNumWWorkers(s)
 		broker.poolCfgs[s][wtypeRW].instCnt = 1
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "RW MaxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt, ", sh =", s)
-		}
 		if GetConfig().EnableCutover {
 			workercnt := GetNumWWorkers(s)
 			if workercnt < 4 {
@@ -208,12 +200,12 @@ func (broker *WorkerBroker) init() error {
 			case int(ShIdTnsCutover):
 				broker.poolCfgs[s][wtypeRW].p2t = ShIdTnsCutover
 			default:
-				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset // ??
+				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset 
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
 		}
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "Cutover overwrite RW MaxWorkerCnt", broker.poolCfgs[s][wtypeRW].maxWorkerCnt, " s=", s)
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Cutover overwrite RW MaxWorkerCnt" at init broker.poolCfgs[s][wtypeRW].maxWorkerCnt, " s=", s)
 		}
 		broker.poolCfgs[s][wtypeStdBy] = new(WorkerPoolCfg)
 		if GetConfig().EnableTAF {
