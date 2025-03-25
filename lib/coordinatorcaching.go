@@ -388,19 +388,24 @@ func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, req
 	cacheCfg.lock.Unlock()
 	logger.GetLogger().Log(logger.Verbose, uint32(crd.sqlhash), "CachingEnabled for ", reqType, ":", ok)
 	if ok {
-		logger.GetLogger().Log(logger.Verbose, "cacheRecord:", "sqlHash", rec.sqlHash, "sqlText", rec.sqlText, "ttl", rec.ttl, "cache enabled", rec.cachingEnabled, "cacheByCorrid", rec.cacheByCorrId)
+		logger.GetLogger().Log(logger.Verbose, "cacheRecord:", "sqlHash", rec.sqlHash, "sqlText", rec.sqlText, "ttl", rec.ttl, "cache enabled", rec.cachingEnabled, "cacheByCorrid", rec.cacheByCorrId, "cacheEnabledApps", rec.cacheEnabledClientApps)
 		cacheByCorrId := true
 		if rec.cachingEnabled == "Y" {
 			if reqType == "GET" {
-				if rec.cacheByCorrId == "N" {
-					cacheByCorrId = false
-				}
-				if rec.enableShadowTest == "Y" {
-					err := crd.doCacheRequest(crd.ctx, request, true, cacheByCorrId)
-					return rec.ttl, cacheByCorrId, err
+				if rec.cacheEnabledClientApps == "all" || (len(crd.poolName) > 0 && strings.Contains(rec.cacheEnabledClientApps, crd.poolName)) {
+					if rec.cacheByCorrId == "N" {
+						cacheByCorrId = false
+					}
+					if rec.enableShadowTest == "Y" {
+						err := crd.doCacheRequest(crd.ctx, request, true, cacheByCorrId)
+						return rec.ttl, cacheByCorrId, err
+					} else {
+						err := crd.doCacheRequest(crd.ctx, request, false, cacheByCorrId)
+						return rec.ttl, cacheByCorrId, err
+					}
 				} else {
-					err := crd.doCacheRequest(crd.ctx, request, false, cacheByCorrId)
-					return rec.ttl, cacheByCorrId, err
+					logger.GetLogger().Log(logger.Verbose, "Application is not enabled for caching:", rec.sqlHash, rec.cacheEnabledClientApps, crd.poolName)
+					return rec.ttl, cacheByCorrId, ErrCacheAppDisabled
 				}
 			} else {
 				err := fmt.Errorf("Unsupported reqType...It must be GET")
