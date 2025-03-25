@@ -193,19 +193,19 @@ func (broker *WorkerBroker) init() error {
 			} else {
 				workercnt = workercnt/2
 			}
-			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = workercnt 
+			broker.poolCfgs[s][wtypeRW].maxWorkerCnt = workercnt
 			switch s {
 			case int(ShIdTns):
 				broker.poolCfgs[s][wtypeRW].p2t = ShIdTns
 			case int(ShIdTnsCutover):
 				broker.poolCfgs[s][wtypeRW].p2t = ShIdTnsCutover
 			default:
-				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset 
+				broker.poolCfgs[s][wtypeRW].p2t = ShIdUnset
 				broker.poolCfgs[s][wtypeRO].maxWorkerCnt = 1
 			}
 		}
 		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, "Cutover overwrite RW MaxWorkerCnt" at init broker.poolCfgs[s][wtypeRW].maxWorkerCnt, " s=", s)
+			logger.GetLogger().Log(logger.Warning, "Cutover overwrite RW MaxWorkerCnt at init", broker.poolCfgs[s][wtypeRW].maxWorkerCnt, " s=", s)
 		}
 		broker.poolCfgs[s][wtypeStdBy] = new(WorkerPoolCfg)
 		if GetConfig().EnableTAF {

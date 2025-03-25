@@ -9,10 +9,8 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-// Active shard means the shard either take R, W, or RW sql.
-// If no shard is active, the ActiveDbInfo should container empty strings.
-// Each coordinator will pull the CutoverCfg to check if there is any update.
-// The information is stored in a structure ActiveDbInfo as for which shard and RW, R, or W
+// Active shard means the shard either take user requests.
+// ShId = ShIdUnset and DbUname = UnsetStr if no active shard. 
 type ActiveDbInfo struct {
 	SrcTns   string         // source Tns key
 	SrcShId  ShardByTwoTask // source shard id
@@ -35,12 +33,12 @@ func (crd *Coordinator) copyActCOInfo(destInfo *ActiveDbInfo, srcInfo ActiveDbIn
 }
 
 // Compare existing ActiveCOInfo with new cfg.
-// (00000) identical
-// (00001) 1 if twotask changes (shard id changes)
-// (00010) 2 if dbuname changes
-// (00100) 4 if phase changes (may force shard id )
-// (01000) 8 if RWStatus changes
-// (10000) 16 if SrcTns changes
+// 0 identical
+// 1 if twotask changes (shard id changes)
+// 2 if dbuname changes
+// 4 if phase changes (may force shard id )
+// 8 if RWStatus changes
+// 16 if SrcTns changes
 func compActiveInfo(cur *ActiveDbInfo, newcfg *ActiveDbInfo) int {
 	if cur == nil || newcfg == nil {
 		return -1
@@ -108,9 +106,7 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 
 /*
 PreprocessCutover returns bool: true -> hang up client connection. error: if there is an error in process.
-Every sqlrequest goes through PreprocessCutover. The function loads the latest cfg and detect which pool shard it should go
-and disconnect the client if needed.
-
+The function loads the latest cfg and detect which pool shard it should go. Disconnect the client if needed.
 hang up conditions
 1. active tns alias has changed from last tracked active info in this coordinator
 2. active tns alias is unchanged but RWstatus disabled from enabled.
@@ -194,8 +190,6 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 						err = errors.New("crd_act_tns_chg_exit_cutover")
 
 					} else if newActInfo.Phase == CutoverPhStr && (crd.curActDb.SrcShId != newActInfo.ShId) {
-						// flex up or enable -> cutover phase
-						// compare cur SrcTns and new active tns, if mismatch, error
 						if logger.GetLogger().V(logger.Warning) {
 							logger.GetLogger().Log(logger.Warning, crd.id, "enter new phase cutover, cur txn is not using active tns")
 						}
