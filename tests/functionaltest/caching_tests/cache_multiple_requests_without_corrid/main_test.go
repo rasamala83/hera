@@ -41,9 +41,8 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["enable_caching"] = "true"
 	appcfg["caching_cfg_reload_interval"] = "300"
 	appcfg["cache_response_timeout_ms"] = "3000"
-	appcfg["cache_by_corrid"] = "false"
 	opscfg := make(map[string]string)
-	opscfg["opscfg.default.server.max_connections"] = "5"
+	opscfg["opscfg.default.server.max_connections"] = "10"
 	opscfg["opscfg.default.server.log_level"] = "10"
 	opscfg["opscfg.default.server.max_lifespan_per_child"] = "500"
 
@@ -67,7 +66,7 @@ func before() error {
 		err := testutil.DBDirect(
 			"create table hera_sql_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
 				"bind_variables varchar(1000),TTL_sec BIGINT,enable_shadow_test varchar(1),tableName varchar(30),"+
-				"invalidation_clause varchar(1000),caching_enabled varchar(1),remarks varchar(4000),hera_module varchar(100))",
+				"invalidation_clause varchar(1000),caching_enabled varchar(1),cache_by_corrid varchar(1), caching_enabled_apps varchar(4000),remarks varchar(4000),hera_module varchar(100))",
 			os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL,
 		)
 		if err != nil {
@@ -82,7 +81,7 @@ func before() error {
 		}
 
 		err = testutil.DBDirect(
-			"INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, hera_module) VALUES  ('1', '2733177372', 'select id, int_val from jdbc_hera_cache_txn_test where id=?', 'id=1', 30, 'N', 'jdbc_hera_cache_taf_test', '', 'Y', '', 'hera-test')",
+			"INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '2733177372', 'select id, int_val from jdbc_hera_cache_txn_test where id=?', 'id=1', 30, 'N', 'jdbc_hera_cache_taf_test', '', 'Y', 'N', 'all', '', 'hera-test')",
 			os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL,
 		)
 		if err != nil {
@@ -163,6 +162,10 @@ func TestTTLCacheWithDifferentCorrIdAndCacheByCorrIdDisabled(t *testing.T) {
 
 	if testutil.RegexCountFile(".*SET.*2733177372[\\s]*0.*", "cal.log") < 1 {
 		t.Fatalf("Error: should see successful SET when cacheCfgRecord is enabled for caching")
+	}
+
+	if testutil.RegexCountFile("coordinator DispatchCachingSession for SET returned: error: unique key violation", "hera.log") < 0 {
+		t.Fatalf("Error:should not see error: unique key violation error")
 	}
 
 	logger.GetLogger().Log(logger.Debug, "TestTTLCacheWithDifferentCorrIdAndCacheByCorrIdDisabled done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")

@@ -79,6 +79,7 @@ type Coordinator struct {
 	response string
 	writeToCache bool
 	isMultiReq bool
+	isMultiReqNs string
 }
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
@@ -326,17 +327,20 @@ func (crd *Coordinator) Run() {
 func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 	var getErr error
 	var cache_ttl uint32
+	var cacheByCorrId bool
 	crd.isMultiReq = false
+	crd.isMultiReqNs = ""
 	if crd.worker != nil {
 		crd.isMultiReq = true
+		crd.isMultiReqNs = string(request.Serialized)
 	}
 	if GetConfig().EnableCaching && (crd.worker == nil) {
 		logger.GetLogger().Log(logger.Verbose, "Inside dispatch...Caching is enabled")
 		timeStart := time.Now()
-		cache_ttl, getErr = crd.DispatchCachingSession(request, "GET")
+		cache_ttl, cacheByCorrId, getErr = crd.DispatchCachingSession(request, "GET")
 		timediff := time.Since(timeStart)
 		if getErr != nil {
-			if getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheShadowTest || getErr == ErrCacheCorridNotSet || getErr == ErrCacheBadRequest || getErr == ErrCacheReqNotSupported || getErr == ErrCacheSkipResponse {
+			if getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheAppDisabled || getErr == ErrCacheShadowTest || getErr == ErrCacheCorridNotSet || getErr == ErrCacheBadRequest || getErr == ErrCacheReqNotSupported || getErr == ErrCacheSkipResponse {
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", getErr)
 				}
@@ -373,13 +377,13 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 				logger.GetLogger().Log(logger.Verbose, "Skip setting the record again to cache.. GET returned:", getErr)
 			} else {
 				// Caching disabled in the config table (or) caching disabled (or) corrId missing (or) bad request (or) req not supported -- Do not SET record to cache
-				if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheCorridNotSet || getErr == ErrCacheBadRequest || getErr == ErrCacheReqNotSupported) {
+				if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheAppDisabled || getErr == ErrCacheCorridNotSet || getErr == ErrCacheBadRequest || getErr == ErrCacheReqNotSupported) {
 					if logger.GetLogger().V(logger.Verbose) {
 						logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", getErr)
 					}
 				} else {
 					if crd.writeToCache && (crd.worker == nil) && !crd.isMultiReq {
-						go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash)
+						go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash, cacheByCorrId)
 					} else {
 						logger.GetLogger().Log(logger.Verbose, "Skip setting the record to cache.. crd.writeToCache:", crd.writeToCache, "crd.isMultiReq", crd.isMultiReq)
 					}
@@ -402,13 +406,13 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 			logger.GetLogger().Log(logger.Verbose, "Skip setting the record again to cache.. GET returned:", getErr)
 		} else {
 			// Caching disabled in the config table (or) caching disabled (or) corrId missing (or) bad request (or) req not supported -- Do not SET record to cache
-			if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheCorridNotSet || getErr == ErrCacheBadRequest || getErr == ErrCacheReqNotSupported) {
+			if getErr != nil && (getErr == ErrCacheNotEnabled || getErr == ErrCacheDisabled || getErr == ErrCacheAppDisabled || getErr == ErrCacheCorridNotSet || getErr == ErrCacheBadRequest || getErr == ErrCacheReqNotSupported) {
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for SET returned:", getErr)
 				}
 			} else {
 				if crd.writeToCache && (crd.worker == nil) && !crd.isMultiReq {
-					go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash)
+					go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash, cacheByCorrId)
 				} else {
 					logger.GetLogger().Log(logger.Verbose, "Skip setting the record to cache.. crd.writeToCache:", crd.writeToCache, "crd.isMultiReq", crd.isMultiReq)
 				}
@@ -1278,6 +1282,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 							evt.AddDataStr("corrId", crd.extractedcorrId)
 							evt.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(crd.sqlhash)))
 							evt.AddDataStr("client", crd.poolName)
+							evt.AddDataStr("requestNs", crd.isMultiReqNs)
 							evt.Completed()
 						}
 					}

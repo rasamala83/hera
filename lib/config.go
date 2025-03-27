@@ -23,6 +23,8 @@ import (
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/config"
 	"github.com/paypal/hera/utility/logger"
+	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
+
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +48,7 @@ type Config struct {
 	NumStdbyDbs        int
 	InitialMaxChildren int
 	ReadonlyPct        int
+	TafChildrenPct 	   int
 	//
 	// backlog
 	//
@@ -173,7 +176,6 @@ type Config struct {
 
 	// Caching
 	EnableCaching bool
-	CacheByCorrId bool
 	CachingCfgReloadInterval int
 	CacheEndPoint string
 	CacheDefaultTTL int
@@ -252,7 +254,7 @@ func parseMapStrStr(encoded string) map[string]string {
 }
 
 // InitConfig initializes the configuration, both the static configuration (from hera.txt) and the dynamic configuration
-func InitConfig() error {
+func InitConfig(poolName string) error {
 	currentDir, abserr := filepath.Abs(filepath.Dir(os.Args[0]))
 
 	if abserr != nil {
@@ -433,6 +435,7 @@ func InitConfig() error {
 	}
 
 	gAppConfig.ReadonlyPct = cdb.GetOrDefaultInt("readonly_children_pct", 0)
+	gAppConfig.TafChildrenPct = cdb.GetOrDefaultInt("taf_children_pct", 100)
 	gAppConfig.InitialMaxChildren = numWorkers
 	if gAppConfig.EnableWhitelistTest {
 		if gAppConfig.NumWhitelistChildren < 2 {
@@ -493,7 +496,6 @@ func InitConfig() error {
 
 	// Caching related configs
 	gAppConfig.EnableCaching = cdb.GetOrDefaultBool("enable_caching", false)
-	gAppConfig.CacheByCorrId = cdb.GetOrDefaultBool("cache_by_corrid", true)
 	gAppConfig.CachingCfgReloadInterval = cdb.GetOrDefaultInt("caching_cfg_reload_interval", 10)
 	gAppConfig.CacheEndPoint = cdb.GetOrDefaultString("cache_endpoint", "127.0.0.1:5080")
 	gAppConfig.EnableCompression = cdb.GetOrDefaultBool("cache_enable_compression", false)
@@ -521,7 +523,37 @@ func InitConfig() error {
 		gAppConfig.MaxDesiredHealthyWorkerPct = 90
 	}
 
+	//Initialize OTEL configs
+	initializeOTELConfigs(cdb, poolName)
+	if logger.GetLogger().V(logger.Info) {
+		otelconfig.OTelConfigData.Dump()
+	}
 	return nil
+}
+
+// This function takes care of initialize OTEL configuration
+func initializeOTELConfigs(cdb config.Config, poolName string) {
+	otelconfig.OTelConfigData = &otelconfig.OTelConfig{}
+	//TODO initialize the values
+	otelconfig.OTelConfigData.Enabled = cdb.GetOrDefaultBool("enable_otel", false)
+	otelconfig.OTelConfigData.SkipCalStateLog = cdb.GetOrDefaultBool("skip_cal_statelog", false)
+	otelconfig.OTelConfigData.MetricNamePrefix = cdb.GetOrDefaultString("otel_metric_prefix", "pp.occ")
+	otelconfig.OTelConfigData.Host = cdb.GetOrDefaultString("otel_agent_host", "localhost")
+	otelconfig.OTelConfigData.MetricsPort = cdb.GetOrDefaultInt("otel_agent_metrics_port", 4318)
+	otelconfig.OTelConfigData.TracePort = cdb.GetOrDefaultInt("otel_agent_trace_port", 4318)
+	otelconfig.OTelConfigData.OtelMetricGRPC = cdb.GetOrDefaultBool("otel_agent_use_grpc_metric", false)
+	otelconfig.OTelConfigData.OtelTraceGRPC = cdb.GetOrDefaultBool("otel_agent_use_grpc_trace", false)
+	otelconfig.OTelConfigData.MetricsURLPath = cdb.GetOrDefaultString("otel_agent_metrics_uri", "")
+	otelconfig.OTelConfigData.TraceURLPath = cdb.GetOrDefaultString("otel_agent_trace_uri", "")
+	otelconfig.OTelConfigData.PoolName = poolName
+	otelconfig.OTelConfigData.UseTls = cdb.GetOrDefaultBool("otel_use_tls", false)
+	otelconfig.OTelConfigData.TLSCertPath = cdb.GetOrDefaultString("otel_tls_cert_path", "")
+	otelconfig.OTelConfigData.ResolutionTimeInSec = cdb.GetOrDefaultInt("otel_resolution_time_in_sec", 1)
+	otelconfig.OTelConfigData.ExporterTimeout = cdb.GetOrDefaultInt("otel_exporter_time_in_sec", 30)
+	otelconfig.OTelConfigData.EnableRetry = cdb.GetOrDefaultBool("otel_enable_exporter_retry", false)
+	otelconfig.OTelConfigData.ResourceType = gAppConfig.StateLogPrefix
+	otelconfig.OTelConfigData.OTelErrorReportingInterval = cdb.GetOrDefaultInt("otel_error_reporting_interval_in_sec", 60)
+	otelconfig.SetOTelIngestToken(cdb.GetOrDefaultString("otel_ingest_token", ""))
 }
 
 func LogOccConfigs() {
@@ -535,6 +567,18 @@ func LogOccConfigs() {
 			"bouncer_enabled":          gAppConfig.BouncerEnabled,
 			"bouncer_startup_delay":    gAppConfig.BouncerStartupDelay,
 			"bouncer_poll_interval_ms": gAppConfig.BouncerPollInterval,
+		},
+		"OTEL": {
+			"enable_otel":                          otelconfig.OTelConfigData.Enabled,
+			"otel_use_tls":                         otelconfig.OTelConfigData.UseTls,
+			"skip_cal_statelog":                    otelconfig.OTelConfigData.SkipCalStateLog,
+			"otel_agent_host":                      otelconfig.OTelConfigData.Host,
+			"otel_agent_metrics_port":              otelconfig.OTelConfigData.MetricsPort,
+			"otel_agent_trace_port":                otelconfig.OTelConfigData.TracePort,
+			"otel_agent_metrics_uri":               otelconfig.OTelConfigData.MetricsURLPath,
+			"otel_agent_trace_uri":                 otelconfig.OTelConfigData.TraceURLPath,
+			"otel_resolution_time_in_sec":          otelconfig.OTelConfigData.ResolutionTimeInSec,
+			"otel_error_reporting_interval_in_sec": otelconfig.OTelConfigData.OTelErrorReportingInterval,
 		},
 		"PROFILE": {
 			"enable_profile":      gAppConfig.EnableProfile,
@@ -651,6 +695,10 @@ func LogOccConfigs() {
 			if !gAppConfig.BouncerEnabled {
 				continue
 			}
+		case "OTEL":
+			if !otelconfig.OTelConfigData.Enabled {
+				continue
+			}
 		case "PROFILE":
 			if !gAppConfig.EnableProfile {
 				continue
@@ -712,7 +760,6 @@ func LogOccConfigs() {
 		}
 		evt.Completed()
 	}
-
 }
 
 // CheckOpsConfigChange checks if the ops config file needs to be reloaded and reloads it if necessary.
@@ -813,6 +860,8 @@ func (cfg *Config) NumWorkersCh() <-chan int {
 func (cfg *Config) GetBacklogLimit(wtype HeraWorkerType, shard int) int {
 	if wtype == wtypeRO {
 		return gAppConfig.BacklogPct * GetNumRWorkers(shard) / 100
+	} else if wtype == wtypeStdBy {
+		return gAppConfig.BacklogPct * GetNumStdByWorkers(shard) / 100
 	}
 	return gAppConfig.BacklogPct * GetNumWWorkers(shard) / 100
 }
@@ -882,6 +931,26 @@ func GetNumRWorkers(shard int) int {
 		num = GetNumWorkers(shard) * gAppConfig.ReadonlyPct / 100
 		if num == 0 {
 			num = 1
+		}
+	}
+	return num
+}
+
+// GetNumStdByWorkers gets the number of workers for the "StdBy" pool
+func GetNumStdByWorkers(shard int) int {
+	num := GetNumWWorkers(shard)
+	// TafChildrenPct should not be greater than 100.
+	if gAppConfig.TafChildrenPct > 100 {
+		return num
+	}
+	if gAppConfig.EnableTAF && gAppConfig.TafChildrenPct < 100 {
+		if gAppConfig.TafChildrenPct < 0 {
+			num = 1
+		} else {
+			num = num * gAppConfig.TafChildrenPct / 100
+			if num == 0 {
+				num = 1
+			}
 		}
 	}
 	return num
