@@ -24,11 +24,19 @@ import (
 type Mux interface {
 	StartServer() error
 	StopServer()
+	StartOTelAgent() error
+	StopOTelAgent() error
 }
 
 /**
 commons used by mux tests
 */
+
+const OTEL_AGENT_DOCKER_CONFIG_PATH = "docker_compose_otel_collector.yaml"
+const OTEL_AGENT_CONFIG_FILE_PATH = "otel_config.yaml"
+const OTEL_LOG_DIR = "otel_logs"
+
+var otelLogsDir string
 
 type WorkerType int
 
@@ -359,9 +367,15 @@ func (m *mux) StartServer() error {
 			os.Setenv("username", "herausertest")
 			os.Setenv("password", "Hera-User-Test-9")
 			os.Setenv("TWO_TASK", "tcp(127.0.0.1:2121)/heratestdb")
+			os.Setenv("TWO_TASK_STANDBY0", "tcp(127.0.0.1:2121)/heratestdb")
+			os.Setenv("TWO_TASK_STANDBY0_0", "tcp(127.0.0.1:2121)/heratestdb")
+			os.Setenv("TWO_TASK_STANDBY0_1", "tcp(127.0.0.1:2121)/heratestdb")
 		} else if xMysql == "auto" {
 			ip := MakeDB("mysql22", "heratestdb", MySQL)
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_STANDBY0", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_STANDBY0_0", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_STANDBY0_1", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
 
@@ -454,4 +468,79 @@ func (m *mux) StopServer() {
 	m.cleanupConfig()
 	os.Chdir(m.origDir)
 	logger.GetLogger().Log(logger.Info, "Exit StopServer time=", time.Now().Unix())
+}
+
+func (m *mux) StartOTelAgent() error {
+	logger.GetLogger().Log(logger.Info, "starting OTEL agent locally at: ", time.Now())
+	err := generateConfigData()
+	if err != nil {
+		return err
+		logger.GetLogger().Log(logger.Alert, "error while Generating configuration datax, error: ", err)
+	}
+	shutdownAgent := exec.Command("docker-compose", "-f", OTEL_AGENT_DOCKER_CONFIG_PATH, "down")
+	err = shutdownAgent.Run()
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, "error while stopping OTEL agent, error: ", err)
+	}
+	startCommand := exec.Command("docker-compose", "-f", OTEL_AGENT_DOCKER_CONFIG_PATH, "up", "-d")
+	err = startCommand.Run()
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, "failed to start OTEL agent, error: ", err)
+	}
+	return err
+}
+
+func (m *mux) StopOTelAgent() error {
+	logger.GetLogger().Log(logger.Info, "stoping OTEL agent locally at: ", time.Now())
+	shutdownAgent := exec.Command("docker-compose", "-f", OTEL_AGENT_DOCKER_CONFIG_PATH, "down")
+	err := shutdownAgent.Run()
+
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, "error while stopping OTEL agent, error: ", err)
+	}
+	return err
+}
+
+func generateConfigData() error {
+	workingDir, _ := os.Getwd()
+	otelLogsDir = filepath.Join(workingDir, OTEL_LOG_DIR)
+	_, err := os.Stat(otelLogsDir)
+	if !os.IsNotExist(err) {
+		os.RemoveAll(otelLogsDir)
+	}
+	err = os.MkdirAll(otelLogsDir, 0777)
+	if err != nil {
+		return err
+	}
+	configFilePath := filepath.Join(workingDir, OTEL_AGENT_CONFIG_FILE_PATH)
+	_, err = os.Stat(configFilePath)
+	if os.IsNotExist(err) {
+		configFile, err := os.OpenFile(configFilePath, os.O_CREATE|os.O_RDWR, 0644)
+		if err != nil {
+			return err
+		}
+		_, err = configFile.WriteString(otelConfigYamlData)
+		if err != nil {
+			return err
+		}
+		configFile.Close()
+	}
+	dockerDefinitionFile := filepath.Join(workingDir, OTEL_AGENT_DOCKER_CONFIG_PATH)
+	_, err = os.Stat(dockerDefinitionFile)
+	if os.IsNotExist(err) {
+		dockerFile, err := os.OpenFile(dockerDefinitionFile, os.O_CREATE|os.O_RDWR, 0777)
+		if err != nil {
+			return err
+		}
+		_, err = dockerFile.WriteString(otelCollectorDockerDef)
+		if err != nil {
+			return err
+		}
+		dockerFile.Close()
+	}
+	return nil
+}
+
+func GetOTELLogDirPath() string {
+	return otelLogsDir
 }
