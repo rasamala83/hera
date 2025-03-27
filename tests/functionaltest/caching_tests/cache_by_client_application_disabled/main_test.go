@@ -35,12 +35,12 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["db_heartbeat_interval"] = "10"
 	appcfg["enable_caching"] = "true"
-	appcfg["caching_cfg_reload_interval"] = "60"
+	appcfg["caching_cfg_reload_interval"] = "5"
 	appcfg["cache_response_timeout_ms"] = "3000"
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
-	opscfg["opscfg.default.server.max_lifespan_per_child"] = "5"
+	opscfg["opscfg.default.server.max_lifespan_per_child"] = "500"
 
 	appcfg["child.executable"] = "mysqlworker"
 
@@ -51,7 +51,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
-func populateCache() error {
+func doRequestFromAppA() error {
 
 	shard := 0
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
@@ -68,15 +68,15 @@ func populateCache() error {
 	}
 	mux := gosqldriver.InnerConn(conn)
 	mux.SetCalCorrID("5af5e4a2758e")
+	mux.SetClientInfo("clientApplicationA", testutil.GetHostname())
 
-	rows, err := conn.QueryContext(ctx, "SELECT version()")
-	if err != nil {
-		return fmt.Errorf("expected 1 row but received an unexpected error %v", err)
-	}
+	rows, _ := conn.QueryContext(ctx, "SELECT version()")
+
 	if !rows.Next() {
 		return fmt.Errorf("Expected 1 row")
 	}
 	rows.Close()
+	cancel()
 	conn.Close()
 	return err
 }
@@ -94,7 +94,7 @@ func before() error {
 		err := testutil.DBDirect(
 			"create table hera_sql_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
 				"bind_variables varchar(1000),TTL_sec BIGINT,enable_shadow_test varchar(1),tableName varchar(30),"+
-				"invalidation_clause varchar(1000),caching_enabled varchar(1),cache_by_corrid varchar(1), caching_enabled_apps varchar(4000), remarks varchar(4000),hera_module varchar(100))",
+				"invalidation_clause varchar(1000),caching_enabled varchar(1),cache_by_corrid varchar(1), caching_enabled_apps varchar(4000),remarks varchar(4000),hera_module varchar(100))",
 			os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL,
 		)
 		if err != nil {
@@ -105,13 +105,13 @@ func before() error {
 }
 
 // GET (Cache MISS) + SET
-func TestTTLCacheEnableShadowTest(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestTTLCacheEnableShadowTest begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestTTLCacheByClientApplicationDisabled(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestTTLCacheByClientApplicationDisabled begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	testutil.RunDML("DELETE from hera_sql_caching")
-	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '2904134799', 'MyTestQuery', 'abc=123', 60, 'Y', 'MyTestTable', '', 'Y', 'Y', 'all', '', 'hera-test')")
+	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '2904134799', 'MyTestQuery', 'abc=123', 60, 'N', 'MyTestTable', '', 'Y', 'N', 'clientApplicationA,clientApplicationC','', 'hera-test')")
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	if testutil.RegexCountFile("Loaded 1 sqlhashes, 1 cacheCfg entries", "hera.log") < 1 {
 		t.Fatalf("Error: should have loaded the cacheCfg entry...")
@@ -121,15 +121,14 @@ func TestTTLCacheEnableShadowTest(t *testing.T) {
 		t.Fatalf("Error: should have loaded the cacheCfg entry...")
 	}
 
-	err := populateCache()
+	err := doRequestFromAppA()
 
 	if err != nil {
-		t.Fatal("Error populating cache:", err)
+		t.Fatal("Error:", err)
 		return
 	}
 
 	time.Sleep(5 * time.Second)
-
 	if testutil.RegexCountFile("2904134799 CachingEnabled for  GET : true", "hera.log") < 1 {
 		t.Fatalf("Error: should have entered this block")
 	}
@@ -177,7 +176,7 @@ func TestTTLCacheEnableShadowTest(t *testing.T) {
 	}
 
 	mux := gosqldriver.InnerConn(conn)
-	mux.SetCalCorrID("5af5e4a2758e")
+	mux.SetClientInfo("clientApplicationB", testutil.GetHostname())
 
 	rows, _ := conn.QueryContext(ctx, "SELECT version()")
 
@@ -186,48 +185,52 @@ func TestTTLCacheEnableShadowTest(t *testing.T) {
 	}
 	rows.Close()
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	if testutil.RegexCountFile("2904134799 CachingEnabled for  GET : true", "hera.log") < 2 {
 		t.Fatalf("Error: should have entered this block")
 	}
 
-	if testutil.RegexCountFile("coordinator doCacheRequest: starting", "hera.log") < 2 {
-		t.Fatalf("Error: should have entered doCacheRequest when caching is enabled")
+	if testutil.RegexCountFile("Application is not enabled for caching", "hera.log") < 1 {
+		t.Fatalf("Error: should have exited DispatchCachingSession")
 	}
 
-	if testutil.RegexCountFile("Trying GET with key", "hera.log") < 2 {
-		t.Fatalf("Error: should have entered getRecordFromCache when caching is enabled")
+	if testutil.RegexCountFile("coordinator DispatchCachingSession for GET returned: caching is not enabled for client application", "hera.log") < 1 {
+		t.Fatalf("Error: should have exited DispatchCachingSession with caching is not enabled for client application")
 	}
 
-	if testutil.RegexCountFile("Not responding to the client from cache...ShadowTestEnabled: true", "hera.log") < 1 {
-		t.Fatalf("Error: should have entered this block when shadow_test is enabled")
-	}
-
-	if testutil.RegexCountFile(".*getRecordFromCache\tshadowTest.*", "cal.log") < 1 {
-		t.Fatalf("Error: should see the event when shadow_test is enabled")
-	}
-
-	if testutil.RegexCountFile(".*\tGET\t.*\tshadowTestEnabled.*", "cal.log") < 1 {
-		t.Fatalf("Error: should see the GET status set to shadowTestEnabled")
-	}
-
-	if testutil.RegexCountFile("coordinator DispatchCachingSession for GET returned: cache session: shadow test enabled", "hera.log") < 1 {
-		t.Fatalf("Error: should return ErrCacheShadowTest when shadow test is enabled")
-	}
-
-	if testutil.RegexCountFile(".*GET\t2904134799\tshadowTestEnabled.*", "cal.log") < 1 {
-		t.Fatalf("Error: should be a cache HIT with status shadowTestEnabled")
+	if testutil.RegexCountFile(".*GET\t2904134799\t0.*", "cal.log") > 0 {
+		t.Fatalf("Error: request should not be served from cache")
 	}
 
 	if testutil.RegexCountFile(".*EXEC\t2904134799\t0.*", "cal.log") < 2 {
 		t.Fatalf("Error: query should be sent to the database")
 	}
 
-	if testutil.RegexCountFile("Skip setting the record again to cache.. GET returned", "hera.log") < 1 {
-		t.Fatalf("Error: should not SET the record again to cache")
+	if testutil.RegexCountFile("coordinator DispatchCachingSession for SET returned: caching is not enabled for client application", "hera.log") < 1 {
+		t.Fatalf("Error: should have exited DispatchCachingSession with caching is not enabled for client application")
 	}
+
 	conn.Close()
 
-	logger.GetLogger().Log(logger.Debug, "TestTTLCacheEnableShadowTest done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	err = doRequestFromAppA()
+
+	if err != nil {
+		t.Fatal("Error:", err)
+		return
+	}
+
+	if testutil.RegexCountFile(".*GET\t2904134799\t0.*", "cal.log") < 1 {
+		t.Fatalf("Error: request should be served from cache for Application A")
+	}
+
+	if testutil.RegexCountFile(".*EXEC\t2904134799\t0.*", "cal.log") > 2 {
+		t.Fatalf("Error: query should not be sent to the database")
+	}
+
+	if testutil.RegexCountFile(".*SET\t2904134799\t0.*", "cal.log") > 1 {
+		t.Fatalf("Error: should not see SET for Application A")
+	}
+
+	logger.GetLogger().Log(logger.Debug, "TestTTLCacheByClientApplicationDisabled done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 }

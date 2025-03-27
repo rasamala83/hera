@@ -35,7 +35,6 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["db_heartbeat_interval"] = "10"
 	appcfg["enable_caching"] = "true"
 	appcfg["caching_cfg_reload_interval"] = "60"
-	appcfg["cache_by_corrid"] = "false"
 	appcfg["cache_response_timeout_ms"] = "10000"
 
 	opscfg := make(map[string]string)
@@ -62,7 +61,7 @@ func before() error {
 		err := testutil.DBDirect(
 			"create table hera_sql_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
 				"bind_variables varchar(1000),TTL_sec BIGINT,enable_shadow_test varchar(1),tableName varchar(30),"+
-				"invalidation_clause varchar(1000),caching_enabled varchar(1),remarks varchar(4000),hera_module varchar(100))",
+				"invalidation_clause varchar(1000),caching_enabled varchar(1),cache_by_corrid varchar(1), caching_enabled_apps varchar(4000), remarks varchar(4000),hera_module varchar(100))",
 			os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL,
 		)
 		if err != nil {
@@ -90,7 +89,7 @@ func TestTTLCacheEmptyResultSet(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestTTLCacheEmptyResultSet begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	testutil.RunDML("DELETE from hera_sql_caching")
-	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, remarks, hera_module) VALUES  ('1', '619648305', 'SelectQueryWithEmptyResultSet', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', '', 'hera-test')")
+	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '619648305', 'SelectQueryWithEmptyResultSet', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', 'N', 'all', '', 'hera-test')")
 
 	time.Sleep(1 * time.Second)
 
