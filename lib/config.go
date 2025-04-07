@@ -388,7 +388,7 @@ func InitConfig(poolName string) error {
 	gAppConfig.EnableQueryReplaceNL = cdb.GetOrDefaultBool("enable_query_replace_nl", true)
 	gAppConfig.EnableBindHashLogging = cdb.GetOrDefaultBool("enable_bind_hash_logging", false)
 	gAppConfig.EnableSessionVariables = cdb.GetOrDefaultBool("enable_session_variables", false)
-	gAppConfig.UseNonBlocking = cdb.GetOrDefaultBool("use_non_blocking", false)
+	gAppConfig.UseNonBlocking = cdb.GetOrDefaultBool("use_nonblocking", false)
 
 	var numWorkers int
 	numWorkers = 6
@@ -651,8 +651,8 @@ func LogOccConfigs() {
 			"use_non_blocking": gAppConfig.UseNonBlocking,
 		},
 	}
-	calName := mux_config_cal_name
 	for feature, configs := range whiteListConfigs {
+		calName := mux_config_cal_name
 		switch feature {
 		case "BACKLOG":
 			if gAppConfig.BacklogPct == 0 {
