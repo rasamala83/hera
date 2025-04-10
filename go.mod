@@ -49,8 +49,8 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240515191416-fc5f0ca64291 // indirect
 	google.golang.org/grpc v1.64.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-    github.com/pmezard/go-difflib v1.0.0 // indirect
-    github.com/spacemonkeygo/openssl v0.0.0-20181017203307-c2dcc5cca94a // indirect
-    github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
-    gopkg.in/yaml.v3 v3.0.1 // indirect
+        github.com/pmezard/go-difflib v1.0.0 // indirect
+        github.com/spacemonkeygo/openssl v0.0.0-20181017203307-c2dcc5cca94a // indirect
+        github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
+        gopkg.in/yaml.v3 v3.0.1 // indirect
 )
