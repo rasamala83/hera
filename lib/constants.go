@@ -90,6 +90,9 @@ var (
 	ErrCacheMultipleClientReq,
 	ErrCacheClientReqCanceled,
 	ErrCacheClientWriteFailed,
+	ErrCacheKeyNotSet,
+	ErrCacheInvalidTTL,
+	ErrCacheInvalidOperation,
 	ErrReqParseFail error
 )
 
@@ -132,6 +135,9 @@ func MkErr(prefix string) {
 	ErrCacheMultipleClientReq = errors.New("cache session: multiple client request not supported")
 	ErrCacheClientReqCanceled = errors.New("cache session: client request canceled")
 	ErrCacheClientWriteFailed = errors.New("cache session: client write failed")
+	ErrCacheKeyNotSet = errors.New("cache-controlled cache request: key not set")
+	ErrCacheInvalidTTL = errors.New("cache-controlled cache request: invalid ttl value")
+	ErrCacheInvalidOperation = errors.New("client-controlled cache request: invalid operation")
 }
 
 // Configuration entry names
