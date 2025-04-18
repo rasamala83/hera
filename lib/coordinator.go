@@ -57,6 +57,8 @@ type Coordinator struct {
 	poolName         string
 	clientPoolStack  string
 	sendResponseMetadata bool
+	isClientControlledCaching bool
+	isClientControlledCachingRequest bool
 	// tells if the current request is SELECT
 	isRead bool
 	// for debugging
@@ -80,11 +82,12 @@ type Coordinator struct {
 	writeToCache bool
 	isMultiReq bool
 	isMultiReqNs string
+	cacheInfo  *CacheInfo
 }
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
 func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstring, conn net.Conn) *Coordinator {
-	coordinator := &Coordinator{clientchannel: clientchannel, conn: conn, ctx: ctx, done: make(chan int, 1), id: conn.RemoteAddr().String(), shard: &shardInfo{sessionShardID: -1}, prevShard: &shardInfo{sessionShardID: -1}}
+	coordinator := &Coordinator{clientchannel: clientchannel, conn: conn, ctx: ctx, done: make(chan int, 1), id: conn.RemoteAddr().String(), shard: &shardInfo{sessionShardID: -1}, prevShard: &shardInfo{sessionShardID: -1}, isClientControlledCaching: false, cacheInfo: &CacheInfo{}}
 	var err error
 	coordinator.sqlParser, err = common.NewRegexSQLParser()
 	if err != nil {
@@ -150,6 +153,8 @@ func (crd *Coordinator) Run() {
 			}
 			// new session
 			crd.nss = nil
+			crd.cacheInfo = &CacheInfo{}
+			crd.isClientControlledCachingRequest = false
 			handle, _ := crd.handleMux(ns)
 			if !handle {
 				// not handled by mux, it means it is a worker command
@@ -346,6 +351,8 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 				}
 			} else if getErr == ErrCacheClientClosed || getErr == ErrCacheMultipleClientReq || getErr == ErrCacheClientReqCanceled || getErr == ErrCacheClientWriteFailed {
 				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", getErr)
+				crd.isClientControlledCachingRequest = false
+				crd.cacheInfo = &CacheInfo{}
 				return (getErr == nil)
 			} else {
 				logger.GetLogger().Log(logger.Verbose, "coordinator DispatchCachingSession for GET returned:", getErr)
@@ -362,6 +369,8 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 			txn.AddDataStr("raddr", crd.conn.RemoteAddr().String())
 			txn.SetDuration(duration)
 			txn.Completed()
+			crd.isClientControlledCachingRequest = false
+			crd.cacheInfo = &CacheInfo{}
 			return (getErr == nil)
 		}
 	}
@@ -383,7 +392,7 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 					}
 				} else {
 					if crd.writeToCache && (crd.worker == nil) && !crd.isMultiReq {
-						go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash, cacheByCorrId)
+						go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash, cacheByCorrId, crd.isClientControlledCachingRequest, crd.cacheInfo.key)
 					} else {
 						logger.GetLogger().Log(logger.Verbose, "Skip setting the record to cache.. crd.writeToCache:", crd.writeToCache, "crd.isMultiReq", crd.isMultiReq)
 					}
@@ -393,6 +402,8 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 		crd.response = ""
 		crd.writeToCache = false
 		getErr = nil
+		crd.isClientControlledCachingRequest = false
+		crd.cacheInfo = &CacheInfo{}
 		return (taferr == nil)
 	}
 
@@ -412,7 +423,7 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 				}
 			} else {
 				if crd.writeToCache && (crd.worker == nil) && !crd.isMultiReq {
-					go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash, cacheByCorrId)
+					go setRecordToCache(request, crd.response, cache_ttl, crd.extractedcorrId, crd.sqlhash, cacheByCorrId, crd.isClientControlledCachingRequest, crd.cacheInfo.key)
 				} else {
 					logger.GetLogger().Log(logger.Verbose, "Skip setting the record to cache.. crd.writeToCache:", crd.writeToCache, "crd.isMultiReq", crd.isMultiReq)
 				}
@@ -422,6 +433,8 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 	crd.response = ""
 	crd.writeToCache = false
 	getErr = nil
+	crd.isClientControlledCachingRequest = false
+	crd.cacheInfo = &CacheInfo{}
 	return (deferr == nil)
 }
 
@@ -495,6 +508,17 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 				return true /*handled*/, nil
 			}
 		} // end GetConfig().EnableQueryBindBlocker
+		if GetConfig().EnableCaching && crd.isClientControlledCaching {
+			crd.cacheInfo = &CacheInfo{}
+			crd.isClientControlledCachingRequest, err = crd.PreprocessCaching(request)
+			if err != nil {
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator PreprocessCaching returned:", err)
+				}
+				crd.cacheInfo = &CacheInfo{}
+				crd.isClientControlledCachingRequest = false
+			}
+		}
 		for _, ns := range nss {
 			if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
 				crd.sqlhash = int32(utility.GetSQLHash(string(ns.Payload)))
@@ -622,11 +646,13 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		hostname = hostname[:39]
 	}
 	crd.sendResponseMetadata = false
+	crd.isClientControlledCaching = false
 	serverInfo := fmt.Sprintf("%s:load_saved_sessions*CalThreadId=0*TopLevelTxnStartTime=TopLevelTxn not set*Host=%s",
 		cal.GetCalClientInstance().GetPoolName(), hostname)
 	if GetConfig().EnableCaching {
 		idx := strings.Index(clientInfo, "ClientSupportedProtocolVersions: 2")
 		if idx != -1 {
+			crd.isClientControlledCaching = true // Client controlled caching support for clients with version 2.
 			crd.sendResponseMetadata = true // Send response metadata (when caching is enabled) for clients with version 2.
 			// Indicate to the client that the server is going to send additional metadata while responding to requests.
 			serverInfo = fmt.Sprintf("%s:load_saved_sessions*CalThreadId=0*TopLevelTxnStartTime=TopLevelTxn not set*Host=%s*ServerSupportedProtocolVersion: 2",

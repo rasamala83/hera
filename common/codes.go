@@ -53,6 +53,10 @@ const (
 	CmdShardKey         = 27
 	CmdGetNumShards     = 28
 	CmdSetShardID       = 29
+	CmdCacheKey         = 30
+	CmdCacheTTL         = 31
+	CmdCacheOp          = 32
+
 )
 
 // DataType defines Bind data types
