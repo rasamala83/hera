@@ -993,6 +993,9 @@ func (worker *WorkerClient) setState(status HeraWorkerStatus) {
 		}
 		return
 	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "worker pid=", worker.pid, " changing status from", currentStatus, "to", status)
+	}
 	//This checks whether state transition is valid or not
 	worker.Status = status
 	GetStateLog().PublishStateEvent(StateEvent{eType: WorkerStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, workerID: worker.ID, newWState: status})
