@@ -634,7 +634,7 @@ int Worker::handle_command(const int _cmd, std::string &_buffer)
 		{	
 			std::ostringstream msg;
 
-//			m_writer->write(SERVER_UNEXPECTED_COMMAND, "");
+			m_writer->write(SERVER_UNEXPECTED_COMMAND, "");
 			msg << "err_msg=Unknown command " << _cmd << ": " << _buffer;
 			WRITE_LOG_ENTRY(logfile, LOG_ALERT, msg.str().c_str());
 			if (m_cal_enabled)
