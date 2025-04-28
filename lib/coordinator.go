@@ -1151,6 +1151,30 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			plusAnyCorrId = netstring.NewNetstringEmbedded(ns)
 
 		}
+		// Do not send caching related commands to the worker.
+		if crd.isClientControlledCachingRequest {
+			logger.GetLogger().Log(logger.Verbose, "isClientControlledCachingRequest: Before rewrite: ", string(plusAnyCorrId.Serialized))
+			var newNss []*netstring.Netstring
+			if plusAnyCorrId.IsComposite() {
+				nss, err := netstring.SubNetstrings(plusAnyCorrId)
+				if err != nil {
+					logger.GetLogger().Log(logger.Alert, crd.id, "Can't parse embedded ns, size", len(plusAnyCorrId.Serialized))
+					return false, ErrClientFail
+				}
+				for _, ns := range nss {
+					if ns.Cmd != common.CmdCacheKey && ns.Cmd != common.CmdCacheTTL && ns.Cmd != common.CmdCacheOp {
+						newNss = append(newNss, ns)
+					}
+				}
+				plusAnyCorrId = netstring.NewNetstringEmbedded(newNss)
+			} else {
+				if plusAnyCorrId.Cmd != common.CmdCacheKey && plusAnyCorrId.Cmd != common.CmdCacheTTL && plusAnyCorrId.Cmd != common.CmdCacheOp {
+					newNss = append(newNss, plusAnyCorrId)
+					plusAnyCorrId = netstring.NewNetstringEmbedded(newNss)
+				}
+			}
+			logger.GetLogger().Log(logger.Verbose, "isClientControlledCachingRequest: After rewrite: ", string(plusAnyCorrId.Serialized))
+		}
 		err := worker.Write(plusAnyCorrId, uint16(cnt))
 		if err != nil {
 			if logger.GetLogger().V(logger.Debug) {
