@@ -22,12 +22,11 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"net"
-	"os"
-
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
+	"net"
+	"os"
 )
 
 var corrIDUnsetCmd = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
@@ -38,6 +37,10 @@ type heraConnection struct {
 	reader *netstring.Reader
 	// for the sharding extension
 	shardKeyPayload []byte
+	//caching extension
+	cacheKey []byte
+	cacheTTL []byte
+	cacheOperation []byte
 	// correlation id
 	corrID *netstring.Netstring
 	clientinfo *netstring.Netstring
@@ -168,6 +171,36 @@ func (c *heraConnection) SetShardKeyPayload(payload string) {
 // implementing the extension HeraConn interface
 func (c *heraConnection) ResetShardKeyPayload() {
 	c.SetShardKeyPayload("")
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) SetCacheKey(payload string) {
+	c.cacheKey = []byte(payload)
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) ResetCacheKey() {
+	c.SetCacheKey("")
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) SetCacheTTL(payload string) {
+	c.cacheTTL = []byte(payload)
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) ResetCacheTTL() {
+	c.SetCacheTTL("")
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) SetCacheOperation(payload string) {
+	c.cacheOperation = []byte(payload)
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) ResetCacheOperation() {
+	c.SetCacheOperation("")
 }
 
 // implementing the extension HeraConn interface
