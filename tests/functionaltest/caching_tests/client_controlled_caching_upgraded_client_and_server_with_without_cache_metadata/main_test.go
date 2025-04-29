@@ -72,6 +72,10 @@ func populateCache() error {
 	if err != nil {
 		return err
 	}
+	mux.SetCacheKey("510935701")
+	mux.SetCacheTTL("30")
+	mux.SetCacheOperation("GET")
+
 	rows, _ := conn.QueryContext(ctx, "SELECT 'pqr' from dual")
 
 	if !rows.Next() {
@@ -101,8 +105,8 @@ func before() error {
 }
 
 // GET (Cache MISS) + SET
-func TestTTLCacheResponseMetadataUpgradedClientAndServer(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestTTLCacheResponseMetadataUpgradedClientAndServer begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestClientControlledCacheUpgradedClientAndServerWithWithoutCacheMetadata(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestClientControlledCacheUpgradedClientAndServerWithWithoutCacheMetadata begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	testutil.RunDML("DELETE from hera_sql_caching")
 	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '3029497934', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', 'N', 'all','', 'hera-test')")
@@ -124,7 +128,24 @@ func TestTTLCacheResponseMetadataUpgradedClientAndServer(t *testing.T) {
 	}
 
 	time.Sleep(10 * time.Second)
-	if testutil.RegexCountFile("3029497934 CachingEnabled for  GET : true", "hera.log") < 1 {
+
+	if testutil.RegexCountFile(".*sendCacheResponseMetadata.*", "cal.log") < 1 {
+		t.Fatalf("Error: should see sendCacheResponseMetadata event with client name")
+	}
+
+	if testutil.RegexCountFile("server info:.*ServerSupportedProtocolVersion: 2", "hera.log") < 1 {
+		t.Fatalf("Error: should respond with ServerSupportedProtocolVersion")
+	}
+
+	if testutil.RegexCountFile("coordinator PreprocessCaching returned: cache session: request not supported", "hera.log") > 0 {
+		t.Fatalf("Error: PreprocessCaching should not return request not supported")
+	}
+
+	if testutil.RegexCountFile("isClientControlledCachingRequest.*rewrite", "hera.log") < 2 {
+		t.Fatalf("Error: should enter rewrite request block for requests with cache metadata")
+	}
+
+	if testutil.RegexCountFile("Trying GET with key: 510935701", "hera.log") < 1 {
 		t.Fatalf("Error: should have entered this block")
 	}
 
@@ -136,7 +157,7 @@ func TestTTLCacheResponseMetadataUpgradedClientAndServer(t *testing.T) {
 		t.Fatalf("Error: should have dispatched the request to database")
 	}
 
-	if testutil.RegexCountFile("Trying SET with key", "hera.log") < 1 {
+	if testutil.RegexCountFile("Trying SET with key: 510935701", "hera.log") < 1 {
 		t.Fatalf("Error: should have entered setRecordToCache when caching is enabled")
 	}
 
@@ -184,7 +205,6 @@ func TestTTLCacheResponseMetadataUpgradedClientAndServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to set CLIENT_INFO")
 	}
-
 	rows, _ := conn.QueryContext(ctx, "SELECT 'pqr' from dual")
 
 	if !rows.Next() {
@@ -207,69 +227,44 @@ func TestTTLCacheResponseMetadataUpgradedClientAndServer(t *testing.T) {
 		t.Fatalf("Error: should see sendCacheResponseMetadata event with the client application name")
 	}
 
-	if testutil.RegexCountFile("3029497934 CachingEnabled for  GET : true", "hera.log") < 2 {
-		t.Fatalf("Error: should have entered this block")
+	if testutil.RegexCountFile("coordinator PreprocessCaching returned: cache session: request not supported", "hera.log") < 1 {
+		t.Fatalf("Error: PreprocessCaching should not return request not supported")
+	}
+
+	if testutil.RegexCountFile("3029497934 CachingEnabled for  GET : true", "hera.log") < 1 {
+		t.Fatalf("Error: should not have entered this block")
 	}
 
 	if testutil.RegexCountFile("coordinator doCacheRequest: starting", "hera.log") < 2 {
 		t.Fatalf("Error: should have entered doCacheRequest when caching is enabled")
 	}
 
-	if testutil.RegexCountFile("Trying GET with key", "hera.log") < 2 {
-		t.Fatalf("Error: should have entered getRecordFromCache when caching is enabled")
+	if testutil.RegexCountFile("Trying GET with key: 510935701", "hera.log") > 1 {
+		t.Fatalf("Error: should not try cache GET with the above key")
 	}
 
-	if testutil.RegexCountFile(".*GET\t3029497934\t0.*", "cal.log") < 1 {
-		t.Fatalf("Error: should be a cache HIT")
+	// GET should fail with no key
+	if testutil.RegexCountFile(".*GET\t3029497934\t2.*", "cal.log") < 2 {
+		t.Fatalf("Error: should see GET when cacheCfgRecord is enabled for caching")
 	}
 
-	if testutil.RegexCountFile(".*EXEC\t3029497934\t0.*", "cal.log") < 1 {
-		t.Fatalf("Error: query should not be sent to the database")
+	if testutil.RegexCountFile(".*SET\t3029497934\t0.*", "cal.log") < 2 {
+		t.Fatalf("Error: should see SET when cacheCfgRecord is enabled for caching")
 	}
 
-	if testutil.RegexCountFile("Before ResponseMetadata: 1:6,", "hera.log") < 1 {
-		t.Fatalf("Error: should have entered this block when ClientSupportedProtocolVersions is sent by the client")
+	if testutil.RegexCountFile(".*EXEC\t3029497934\t0.*", "cal.log") < 2 {
+		t.Fatalf("Error: query should be sent to the database")
 	}
 
-	if testutil.RegexCountFile("After ResponseMetadata: 6:6 1020,", "hera.log") < 1 {
-		t.Fatalf("Error: should have entered this block when ClientSupportedProtocolVersions is sent by the client")
+	if testutil.RegexCountFile("Before ResponseMetadata: 1:6,", "hera.log") > 0 {
+		t.Fatalf("Error: should not have entered this block")
 	}
 
-	mux.SetCalCorrID("5af5e4a2758e")
-	// Re-use same connection
-	rows, _ = conn.QueryContext(ctx, "SELECT 'pqr' from dual")
-
-	if !rows.Next() {
-		t.Fatalf("Expected 1 row")
-	}
-	rows.Close()
-	time.Sleep(3 * time.Second)
-
-	if testutil.RegexCountFile("3029497934 CachingEnabled for  GET : true", "hera.log") < 3 {
+	if testutil.RegexCountFile("After ResponseMetadata: 6:6 1020,", "hera.log") > 0 {
 		t.Fatalf("Error: should have entered this block")
-	}
-
-	if testutil.RegexCountFile("coordinator doCacheRequest: starting", "hera.log") < 3 {
-		t.Fatalf("Error: should have entered doCacheRequest when caching is enabled")
-	}
-
-	if testutil.RegexCountFile("Trying GET with key", "hera.log") < 3 {
-		t.Fatalf("Error: should have entered getRecordFromCache when caching is enabled")
-	}
-
-	if testutil.RegexCountFile(".*GET\t3029497934\t0.*", "cal.log") < 2 {
-		t.Fatalf("Error: should be a cache HIT")
-	}
-
-	if testutil.RegexCountFile("Before ResponseMetadata: 1:6,", "hera.log") < 2 {
-		t.Fatalf("Error: should have entered this block when ClientSupportedProtocolVersions is sent by the client")
-	}
-
-	if testutil.RegexCountFile("After ResponseMetadata: 6:6 1020,", "hera.log") < 2 {
-		t.Fatalf("Error: should have entered this block when ClientSupportedProtocolVersions is sent by the client")
 	}
 
 	conn.Close()
 
-	logger.GetLogger().Log(logger.Debug, "TestTTLCacheResponseMetadataUpgradedClientAndServer done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	logger.GetLogger().Log(logger.Debug, "TestClientControlledCacheUpgradedClientAndServerWithWithoutCacheMetadata done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 }
