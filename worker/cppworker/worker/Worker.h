@@ -153,6 +153,7 @@ protected:
 	int init_protected(const void*);
 	int helper_load_protected_configs(const void* pin);
 	std::string m_corr_id;
+	std::string m_pool_name;
 	int m_sid;
 	timeval m_mux_start_time;
 	uint m_saturation_recover;
