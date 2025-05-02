@@ -760,7 +760,6 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 	default: // all non-DB commands go this path.
 		break;
 	}
-
 	switch(_cmd) {
 	case OCC_PREPARE:
 	case OCC_PREPARE_V2:
@@ -1074,6 +1073,10 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 						   m_scuttle_id.length(), OCI_ATTR_CLIENT_INFO, errhp);
 			}
 			
+			std::string attr_action = m_corr_id+":"+m_pool_name+":"+m_query_hash;
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE,"OCI_ATTR_ACTION::%s",const_cast<char*>(attr_action.c_str()));
+			OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(attr_action.c_str()),
+                                                   attr_action.length(), OCI_ATTR_ACTION, errhp);
 			execute(rc);
 			if (cur_stmt)
 			{
@@ -1339,7 +1342,6 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			{
 				client_info = _line;
 				process_pool_info(client_info);
-
 				unsigned int last_idx = client_info.rfind(CLIENT_NAME_PREFIX);
 				if (last_idx != std::string::npos)
 				{
@@ -1365,7 +1367,10 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			if (client_info.length() == 0)
 			{
 				client_info = "unknown";
+			
 			}
+			m_pool_name.clear();
+			m_pool_name = client_info;
 			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s", client_info.c_str());
 			CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK);
 			/* std::string poolStack = _line;
@@ -1406,7 +1411,6 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 
 	case CLIENT_CAL_CORRELATION_ID:
 		rc = Worker::handle_command(CLIENT_CAL_CORRELATION_ID, _line);
-		OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_corr_id.c_str()), m_corr_id.length(), OCI_ATTR_ACTION, errhp);
 
 		if (cur_stmt != NULL)
 			CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CORRID_IN_TXN", "0");
