@@ -198,14 +198,27 @@ func (crd *Coordinator) PreprocessCaching(request *netstring.Netstring) (bool, e
 	}()
 	dice := rand.Intn(GetConfig().numCalThreads)
 	calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
-	foundKey := false
-	foundTTL := false
-	foundCacheOp := false
 	if request == nil {
 		return false, ErrCacheBadRequest
 	}
+	hasPrepare, hasExec, hasFetch, err := parseRequest(request)
+	if err != nil {
+		evt := cal.NewCalEvent("PreprocessCaching", "ErrParseRequest", cal.TransWarning, "", calThreadGroupName)
+		evt.AddDataStr("corr_id_", crd.extractedcorrId)
+		evt.AddDataStr("err", err.Error())
+		evt.Completed()
+		return false, ErrCacheBadRequest
+	}
+	if !hasPrepare || !hasExec || !hasFetch {
+		evt := cal.NewCalEvent("PreprocessCaching", "ErrCacheReqNotSupported", cal.TransWarning, "", calThreadGroupName)
+		evt.AddDataStr("corr_id_", crd.extractedcorrId)
+		evt.Completed()
+		return false, ErrCacheReqNotSupported
+	}
+	foundKey := false
+	foundTTL := false
+	foundCacheOp := false
 	var nss []*netstring.Netstring
-	var err error
 	if request.IsComposite() {
 		if crd.nss == nil {
 			nss, err = netstring.SubNetstrings(request)
