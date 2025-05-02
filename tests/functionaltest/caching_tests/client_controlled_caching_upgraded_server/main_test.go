@@ -97,8 +97,8 @@ func before() error {
 }
 
 // GET (Cache MISS) + SET
-func TestTTLCacheResponseMetadataUpgradedServer(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestTTLCacheResponseMetadataUpgradedServer begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestClientControlledCacheUpgradedServer(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestClientControlledCacheUpgradedServer begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	testutil.RunDML("DELETE from hera_sql_caching")
 	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '3029497934', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', 'N', 'all', '', 'hera-test')")
@@ -120,6 +120,23 @@ func TestTTLCacheResponseMetadataUpgradedServer(t *testing.T) {
 	}
 
 	time.Sleep(10 * time.Second)
+
+	if testutil.RegexCountFile(".*sendCacheResponseMetadata.*", "cal.log") > 0 {
+		t.Fatalf("Error: should not see sendCacheResponseMetadata event")
+	}
+
+	if testutil.RegexCountFile("server info:.*ServerSupportedProtocolVersion: 2", "hera.log") > 0 {
+		t.Fatalf("Error: should not respond with ServerSupportedProtocolVersion")
+	}
+
+	if testutil.RegexCountFile("PreprocessCaching:.*", "hera.log") > 0 {
+		t.Fatalf("Error: should not get into PreprocessCaching for v1 clients")
+	}
+
+	if testutil.RegexCountFile("isClientControlledCachingRequest.*rewrite", "hera.log") > 0 {
+		t.Fatalf("Error: should not rewrite request block for v1 clients")
+	}
+
 	if testutil.RegexCountFile("3029497934 CachingEnabled for  GET : true", "hera.log") < 1 {
 		t.Fatalf("Error: should have entered this block")
 	}
@@ -198,6 +215,10 @@ func TestTTLCacheResponseMetadataUpgradedServer(t *testing.T) {
 		t.Fatalf("Error: should not see sendCacheResponseMetadata event")
 	}
 
+	if testutil.RegexCountFile("PreprocessCaching:.*", "hera.log") > 0 {
+		t.Fatalf("Error: should not get into PreprocessCaching for v1 clients")
+	}
+
 	if testutil.RegexCountFile("3029497934 CachingEnabled for  GET : true", "hera.log") < 2 {
 		t.Fatalf("Error: should have entered this block")
 	}
@@ -227,5 +248,5 @@ func TestTTLCacheResponseMetadataUpgradedServer(t *testing.T) {
 	}
 	conn.Close()
 
-	logger.GetLogger().Log(logger.Debug, "TestTTLCacheResponseMetadataUpgradedServer done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	logger.GetLogger().Log(logger.Debug, "TestClientControlledCacheUpgradedServer done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 }

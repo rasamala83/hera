@@ -31,6 +31,14 @@ import (
 	"strings"
 )
 
+type CacheInfo struct {
+	key       string // The original key string used to generate the hash
+	ttl       uint32 // Time-to-live for the cache entry
+	operation string // Operation type (e.g., "GET", "SET")
+	cacheByCorrId bool
+	isShadowTest bool
+}
+
 func parseRequest(request *netstring.Netstring) (hasPrepare bool, hasExec bool, hasFetch bool, parseErr error) {
 	foundPrepare := false
 	foundExec := false
@@ -133,26 +141,32 @@ func getKey(request *netstring.Netstring, corrId string, sqlHash int32, cacheByC
 }
 
 // setRecordToCache tries to write the data to cache
-func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint32, corrId string, sqlHash int32, cacheByCorrId bool) {
+func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint32, corrId string, sqlHash int32, cacheByCorrId bool, isClientControlledCachingRequest bool, cacheKey string) {
 	cli, _ := GetJunoClient()
+	var keyHashStr string
 	logger.GetLogger().Log(logger.Verbose, "SET junoClientReady:", cli.junoClientReady)
 	if cli.junoClientReady && cli != nil {
 		dice := rand.Intn(GetConfig().numCalThreads)
 		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
-		keyHash, key, keyerr := getKey(request, corrId, sqlHash, cacheByCorrId)
-		if keyerr != nil {
-			evt := cal.NewCalEvent("setRecordToCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
-			evt.AddDataStr("corr_id_", corrId)
-			evt.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(sqlHash)))
-			evt.AddDataStr("err", keyerr.Error())
-			evt.Completed()
-			return
+		if isClientControlledCachingRequest {
+			keyHashStr = cacheKey // Use the key from the client request
+			logger.GetLogger().Log(logger.Verbose, "Trying SET with key:", keyHashStr, "value:", crdResponse)
+		} else {
+			keyHash, key, keyerr := getKey(request, corrId, sqlHash, cacheByCorrId)
+			if keyerr != nil {
+				evt := cal.NewCalEvent("setRecordToCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
+				evt.AddDataStr("corr_id_", corrId)
+				evt.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(sqlHash)))
+				evt.AddDataStr("err", keyerr.Error())
+				evt.Completed()
+				return
+			}
+			keyHashStr = fmt.Sprintf("%x", keyHash)
+			logger.GetLogger().Log(logger.Verbose, "Trying SET with key:", keyHashStr, "value:", crdResponse)
+			logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
 		}
-		keyHashStr := fmt.Sprintf("%x", keyHash)
-		logger.GetLogger().Log(logger.Verbose, "Trying SET with key:", keyHashStr, "value:", crdResponse)
 		caltxn := cal.NewCalAtomicTransaction("SET", fmt.Sprintf("%d", uint32(sqlHash)), "0", "", calThreadGroupName)
 		caltxn.AddDataStr("corr_id_", corrId)
-		logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
 		err := cli.Set([]byte(keyHashStr), []byte(crdResponse), ttl, corrId, calThreadGroupName)
 		caltxn.AddDataStr("junoKeyHash", keyHashStr)
 		caltxn.AddDataInt("keySize:", int64(len([]byte(keyHashStr))))
@@ -172,28 +186,122 @@ func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint
 	}
 }
 
+
+func (crd *Coordinator) PreprocessCaching(request *netstring.Netstring) (bool, error) {
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessCaching: starting", string(request.Payload))
+	}
+	defer func() {
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessCaching: exiting")
+		}
+	}()
+	dice := rand.Intn(GetConfig().numCalThreads)
+	calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
+	if request == nil {
+		return false, ErrCacheBadRequest
+	}
+	hasPrepare, hasExec, hasFetch, err := parseRequest(request)
+	if err != nil {
+		evt := cal.NewCalEvent("PreprocessCaching", "ErrParseRequest", cal.TransWarning, "", calThreadGroupName)
+		evt.AddDataStr("corr_id_", crd.extractedcorrId)
+		evt.AddDataStr("err", err.Error())
+		evt.Completed()
+		return false, ErrCacheBadRequest
+	}
+	if !hasPrepare || !hasExec || !hasFetch {
+		evt := cal.NewCalEvent("PreprocessCaching", "ErrCacheReqNotSupported", cal.TransWarning, "", calThreadGroupName)
+		evt.AddDataStr("corr_id_", crd.extractedcorrId)
+		evt.Completed()
+		return false, ErrCacheReqNotSupported
+	}
+	foundKey := false
+	foundTTL := false
+	foundCacheOp := false
+	var nss []*netstring.Netstring
+	if request.IsComposite() {
+		if crd.nss == nil {
+			nss, err = netstring.SubNetstrings(request)
+			if err != nil {
+				return false, fmt.Errorf("error parsing sub-netstrings: %w", err)
+			}
+			crd.nss = nss
+		} else {
+			nss = crd.nss
+		}
+	} else {
+		nss = []*netstring.Netstring{request}
+	}
+	for _, ns := range nss {
+		switch ns.Cmd {
+		case common.CmdCacheKey:
+			foundKey = true
+			crd.cacheInfo.key = string(ns.Payload)
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, crd.id, "Found CmdCacheKey:", crd.cacheInfo.key)
+			}
+			if len(crd.cacheInfo.key) == 0 {
+				return false, ErrCacheKeyNotSet
+			}
+		case common.CmdCacheTTL:
+			foundTTL = true
+			ttl, err := strconv.ParseUint(string(ns.Payload), 10, 32)
+			if err != nil {
+				return false, fmt.Errorf("error parsing CmdCacheTTL: %w", err)
+			}
+			crd.cacheInfo.ttl = uint32(ttl)
+			if crd.cacheInfo.ttl == 0 {
+				return false, ErrCacheInvalidTTL
+			}
+		case common.CmdCacheOp:
+			foundCacheOp = true
+			crd.cacheInfo.operation = string(ns.Payload)
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, crd.id, "Found CmdCacheOp:", crd.cacheInfo.operation)
+			}
+			if crd.cacheInfo.operation != "GET" {
+				return false, ErrCacheInvalidOperation
+			}
+		}
+	}
+	if foundKey && foundCacheOp && foundTTL {
+		return true, nil
+	} else {
+		evt := cal.NewCalEvent("PreprocessCaching", "ErrCacheReqNotSupported", cal.TransWarning, "", calThreadGroupName)
+		evt.AddDataStr("corr_id_", crd.extractedcorrId)
+		evt.Completed()
+		return false, ErrCacheReqNotSupported
+	}
+}
+
 // getRecordFromCache tries to fetch data from cache. It responds to the client if the lookup is successful. If not, it returns the error.
 func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExit <-chan error, shadowTest bool, cacheByCorrId bool) error {
 	cli, _ := GetJunoClient()
 	logger.GetLogger().Log(logger.Verbose, "GET junoClientReady:", cli.junoClientReady)
+	var keyHashStr string
 	if cli.junoClientReady && cli != nil {
 		dice := rand.Intn(GetConfig().numCalThreads)
 		calThreadGroupName := cal.DefaultTGName + strconv.Itoa(dice)
-		keyHash, key, keyerr := getKey(request, crd.extractedcorrId, crd.sqlhash, cacheByCorrId)
-		if keyerr != nil {
-			evt := cal.NewCalEvent("getRecordFromCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
-			evt.AddDataStr("corr_id_", crd.extractedcorrId)
-			evt.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(crd.sqlhash)))
-			evt.AddDataStr("clientApp", crd.poolName)
-			evt.AddDataStr("err", keyerr.Error())
-			evt.Completed()
-			return keyerr
+		if crd.isClientControlledCachingRequest {
+			keyHashStr = crd.cacheInfo.key // Use the key from the client request
+			logger.GetLogger().Log(logger.Verbose, "Trying GET with key:", keyHashStr)
+		} else {
+			keyHash, key, keyerr := getKey(request, crd.extractedcorrId, crd.sqlhash, cacheByCorrId)
+			if keyerr != nil {
+				evt := cal.NewCalEvent("getRecordFromCache", "getKeyErr", cal.TransWarning, "", calThreadGroupName)
+				evt.AddDataStr("corr_id_", crd.extractedcorrId)
+				evt.AddDataStr("sqlHash", fmt.Sprintf("%d", uint32(crd.sqlhash)))
+				evt.AddDataStr("clientApp", crd.poolName)
+				evt.AddDataStr("err", keyerr.Error())
+				evt.Completed()
+				return keyerr
+			}
+			keyHashStr = fmt.Sprintf("%x", keyHash)
+			logger.GetLogger().Log(logger.Verbose, "Trying GET with key:", keyHashStr)
+			logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
 		}
 		caltxn := cal.NewCalAtomicTransaction("GET", fmt.Sprintf("%d", uint32(crd.sqlhash)), "0", "", calThreadGroupName)
 		caltxn.AddDataStr("corr_id_", crd.extractedcorrId)
-		keyHashStr := fmt.Sprintf("%x", keyHash)
-		logger.GetLogger().Log(logger.Verbose, "Trying GET with key:", keyHashStr)
-		logger.GetLogger().Log(logger.Verbose, "junoKeyHash:", keyHashStr, "junoKey:", key)
 		resp, err := cli.Get([]byte(keyHashStr), crd.extractedcorrId, calThreadGroupName)
 		caltxn.AddDataStr("junoKeyHash:", keyHashStr)
 		caltxn.AddDataInt("keySize:", int64(len([]byte(keyHashStr))))
@@ -382,39 +490,45 @@ func (crd *Coordinator) DispatchCachingSession(request *netstring.Netstring, req
 
 	// var key string
 	logger.GetLogger().Log(logger.Verbose, "Incoming request.Serialized:", string(request.Serialized))
-	cacheCfg := getCacheCfg()
-	cacheCfg.lock.Lock()
-	rec, ok := cacheCfg.cacheCfgRecords[uint32(crd.sqlhash)]
-	cacheCfg.lock.Unlock()
-	logger.GetLogger().Log(logger.Verbose, uint32(crd.sqlhash), "CachingEnabled for ", reqType, ":", ok)
-	if ok {
-		logger.GetLogger().Log(logger.Verbose, "cacheRecord:", "sqlHash", rec.sqlHash, "sqlText", rec.sqlText, "ttl", rec.ttl, "cache enabled", rec.cachingEnabled, "cacheByCorrid", rec.cacheByCorrId, "cacheEnabledApps", rec.cacheEnabledClientApps)
-		cacheByCorrId := true
-		if rec.cachingEnabled == "Y" {
-			if reqType == "GET" {
-				if rec.cacheEnabledClientApps == "all" || (len(crd.poolName) > 0 && strings.Contains(rec.cacheEnabledClientApps, crd.poolName)) {
-					if rec.cacheByCorrId == "N" {
-						cacheByCorrId = false
-					}
-					if rec.enableShadowTest == "Y" {
-						err := crd.doCacheRequest(crd.ctx, request, true, cacheByCorrId)
-						return rec.ttl, cacheByCorrId, err
+
+	if crd.isClientControlledCachingRequest {
+		err := crd.doCacheRequest(crd.ctx, request, crd.cacheInfo.isShadowTest, crd.cacheInfo.cacheByCorrId)
+		return crd.cacheInfo.ttl, crd.cacheInfo.cacheByCorrId, err
+	} else {
+		cacheCfg := getCacheCfg()
+		cacheCfg.lock.Lock()
+		rec, ok := cacheCfg.cacheCfgRecords[uint32(crd.sqlhash)]
+		cacheCfg.lock.Unlock()
+		logger.GetLogger().Log(logger.Verbose, uint32(crd.sqlhash), "CachingEnabled for ", reqType, ":", ok)
+		if ok {
+			logger.GetLogger().Log(logger.Verbose, "cacheRecord:", "sqlHash", rec.sqlHash, "sqlText", rec.sqlText, "ttl", rec.ttl, "cache enabled", rec.cachingEnabled, "cacheByCorrid", rec.cacheByCorrId, "cacheEnabledApps", rec.cacheEnabledClientApps)
+			cacheByCorrId := true
+			if rec.cachingEnabled == "Y" {
+				if reqType == "GET" {
+					if rec.cacheEnabledClientApps == "all" || (len(crd.poolName) > 0 && strings.Contains(rec.cacheEnabledClientApps, crd.poolName)) {
+						if rec.cacheByCorrId == "N" {
+							cacheByCorrId = false
+						}
+						if rec.enableShadowTest == "Y" {
+							err := crd.doCacheRequest(crd.ctx, request, true, cacheByCorrId)
+							return rec.ttl, cacheByCorrId, err
+						} else {
+							err := crd.doCacheRequest(crd.ctx, request, false, cacheByCorrId)
+							return rec.ttl, cacheByCorrId, err
+						}
 					} else {
-						err := crd.doCacheRequest(crd.ctx, request, false, cacheByCorrId)
-						return rec.ttl, cacheByCorrId, err
+						logger.GetLogger().Log(logger.Verbose, "Application is not enabled for caching:", rec.sqlHash, rec.cacheEnabledClientApps, crd.poolName)
+						return rec.ttl, cacheByCorrId, ErrCacheAppDisabled
 					}
 				} else {
-					logger.GetLogger().Log(logger.Verbose, "Application is not enabled for caching:", rec.sqlHash, rec.cacheEnabledClientApps, crd.poolName)
-					return rec.ttl, cacheByCorrId, ErrCacheAppDisabled
+					err := fmt.Errorf("Unsupported reqType...It must be GET")
+					return rec.ttl, cacheByCorrId, err
 				}
 			} else {
-				err := fmt.Errorf("Unsupported reqType...It must be GET")
-				return rec.ttl, cacheByCorrId, err
+				logger.GetLogger().Log(logger.Verbose, "sqlHash is disabled for caching:", rec.sqlHash, rec.cachingEnabled)
+				return rec.ttl, cacheByCorrId, ErrCacheDisabled
 			}
-		} else {
-			logger.GetLogger().Log(logger.Verbose, "sqlHash is disabled for caching:", rec.sqlHash, rec.cachingEnabled)
-			return rec.ttl, cacheByCorrId, ErrCacheDisabled
 		}
+		return 0, true, ErrCacheNotEnabled // Default for cacheByCorrId is true. Should be a no/op.
 	}
-	return 0, true, ErrCacheNotEnabled // Default for cacheByCorrId is true. Should be a no/op.
 }
