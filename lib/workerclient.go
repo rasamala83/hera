@@ -204,9 +204,7 @@ func NewWorker(wid int, connPool ShardByTwoTask, wType HeraWorkerType, instID in
 	if lifespan >= 4 {
 		worker.exitTime = worker.startTime + int64(lifespan) - int64(rand.Intn(int(lifespan/4)))
 	}
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, fmt.Sprintf("workerId=%d max_requests_per_child=%d max_lifespan_per_child=%d exitTime=%d", worker.ID, worker.maxReqCount, worker.exitTime-worker.startTime, worker.exitTime))
-	}
+	logger.GetLogger().Log(logger.Debug, fmt.Sprintf("workerId=%d max_requests_per_child=%d max_lifespan_per_child=%d exitTime=%d", worker.ID, worker.maxReqCount, worker.exitTime-worker.startTime, worker.exitTime))
 	// TODO
 	worker.racID = -1
 	atomic.CompareAndSwapInt32(&worker.isUnderRecovery, 1, 0)
@@ -276,9 +274,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 				et.Completed()
 				return errors.New(twoTaskEnv + " is not defined")
 			}
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
-			}
+			logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
 			twoTaskEnv = "TWO_TASK_STANDBY0"
 			twoTask = os.Getenv(twoTaskEnv)
 		}
@@ -342,9 +338,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 					et.Completed()
 					return errors.New(twoTaskEnv + " is not defined")
 				}
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
-				}
+				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
 			}
 			twoTask = os.Getenv(twoTaskEnv)
 		}
@@ -395,17 +389,13 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		logger.GetLogger().Log(logger.Info, "twoTaskEnv", twoTaskEnv, "value:", twoTask)
 		if twoTask == "" {
 			if GetConfig().EnableCutover {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback to default")
-				}
+				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback to default")
 				twoTaskEnv = envTwoTask
 				if worker.ConnTwoTask == ShIdTnsCutover {
 					twoTaskEnv += "_CUTOVER"
 				}
 				twoTask = os.Getenv(twoTaskEnv)
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, twoTaskEnv, "fallback to default", twoTask)
-				}
+				logger.GetLogger().Log(logger.Info, twoTaskEnv, "fallback to default", twoTask)
 
 			} else {
 				if worker.shardID != 0 {
@@ -1208,9 +1198,7 @@ func (worker *WorkerClient) printCallStack() {
 func (worker *WorkerClient) sendUserRoleMsg(_enable uint) {
 	buff := []byte{byte(_enable)}
 	ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
-	if logger.GetLogger().V(logger.Info) {
-		logger.GetLogger().Log(logger.Info, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg", ns.Cmd, ns.Payload)
-	}
+	logger.GetLogger().Log(logger.Info, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg", ns.Cmd, ns.Payload)
 	worker.workerOOBConn.Write(ns.Serialized)
 	worker.roleCheck = _enable
 }
