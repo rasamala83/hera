@@ -84,9 +84,7 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 		if cocfg.ActiveTns == UnsetStr {
 			evt := cal.NewCalEvent(EvtTypeCutover, "cutover_no_active_db", cal.TransOK, "")
 			evt.Completed()
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "No active DB in cutover phase", cocfg)
-			}
+			logger.GetLogger().Log(logger.Warning, "No active DB in cutover phase", cocfg)
 			newActInfo.ShId = ShIdUnset
 			newActInfo.DbUname = UnsetStr
 			newActInfo.Phase = cocfg.Phase
@@ -98,9 +96,7 @@ func cvtActiveInfo(cocfg *CutoverCfg) *ActiveDbInfo {
 			newActInfo.RwStatus = cocfg.RWstatusByDb[actDb]
 		}
 	}
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "ActiveDBInfo (ActShId, SrcShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.SrcShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
-	}
+	logger.GetLogger().Log(logger.Debug, "ActiveDBInfo (ActShId, SrcShId, dbUname, phase, rwstatus)=(", newActInfo.ShId, newActInfo.SrcShId, newActInfo.DbUname, newActInfo.Phase, newActInfo.RwStatus, ")")
 	return &newActInfo
 }
 
@@ -119,9 +115,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		if !crd.isInternal {
 			evt := cal.NewCalEvent(EvtTypeCutover, "preproc_cfg_nil_startup", cal.TransOK, "")
 			evt.Completed()
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, crd.id, "cutovercfg is nil, likely at server start up")
-			}
+			logger.GetLogger().Log(logger.Info, crd.id, "cutovercfg is nil, likely at server start up")
 			return true, nil
 		}
 		evt := cal.NewCalEvent(EvtTypeCutover, "preproc_internal_startup", cal.TransOK, "")
@@ -134,35 +128,25 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 	if newActInfo == nil {
 		evt := cal.NewCalEvent(EvtTypeCutover, "preproc_empty_newactive", cal.TransOK, "")
 		evt.Completed()
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, "something is wrong. no new activeInfo in PreprocessCutover")
-		}
+		logger.GetLogger().Log(logger.Warning, "something is wrong. no new activeInfo in PreprocessCutover")
 		if crd.curActDb != nil {
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, crd.id, "new cfg nil, existing active [ShId, , SrcShId, dbUname, phase, rwstatus]=[",
-					crd.curActDb.ShId, crd.curActDb.SrcShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
-			}
+			logger.GetLogger().Log(logger.Debug, crd.id, "new cfg nil, existing active [ShId, , SrcShId, dbUname, phase, rwstatus]=[",
+				crd.curActDb.ShId, crd.curActDb.SrcShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
 		}
 		return interrupt, nil
 	}
 
 	if crd.curActDb == nil {
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
-		}
+		logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessCutover crd.curActInfo is nil, expected when coordinator is just created")
 		crd.curActDb = &ActiveDbInfo{}
 		crd.copyActCOInfo(crd.curActDb, *newActInfo) // now coordinator has updated with latest info
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, crd.id, "init crd.curActDb [ShId, SrcShId, dbUname, phase, rwstatus]=[",
-				crd.curActDb.ShId, crd.curActDb.SrcShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
-		}
+		logger.GetLogger().Log(logger.Debug, crd.id, "init crd.curActDb [ShId, SrcShId, dbUname, phase, rwstatus]=[",
+			crd.curActDb.ShId, crd.curActDb.SrcShId, crd.curActDb.DbUname, crd.curActDb.Phase, crd.curActDb.RwStatus, "]")
 	}
 	diff := compActiveInfo(crd.curActDb, newActInfo)
 
 	if diff < 0 {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, crd.id, "PreprocessCutover unexpected nil at comparing ActiveInfo")
-		}
+		logger.GetLogger().Log(logger.Alert, crd.id, "PreprocessCutover unexpected nil at comparing ActiveInfo")
 		return interrupt, nil
 	}
 
@@ -170,9 +154,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		return interrupt, nil // same cutover config
 	}
 
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "crd.curActInfo and newActInfo is different", diff)
-	}
+	logger.GetLogger().Log(logger.Verbose, "crd.curActInfo and newActInfo is different", diff)
 	var err error
 	if crd.inTransaction {
 		if (diff & 0x0001) == 0x0001 { // active tns changes.
@@ -181,18 +163,14 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 					if (crd.curActDb.Phase == CutoverPhStr) && (crd.curActDb.ShId != newActInfo.SrcShId) {
 						// cutover -> flexup or enable phase
 						// compare cur active tns and SrcTns, if mismatch, error
-						if logger.GetLogger().V(logger.Warning) {
-							logger.GetLogger().Log(logger.Warning, crd.id, "enter new phase enable/flexup, cur txn is not using src pool")
-						}
+						logger.GetLogger().Log(logger.Warning, crd.id, "enter new phase enable/flexup, cur txn is not using src pool")
 						evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_tns_chg_exit_cutover", cal.TransOK, "")
 						evt.Completed()
 						interrupt = true
 						err = errors.New("crd_act_tns_chg_exit_cutover")
 
 					} else if newActInfo.Phase == CutoverPhStr && (crd.curActDb.SrcShId != newActInfo.ShId) {
-						if logger.GetLogger().V(logger.Warning) {
-							logger.GetLogger().Log(logger.Warning, crd.id, "enter new phase cutover, cur txn is not using active tns")
-						}
+						logger.GetLogger().Log(logger.Warning, crd.id, "enter new phase cutover, cur txn is not using active tns")
 						evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_tns_chg_enter_cutover", cal.TransOK, "")
 						evt.Completed()
 						interrupt = true
@@ -201,9 +179,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 						// enable -> flex up or flex up -> enable
 						// compare cur and new SrcTns, if mismatch, error
 						if diff&0x0010 == 0x0010 {
-							if logger.GetLogger().V(logger.Warning) {
-								logger.GetLogger().Log(logger.Warning, crd.id, "cur txn is not using active tns")
-							}
+							logger.GetLogger().Log(logger.Warning, crd.id, "cur txn is not using active tns")
 							evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_tns_chg_enter_cutover", cal.TransOK, "")
 							evt.Completed()
 							interrupt = true
@@ -213,9 +189,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				} else {
 					// phase is the same. we only need to see check if current phase is cutover
 					if crd.curActDb.Phase == CutoverPhStr {
-						if logger.GetLogger().V(logger.Warning) {
-							logger.GetLogger().Log(logger.Warning, crd.id, "cutover phase active tns changes")
-						}
+						logger.GetLogger().Log(logger.Warning, crd.id, "cutover phase active tns changes")
 						evt := cal.NewCalEvent(EvtTypeCutover, "crd_act_tns_chg_at_cutover", cal.TransOK, "")
 						evt.Completed()
 						interrupt = true
@@ -223,9 +197,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 					} else {
 						// phase remains in enable or flex up, check if SrcTns changed
 						if diff&0x0010 == 0x0010 {
-							if logger.GetLogger().V(logger.Warning) {
-								logger.GetLogger().Log(logger.Warning, crd.id, "enable/flex up phase src tns changes")
-							}
+							logger.GetLogger().Log(logger.Warning, crd.id, "enable/flex up phase src tns changes")
 							evt := cal.NewCalEvent(EvtTypeCutover, "crd_src_tns_chg_not_cutover", cal.TransOK, "")
 							evt.Completed()
 							interrupt = true
@@ -235,9 +207,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 				}
 			} else {
 				if diff&0x0010 == 0x0010 {
-					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, crd.id, "crd internal src tns changes")
-					}
+					logger.GetLogger().Log(logger.Warning, crd.id, "crd internal src tns changes")
 					evt := cal.NewCalEvent(EvtTypeCutover, "crd_internal_src_tns_chg", cal.TransOK, "")
 					evt.Completed()
 				}
@@ -246,9 +216,7 @@ func (crd *Coordinator) PreprocessCutover(requests []*netstring.Netstring) (bool
 		if (diff & 0x0002) == 0x0002 {
 			evt := cal.NewCalEvent(EvtTypeCutover, "crd_see_dbuname_change", cal.TransOK, "")
 			evt.Completed()
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Info, crd.id, "logging only. crd cutover preprocess active dbuname change")
-			}
+			logger.GetLogger().Log(logger.Info, crd.id, "logging only. crd cutover preprocess active dbuname change")
 		}
 
 		if (diff & 0x0008) == 0x0008 {
@@ -299,9 +267,7 @@ func (crd *Coordinator) ProceedReadInCutover() error {
 	if (crd.curActDb.Phase == CutoverPhStr) && ((crd.curActDb.RwStatus & ReadOk) != ReadOk) {
 		evt := cal.NewCalEvent(EvtTypeCutover, "no_read_to_act_db", cal.TransOK, "")
 		evt.Completed()
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, crd.id, "OCC-500: active db cutover no read allowed")
-		}
+		logger.GetLogger().Log(logger.Warning, crd.id, "OCC-500: active db cutover no read allowed")
 		return ErrCutoverReadNotAllowed
 	}
 	return nil
@@ -311,9 +277,7 @@ func (crd *Coordinator) ProceedWriteInCutover() error {
 	if (crd.curActDb.Phase == CutoverPhStr) && ((crd.curActDb.RwStatus & WriteOk) != WriteOk) {
 		evt := cal.NewCalEvent(EvtTypeCutover, "no_write_to_act_db", cal.TransOK, "")
 		evt.Completed()
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, crd.id, "OCC-501: active db cutover no write allowed")
-		}
+		logger.GetLogger().Log(logger.Warning, crd.id, "OCC-501: active db cutover no write allowed")
 		return ErrCutoverWriteNotAllowed
 	}
 	return nil
@@ -321,22 +285,16 @@ func (crd *Coordinator) ProceedWriteInCutover() error {
 
 func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
 	if crd.curActDb == nil {
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, crd.id, "unknown source, ignore during server init")
-		}
+		logger.GetLogger().Log(logger.Warning, crd.id, "unknown source, ignore during server init")
 		// we don't know yet
 		return ShIdUnset
 	}
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "get ActiveDb source tns", crd.curActDb.SrcTns)
-	}
+	logger.GetLogger().Log(logger.Debug, crd.id, "get ActiveDb source tns", crd.curActDb.SrcTns)
 	srcShId := ShIdTns
 	if crd.curActDb.SrcTns == GetTnsCutoverName() {
 		srcShId = ShIdTnsCutover
 	}
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "ActiveDb source tns", srcShId)
-	}
+	logger.GetLogger().Log(logger.Debug, crd.id, "ActiveDb source tns", srcShId)
 	// reset the internal
 	crd.intSessionShId = ShIdUnset
 	return srcShId
@@ -346,34 +304,24 @@ func (crd *Coordinator) getSrcShardByCutoverCfg() ShardByTwoTask {
 func (crd *Coordinator) getActiveShId() (ShardByTwoTask, error) {
 	shardToUse := ShIdUnset
 	if crd.curActDb.Phase == CutoverPhStr {
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "cutover phase crd.isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActDb.RwStatus, "]")
-		}
+		logger.GetLogger().Log(logger.Verbose, crd.id, "cutover phase crd.isRead [", crd.isRead, "] crd.curActInfo.Arwstatus [", crd.curActDb.RwStatus, "]")
 		if crd.isRead {
 			if (crd.curActDb.RwStatus & ReadOk) != ReadOk {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, crd.id, "OCC-500: active db cutover no read allowed")
-				}
+				logger.GetLogger().Log(logger.Info, crd.id, "OCC-500: active db cutover no read allowed")
 				return shardToUse, ErrCutoverReadNotAllowed
 			}
 		} else {
 			if (crd.curActDb.RwStatus & WriteOk) != WriteOk {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, crd.id, "OCC-501: active db cutover no write allowed")
-				}
+				logger.GetLogger().Log(logger.Info, crd.id, "OCC-501: active db cutover no write allowed")
 				return shardToUse, ErrCutoverWriteNotAllowed
 			}
 		}
 
 		shardToUse = crd.curActDb.ShId
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "cutover phase, crd dispatch to", int(shardToUse), "workers")
-		}
+		logger.GetLogger().Log(logger.Verbose, crd.id, "cutover phase, crd dispatch to", int(shardToUse), "workers")
 	} else if crd.curActDb.Phase == EnablePhStr || crd.curActDb.Phase == FlexupPhStr {
 		shardToUse = crd.curActDb.SrcShId
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "enable/flexupi phase, crd dispatch to ", int(shardToUse), "workers")
-		}
+		logger.GetLogger().Log(logger.Verbose, crd.id, "enable/flexupi phase, crd dispatch to ", int(shardToUse), "workers")
 		if !isValidShToCutover(shardToUse) {
 			// we can't default sql routing by unknown actual config
 			shardToUse = ShIdUnset
@@ -397,9 +345,7 @@ func (crd *Coordinator) processSetInternalShID(val []byte) error {
 	}
 
 	sh, err := strconv.ParseInt(string(val), 10, 32)
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "processSetInternalShID", sh)
-	}
+	logger.GetLogger().Log(logger.Debug, crd.id, "processSetInternalShID", sh)
 	if err != nil {
 		return nil
 	}
@@ -411,9 +357,7 @@ func (crd *Coordinator) processSetInternalShID(val []byte) error {
 	crd.intSessionShId = ShardByTwoTask(sh)
 	if crd.inTransaction && (crd.worker != nil) {
 		// crd.worker.shardID is always used so check if we need switch. (unlikely if we don't reuse connection)
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, crd.id, "processSetInternalShID", crd.intSessionShId, "crd.worker.shardID", crd.worker.shardID)
-		}
+		logger.GetLogger().Log(logger.Debug, crd.id, "processSetInternalShID", crd.intSessionShId, "crd.worker.shardID", crd.worker.shardID)
 		if int(crd.intSessionShId) != crd.worker.shardID {
 			evt := cal.NewCalEvent(EvtTypeCutover, "internal query change pool", cal.TransOK, "")
 			evt.AddDataInt("cur_shard_id", int64(crd.worker.shardID))

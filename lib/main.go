@@ -48,9 +48,7 @@ func Run() {
 	/* Don't log.
 	We haven't configured log level, so lots goes to stdout/err log. */
 	if len(*namePtr) == 0 {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "missing --name parameter")
-		}
+		logger.GetLogger().Log(logger.Alert, "missing --name parameter")
 		FullShutdown()
 	}
 
@@ -58,16 +56,12 @@ func Run() {
 
 	err := InitConfig(*namePtr)
 	if err != nil {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "failed to initialize configuration:", err.Error())
-		}
+		logger.GetLogger().Log(logger.Alert, "failed to initialize configuration:", err.Error())
 		FullShutdown()
 	}
 	pidfile, err := os.Create(GetConfig().MuxPidFile)
 	if err != nil {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "Can't open", GetConfig().MuxPidFile, err.Error())
-		}
+		logger.GetLogger().Log(logger.Alert, "Can't open", GetConfig().MuxPidFile, err.Error())
 		FullShutdown()
 	} else {
 		pidfile.WriteString(fmt.Sprintf("%d\n", os.Getpid()))
@@ -102,9 +96,7 @@ func Run() {
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
 	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
-		}
+		logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
 		FullShutdown()
 	}
 
@@ -152,15 +144,11 @@ func Run() {
 		InitQueryBindBlocker(*namePtr)
 	}
 
-	if logger.GetLogger().V(logger.Info) {
-		logger.GetLogger().Log(logger.Info, "Waiting for at least one database connection")
-	}
+	logger.GetLogger().Log(logger.Info, "Waiting for at least one database connection")
 
 	pool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, 0)
 	if err != nil {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RW, 0, 0:", err)
-		}
+		logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RW, 0, 0:", err)
 		FullShutdown()
 	}
 
@@ -182,9 +170,7 @@ func Run() {
 	if (GetConfig().EnableCutover || GetConfig().EnableSharding) && GetConfig().ReadonlyPct > 0 { 
 		pool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, 0)
 		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RO, 0, 0:", err)
-			}
+			logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RO, 0, 0:", err)
 			FullShutdown()
 		}
 
@@ -207,18 +193,14 @@ func Run() {
 	if GetConfig().EnableSharding {
 		err = InitShardingCfg()
 		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to initialize sharding config:", err.Error())
-			}
+			logger.GetLogger().Log(logger.Alert, "failed to initialize sharding config:", err.Error())
 			FullShutdown()
 		}
 	} else if GetConfig().EnableCutover {
 		time.Sleep(time.Second * 1)
 		err = InitCutoverCfg(*namePtr)
 		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err.Error())
-			}
+			logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err.Error())
 			FullShutdown()
 		}
 	}
