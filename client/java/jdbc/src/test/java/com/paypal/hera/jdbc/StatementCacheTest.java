@@ -9,11 +9,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.*;
+import java.sql.Date;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
 
 /**
@@ -51,9 +49,21 @@ public class StatementCacheTest {
 
 	@BeforeClass
 	public static void setUp() throws IOException, InterruptedException{
-	LOGGER.debug("ClientInfoPoolnameTest :: setUp {}","starting oralce and mux");
+	    LOGGER.debug("ClientInfoPoolnameTest :: setUp {}","starting oralce and mux");
         Util.startOracleContainer("oracle-xe-21","heraapp","heraappstg");
-	Util.makeAndStartMuxOracleWorker(null);
+        HashMap<String, String> cfg = new HashMap<>();
+        cfg.putIfAbsent("bind_ip", "127.0.0.1");
+        cfg.putIfAbsent("bind_port", "11111");
+        cfg.putIfAbsent("opscfg.hera.server.max_connections","4");
+        cfg.putIfAbsent("database_type","oracle");
+        cfg.putIfAbsent("log_level","5");
+        cfg.putIfAbsent("enable_client_info_to_worker","true");
+        cfg.putIfAbsent("rac_sql_interval","0");
+        cfg.putIfAbsent("child.executable","oracleworker");
+        cfg.putIfAbsent("enable_oci_stmt_cache", "true");
+        cfg.putIfAbsent("enable_cache", "false");
+        cfg.putIfAbsent("max_oci_stmt_cache_size", "200");
+	    Util.makeAndStartMuxOracleWorker(cfg);
     }
 
     @AfterClass
@@ -71,7 +81,6 @@ public class StatementCacheTest {
         dirDBConn = getDBConnection();
         //Create table structure
         assert dirDBConn != null;
-        createTestDataTable(dirDBConn);
 
         //check if oracle container is running
         Runtime.getRuntime().exec("docker inspect -f '{{.State.Running}}' oracle-xe-21");
@@ -80,14 +89,14 @@ public class StatementCacheTest {
 
         //get session Id
         int sid =  getSessionId(dbConn);
-        long initialHardParserCount = getHardParseCount(dbConn, sid);
-
+        long initialHardParserCount = getHardParseCount(dirDBConn, sid);
+        LOGGER.info("Begin: Initial details of hard parsing data for first connection sid: {} count: {}", sid, initialHardParserCount);
         //Perform bulk insert
-       long startTime = System.currentTimeMillis();
-       //Populate the table
-       final String insertSQL = "INSERT INTO user (user_id, name, email, created_date) VALUES (?, ?, ?, ?)";
+        long startTime = System.currentTimeMillis();
+        //Populate the table
+        final String insertSQL = "INSERT INTO user (user_id, name, email, created_date) VALUES (?, ?, ?, ?)";
 
-       try (PreparedStatement ps = dbConn.prepareStatement(insertSQL)) {
+        try (PreparedStatement ps = dbConn.prepareStatement(insertSQL)) {
            SimpleDateFormat dataFormatter = new SimpleDateFormat("yyyy-MM-dd");
            for (User user : users) {
                ps.setInt(1, user.userId);
@@ -104,8 +113,8 @@ public class StatementCacheTest {
        }
        long elapsedTime = System.currentTimeMillis() - startTime;
        LOGGER.info("Elapsed time while inserting data to table : {} using session Id: {}", elapsedTime, sid);
-       long finalHardParses = getHardParseCount(dbConn, sid);
-       int[] parseStats = getParseStats(dbConn, insertSQL);
+       long finalHardParses = getHardParseCount(dirDBConn, sid);
+       int[] parseStats = getParseStats(dirDBConn, insertSQL);
        LOGGER.info("SQL parsing data as part of data inserts to the table, total exec: {} number of parsing: {}", parseStats[1], parseStats[0]);
        LOGGER.info("Hard parsing count for session Id: {} with executions: {} and count: {}", sid, parseStats[1], finalHardParses);
        assert parseStats[0] == 1;
@@ -115,11 +124,12 @@ public class StatementCacheTest {
        //get session Id
        dbConn2 = Util.makeDbConn();
        sid =  getSessionId(dbConn2);
-       initialHardParserCount = getHardParseCount(dbConn2, sid);
+       initialHardParserCount = getHardParseCount(dirDBConn, sid);
+       LOGGER.info("Begin: Initial details of hard parsing data for second connection sid: {} count: {}", sid, initialHardParserCount);
        final String query = "SELECT * FROM user WHERE user_id = ?";
        Random rand = new Random();
-       finalHardParses = getHardParseCount(dbConn2, sid);
-       parseStats = getParseStats(dbConn2, insertSQL);
+       finalHardParses = getHardParseCount(dirDBConn, sid);
+       parseStats = getParseStats(dirDBConn, insertSQL);
        LOGGER.info(" Before: Conn2: SQL parsing data as part of data inserts to the table, total exec: {} number of parsing: {}", parseStats[1], parseStats[0]);
        LOGGER.info("Before: Conn2: Hard parsing count for session Id: {} with executions: {} and count: {}", sid, parseStats[1], finalHardParses);
        //Executes selects
@@ -142,34 +152,13 @@ public class StatementCacheTest {
             }
         }
     }
-    private void createTestDataTable(final Connection dirDBConn) throws SQLException {
-        //Create table with some data
-        final String tableCreateDDL = "CREATE TABLE user (user_id NUMBER PRIMARY KEY, name VARCHAR2(50) NOT NULL, email VARCHAR2(100), created_date DATE DEFAULT SYSDATE)";
-        ResultSet rs = null;
-        Statement stmt = null;
-        try {
-             stmt = dirDBConn.prepareStatement(tableCreateDDL);
-             rs = stmt.executeQuery(tableCreateDDL);
-        } catch (SQLException e) {
-            LOGGER.error("failed while populate data in table: {0}", e);
-            throw e;
-        }  finally {
-            if (stmt != null) {
-                stmt.close();
-            }
-
-            if (rs != null) {
-                rs.close();
-            }
-        }
-    }
 
     private Connection getDBConnection(){
         String jdbcUrl = "jdbc:oracle:thin:@localhost:1521/poolname";
         String username = "heraapp";
         String password = "heraappstg";
-	
-	LOGGER.debug("Connecting to database directly :: "+jdbcUrl);
+
+        LOGGER.debug("Connecting to database directly :: {}", jdbcUrl);
         int maxRetries = 10;
         int retryCount = 0;
         boolean success = false;
@@ -195,7 +184,8 @@ public class StatementCacheTest {
     }
 
     private static int getSessionId(Connection conn) throws SQLException {
-        try (PreparedStatement pstmt = conn.prepareStatement("SELECT sid FROM V$SESSION WHERE username = USER");
+        try (PreparedStatement pstmt = conn.prepareStatement(
+                "SELECT sid FROM V$SESSION WHERE username = USER AND audsid = SYS_CONTEXT('USERENV', 'SESSIONID')");
              ResultSet rs = pstmt.executeQuery()) {
             if (rs.next()) {
                 return rs.getInt(1);

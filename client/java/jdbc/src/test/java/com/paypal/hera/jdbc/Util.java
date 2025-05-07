@@ -405,7 +405,6 @@ static void makeAndStartMuxOracleWorker(HashMap<String,String> cfg) throws IOExc
 		if (!didConn) {
 			throw new RuntimeException("hera srv did not come up");
 		}
-
 	}
 
 }
