@@ -80,11 +80,26 @@ var (
 	ErrQueryBindBlocker,
 	ErrNotInternal,
 	ErrOther,
-	ErrReqParseFail,
 	ErrCutoverReadNotAllowed,
 	ErrCutoverWriteNotAllowed,
 	ErrSrcUnknown,
-	ErrCutoverKill error
+	ErrCutoverKill,
+	ErrCacheNotEnabled,
+	ErrCacheCorridNotSet,
+	ErrCacheBadRequest,
+	ErrCacheReqNotSupported,
+	ErrCacheSkipResponse,
+	ErrCacheDisabled,
+	ErrCacheAppDisabled,
+	ErrCacheShadowTest,
+	ErrCacheClientClosed,
+	ErrCacheMultipleClientReq,
+	ErrCacheClientReqCanceled,
+	ErrCacheClientWriteFailed,
+	ErrCacheKeyNotSet,
+	ErrCacheInvalidTTL,
+	ErrCacheInvalidOperation,
+	ErrReqParseFail error
 )
 
 // Initializes error strings with a prefix like "HERA"
@@ -119,6 +134,21 @@ func MkErr(prefix string) {
 	ErrCutoverKill = errors.New(prefix + "-502: db cutover stop txn in progress")
 	ErrNotInternal = errors.New(prefix + "-503: set shard by non-internal sql")
 	ErrSrcUnknown = errors.New(prefix + "-510: unknown source to internal sql")
+	ErrCacheNotEnabled = errors.New("sql is not enabled for caching")
+	ErrCacheCorridNotSet = errors.New("cache session: corrid is NotSet")
+	ErrCacheBadRequest = errors.New("cache session: bad request")
+	ErrCacheReqNotSupported = errors.New("cache session: request not supported")
+	ErrCacheSkipResponse = errors.New("cache session: skip GET response from cache")
+	ErrCacheDisabled = errors.New("sql is disabled for caching")
+	ErrCacheAppDisabled = errors.New("caching is not enabled for client application")
+	ErrCacheShadowTest = errors.New("cache session: shadow test enabled")
+	ErrCacheClientClosed = errors.New("cache session: client connection closed")
+	ErrCacheMultipleClientReq = errors.New("cache session: multiple client request not supported")
+	ErrCacheClientReqCanceled = errors.New("cache session: client request canceled")
+	ErrCacheClientWriteFailed = errors.New("cache session: client write failed")
+	ErrCacheKeyNotSet = errors.New("cache-controlled cache request: key not set")
+	ErrCacheInvalidTTL = errors.New("cache-controlled cache request: invalid ttl value")
+	ErrCacheInvalidOperation = errors.New("client-controlled cache request: invalid operation")
 }
 
 // Configuration entry names
@@ -182,4 +212,7 @@ const (
 const (
 	ReadOk  int = 0x0001
 	WriteOk int = 0x0002
+)
+const (
+	CacheSeparator string = "##%%OCCCacheSep&&**"
 )

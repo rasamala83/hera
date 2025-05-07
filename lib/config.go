@@ -184,6 +184,22 @@ type Config struct {
 	// taf testing
 	TestingEnableDMLTaf bool
 
+	// Caching
+	EnableCaching bool
+	CachingCfgReloadInterval int
+	CacheEndPoint string
+	CacheDefaultTTL int
+	EnableCompression bool
+	CacheNamespace string
+	CacheConnectionPoolSize int
+	CacheConnectTimeoutMs int
+	CacheResponseTimeoutMs int
+	CacheSSLEnabled bool
+	CacheCertFilePath string
+	CacheBypassLTM bool
+
+	// Requires cal_enable_threadgroup enabled to true. This ensures the messages are put in different swimlanes.
+	numCalThreads int
 	//
 	// enable background goroutine to recover worker not returned by coordinator
 	//
@@ -517,6 +533,23 @@ func InitConfig(poolName string) error {
 	gAppConfig.QueryBindBlockerMinSqlPrefix = cdb.GetOrDefaultInt("query_bind_blocker_min_sql_prefix", 20)
 	gAppConfig.TestingEnableDMLTaf = cdb.GetOrDefaultBool("testing_enable_dml_taf", false)
 	gAppConfig.EnableDanglingWorkerRecovery = cdb.GetOrDefaultBool("enable_danglingworker_recovery", false)
+
+	// Caching related configs
+	gAppConfig.EnableCaching = cdb.GetOrDefaultBool("enable_caching", false)
+	gAppConfig.CachingCfgReloadInterval = cdb.GetOrDefaultInt("caching_cfg_reload_interval", 10)
+	gAppConfig.CacheEndPoint = cdb.GetOrDefaultString("cache_endpoint", "127.0.0.1:5080")
+	gAppConfig.EnableCompression = cdb.GetOrDefaultBool("cache_enable_compression", false)
+	gAppConfig.CacheNamespace = cdb.GetOrDefaultString("cache_namespace", "test_ns")
+	gAppConfig.CacheConnectionPoolSize = cdb.GetOrDefaultInt("cache_connection_pool_size", 2)
+	gAppConfig.CacheConnectTimeoutMs = cdb.GetOrDefaultInt("cache_connection_timeout_ms", 1000)
+	gAppConfig.CacheResponseTimeoutMs = cdb.GetOrDefaultInt("cache_response_timeout_ms", 50)
+	gAppConfig.CacheDefaultTTL = cdb.GetOrDefaultInt("cache_default_ttl", 60)
+	gAppConfig.CacheSSLEnabled = cdb.GetOrDefaultBool("cache_ssl_enabled", true)
+	gAppConfig.CacheCertFilePath = cdb.GetOrDefaultString("cache_cert_file_path", currentDir)
+	gAppConfig.CacheBypassLTM = cdb.GetOrDefaultBool("cache_bypass_ltm", false)
+
+	// num cal threads. Takes effect when cal_enable_threadgroup is enabled. Otherwise, all msgs will end up in one swimlane
+	gAppConfig.numCalThreads = cdb.GetOrDefaultInt("num_cal_threads", 25)
 
 	gAppConfig.GoStatsInterval = cdb.GetOrDefaultInt("go_stats_interval", 10)
 	defaultConns := 10000 // disable by default
