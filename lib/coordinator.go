@@ -351,6 +351,8 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 				}
 			} else if getErr == ErrCacheClientClosed || getErr == ErrCacheMultipleClientReq || getErr == ErrCacheClientReqCanceled || getErr == ErrCacheClientWriteFailed {
 				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator DispatchCachingSession for GET returned:", getErr)
+				crd.response = ""
+				crd.writeToCache = false
 				crd.isClientControlledCachingRequest = false
 				crd.cacheInfo = &CacheInfo{}
 				return (getErr == nil)
@@ -369,6 +371,8 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 			txn.AddDataStr("raddr", crd.conn.RemoteAddr().String())
 			txn.SetDuration(duration)
 			txn.Completed()
+			crd.response = ""
+			crd.writeToCache = false
 			crd.isClientControlledCachingRequest = false
 			crd.cacheInfo = &CacheInfo{}
 			return (getErr == nil)
