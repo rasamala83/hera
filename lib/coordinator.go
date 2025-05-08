@@ -91,7 +91,6 @@ type Coordinator struct {
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
 func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstring, conn net.Conn) *Coordinator {
-<<<<<<< HEAD
 	coordinator := &Coordinator{clientchannel: clientchannel, conn: conn, ctx: ctx, done: make(chan int, 1), id: conn.RemoteAddr().String(), shard: &shardInfo{sessionShardID: -1}, prevShard: &shardInfo{sessionShardID: -1}, intSessionShId: ShIdUnset, isClientControlledCaching: false, cacheInfo: &CacheInfo{}}
 	var err error
 	coordinator.sqlParser, err = common.NewRegexSQLParser()
