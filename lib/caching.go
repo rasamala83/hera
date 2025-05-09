@@ -32,19 +32,19 @@ import (
 
 // CacheRecord represents the <ManagementTablePrefix>_sql_caching record
 type CacheRecord struct {
-	query_id           		string
-	sqlHash            		uint32
-	sqlText            		string
-	binds              		string
-	ttl                		uint32
-	enableShadowTest   		string
-	tableName          		string
-	invalidationClause 		string
-	cachingEnabled     		string
-	remarks          		string
-	module              		string
-	cacheByCorrId         		string
-	cacheEnabledClientApps 		string
+	query_id               string
+	sqlHash                uint32
+	sqlText                string
+	binds                  string
+	ttl                    uint32
+	enableShadowTest       string
+	tableName              string
+	invalidationClause     string
+	cachingEnabled         string
+	remarks                string
+	module                 string
+	cacheByCorrId          string
+	cacheEnabledClientApps string
 }
 
 // CacheCfg contains a map of CacheRecords and is used to determine whether a sql is enabled for caching
@@ -59,7 +59,7 @@ var gCacheCfg atomic.Value
 // getCacheCfgSQL returns the query to load cache cfg.
 func getCacheCfgSQL() string {
 	return fmt.Sprintf(
-		"SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, %s_module FROM %s_sql_caching WHERE %s_module ='%s'",
+		"SELECT query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, %s_module FROM %s_caching WHERE %s_module ='%s'",
 		GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, moduleName,
 	)
 }
