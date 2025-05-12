@@ -44,12 +44,12 @@ func TestMain(m *testing.M) {
 func before() error {
 	tableName = os.Getenv("TABLE_NAME")
 	if tableName == "" {
-		tableName = "hera_sql_caching"
+		tableName = "hera_caching"
 	}
 	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
 		// mysql
 		err := testutil.DBDirect(
-			"create table hera_sql_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
+			"create table hera_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
 				"bind_variables varchar(1000),TTL_sec BIGINT,enable_shadow_test varchar(1),tableName varchar(30),"+
 				"invalidation_clause varchar(1000),caching_enabled varchar(1),cache_by_corrid varchar(1), caching_enabled_apps varchar(4000),remarks varchar(4000),hera_module varchar(100))",
 			os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL,
@@ -63,7 +63,7 @@ func before() error {
 func TestCacheCfgReload(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestCacheCfgReload begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	err := testutil.RunDML("DELETE from hera_sql_caching")
+	err := testutil.RunDML("DELETE from hera_caching")
 	testutil.CheckError(err, t)
 
 	time.Sleep(10 * time.Second)
@@ -76,10 +76,10 @@ func TestCacheCfgReload(t *testing.T) {
 		t.Fatalf("Error: should not have cacheCfg entries...table is empty")
 	}
 
-	err = testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '1774480566', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', 'Y', 'all','', 'hera-test')")
+	err = testutil.RunDML("INSERT into hera_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '1774480566', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', 'Y', 'all','', 'hera-test')")
 	testutil.CheckError(err, t)
 
-	err = testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '1774480567', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', 'Y', 'all','', 'hera-test')")
+	err = testutil.RunDML("INSERT into hera_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '1774480567', 'MyTestQuery', 'abc=123', 30, 'N', 'MyTestTable', '', 'Y', 'Y', 'all','', 'hera-test')")
 	testutil.CheckError(err, t)
 
 	time.Sleep(10 * time.Second)
@@ -92,7 +92,7 @@ func TestCacheCfgReload(t *testing.T) {
 		t.Fatalf("Error: should have two cacheCfg entries...")
 	}
 
-	err = testutil.RunDML("DELETE from hera_sql_caching WHERE sqlhash = '1774480567'")
+	err = testutil.RunDML("DELETE from hera_caching WHERE sqlhash = '1774480567'")
 	testutil.CheckError(err, t)
 
 	time.Sleep(10 * time.Second)
