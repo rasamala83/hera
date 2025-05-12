@@ -74,7 +74,7 @@ func before() error {
 	}
 	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
 		err := testutil.DBDirect(
-			"create table hera_sql_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
+			"create table hera_caching(query_id varchar(30),sqlhash varchar(40),sqltext varchar(4000),"+
 				"bind_variables varchar(1000),TTL_sec BIGINT,enable_shadow_test varchar(1),tableName varchar(30),"+
 				"invalidation_clause varchar(1000),caching_enabled varchar(1),cache_by_corrid varchar(1), caching_enabled_apps varchar(4000), remarks varchar(4000),hera_module varchar(100))",
 			os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL,
@@ -94,7 +94,7 @@ func before() error {
 func TestTTLCacheHappyPath(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestTTLCacheHappyPathWithCompression begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	testutil.RunDML("INSERT into hera_sql_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '102358690', '/*cmd*/select id, int_val, str_val from jdbc_hera_cache_compress_test where id=?', 'id=1', 30, 'N', 'MyTestTable', '', 'Y', 'N', 'all', '', 'hera-test')")
+	testutil.RunDML("INSERT into hera_caching (query_id, sqlhash, sqltext, bind_variables, TTL_sec, enable_shadow_test, tableName, invalidation_clause, caching_enabled, cache_by_corrid, caching_enabled_apps, remarks, hera_module) VALUES  ('1', '102358690', '/*cmd*/select id, int_val, str_val from jdbc_hera_cache_compress_test where id=?', 'id=1', 30, 'N', 'MyTestTable', '', 'Y', 'N', 'all', '', 'hera-test')")
 	testutil.RunDML("/*cmd*/insert into " + tableName + "(id, int_val, str_val) VALUES(1," + fmt.Sprint(time.Now().Unix()) + ",\"" + randSeq(20*1024) + "\")")
 	time.Sleep(10 * time.Second)
 
