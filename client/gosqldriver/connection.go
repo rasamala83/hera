@@ -102,6 +102,7 @@ func (c *heraConnection) execNs(ns *netstring.Netstring) error {
 		logger.GetLogger().Log(logger.Verbose, c.id, "send command:", ns.Cmd, ", payload:", payload)
 	}
 	_, err := c.conn.Write(ns.Serialized)
+	logger.GetLogger().Log(logger.Verbose, c.id, "after write")
 	return err
 }
 
