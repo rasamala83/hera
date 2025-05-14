@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-// CacheRecord represents the <ManagementTablePrefix>_sql_caching record
+// CacheRecord represents the <ManagementTablePrefix>_caching record
 type CacheRecord struct {
 	query_id               string
 	sqlHash                uint32
@@ -75,7 +75,7 @@ func getCacheCfg() *CacheCfg {
 	return cfg.(*CacheCfg) //Assertion to type case
 }
 
-// loadCacheCfg queries the <ManagementTablePrefix>_sql_caching table and populates the cache cfg.
+// loadCacheCfg queries the <ManagementTablePrefix>_caching table and populates the cache cfg.
 func loadCacheCfg(ctx context.Context, db *sql.DB) error {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "Begin loading CacheCfg")
