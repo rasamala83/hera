@@ -723,6 +723,10 @@ func LogOccConfigs() {
 		"KEEP-ALIVE": {
 			"use_non_blocking": gAppConfig.UseNonBlocking,
 		},
+		"RAPID-CUTOVER": {
+			"enable_cutover": gAppConfig.EnableCutover,
+			"cutover_cfg_reload_interval": gAppConfig.CutoverCfgReloadInterval, 
+		},
 	}
 	for feature, configs := range whiteListConfigs {
 		calName := mux_config_cal_name
@@ -791,6 +795,10 @@ func LogOccConfigs() {
 				continue
 			}
 			calName = oracle_worker_config_cal_name
+		case "RAPID-CUTOVER":
+			if !gAppConfig.EnableCutover {
+				continue
+			}
 		}
 
 		evt := cal.NewCalEvent(calName, fmt.Sprintf(feature), cal.TransOK, "")
