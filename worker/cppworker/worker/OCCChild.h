@@ -282,6 +282,13 @@ private:
 	unsigned long long int bit_mask; // Compute based on bits_to_match
 	std::string sql_id;				 // Database SQL ID for statement
 
+	// variables used for DB cutover
+	bool m_enable_cutover;
+	std::string m_cutovercfg_tns;
+	std::string m_role_sql;
+	bool cutover_role_alarm_set;
+	int m_set_role_retry;
+	int m_last_user_role_check;
 public:
 	// need to pass in a server socket which is already bound to the correct port
 	// the child will accept on the socket
@@ -344,6 +351,11 @@ public:
 
 	//break long oci call to prevent hang on long query
 	int break_oci_call();
+
+	// start/stop check and set user_role
+	int enable_set_user_role(bool enable=false);
+
+
 protected:
 	
 	// do idle processing: check cache expiration and send heartbeat
@@ -392,6 +404,7 @@ protected:
 	
 	std::string m_shardcfg_postfix;
 
+	virtual void cutover_support();
 private:
 
 	int internal_update_maint_shm(RACNodeStatus);
@@ -424,6 +437,9 @@ private:
 
 	// an internal error with the OCC
 	void occ_error(const char *str);
+
+	// oracle err logger without logging API
+	void log_oracle_err_helper(int status, const char* str, LogLevelEnum level = LOG_ALERT);
 
 	// returns a string representation of an oracle error
 	// stores into buffer (overwrites)
@@ -529,6 +545,10 @@ private:
 
     //Fetch sql_id for statement
 	void fetch_sql_id(const void  *hndlp, OCIError *errhp);
+	
+	int set_role_for_the_session ();
+
+	//int verify_session_role();
 };
 
 #endif
