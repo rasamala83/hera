@@ -48,7 +48,7 @@ type Config struct {
 	NumStdbyDbs        int
 	InitialMaxChildren int
 	ReadonlyPct        int
-	TafChildrenPct 	   int
+	TafChildrenPct     int
 	//
 	// backlog
 	//
@@ -175,18 +175,19 @@ type Config struct {
 	TestingEnableDMLTaf bool
 
 	// Caching
-	EnableCaching bool
+	EnableCaching            bool
 	CachingCfgReloadInterval int
-	CacheEndPoint string
-	CacheDefaultTTL int
-	EnableCompression bool
-	CacheNamespace string
-	CacheConnectionPoolSize int
-	CacheConnectTimeoutMs int
-	CacheResponseTimeoutMs int
-	CacheSSLEnabled bool
-	CacheCertFilePath string
-	CacheBypassLTM bool
+	CacheEndPoint            string
+	CacheDefaultTTL          int
+	EnableCompression        bool
+	CacheNamespace           string
+	CacheConnectionPoolSize  int
+	CacheConnectTimeoutMs    int
+	CacheResponseTimeoutMs   int
+	CacheSSLEnabled          bool
+	CacheCertFilePath        string
+	CacheBypassLTM           bool
+	CacheKeyModuleRef        string
 
 	// Requires cal_enable_threadgroup enabled to true. This ensures the messages are put in different swimlanes.
 	numCalThreads int
@@ -507,6 +508,7 @@ func InitConfig(poolName string) error {
 	gAppConfig.CacheSSLEnabled = cdb.GetOrDefaultBool("cache_ssl_enabled", true)
 	gAppConfig.CacheCertFilePath = cdb.GetOrDefaultString("cache_cert_file_path", currentDir)
 	gAppConfig.CacheBypassLTM = cdb.GetOrDefaultBool("cache_bypass_ltm", false)
+	gAppConfig.CacheKeyModuleRef = cdb.GetOrDefaultString("cache_key_module_ref", poolName)
 
 	// num cal threads. Takes effect when cal_enable_threadgroup is enabled. Otherwise, all msgs will end up in one swimlane
 	gAppConfig.numCalThreads = cdb.GetOrDefaultInt("num_cal_threads", 25)
