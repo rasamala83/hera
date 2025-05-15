@@ -32,11 +32,11 @@ import (
 )
 
 type CacheInfo struct {
-	key       string // The original key string used to generate the hash
-	ttl       uint32 // Time-to-live for the cache entry
-	operation string // Operation type (e.g., "GET", "SET")
+	key           string // The original key string used to generate the hash
+	ttl           uint32 // Time-to-live for the cache entry
+	operation     string // Operation type (e.g., "GET", "SET")
 	cacheByCorrId bool
-	isShadowTest bool
+	isShadowTest  bool
 }
 
 func parseRequest(request *netstring.Netstring) (hasPrepare bool, hasExec bool, hasFetch bool, parseErr error) {
@@ -128,7 +128,7 @@ func getKey(request *netstring.Netstring, corrId string, sqlHash int32, cacheByC
 		}
 		logger.GetLogger().Log(logger.Verbose, "Binds after parsing:", concatKey)
 		key += concatKey
-		poolName := cal.GetCalClientInstance().GetPoolName()
+		poolName := GetConfig().CacheKeyModuleRef
 		key += poolName
 		logger.GetLogger().Log(logger.Verbose, "key inside getKey:", key)
 		keyHash := utility.GetFNV128a(key)
@@ -185,7 +185,6 @@ func setRecordToCache(request *netstring.Netstring, crdResponse string, ttl uint
 		return
 	}
 }
-
 
 func (crd *Coordinator) PreprocessCaching(request *netstring.Netstring) (bool, error) {
 	if logger.GetLogger().V(logger.Verbose) {
@@ -357,7 +356,7 @@ func (crd *Coordinator) getRecordFromCache(request *netstring.Netstring, respExi
 							logger.GetLogger().Log(logger.Debug, "Before ResponseMetadata:", split)
 							if split == noMoreData {
 								// CmdServerRespondedFromCache = 1020
-								ns := netstring.NewNetstringFrom(common.RcNoMoreData, []byte(fmt.Sprintf("%d",common.CmdServerRespondedFromCache)))
+								ns := netstring.NewNetstringFrom(common.RcNoMoreData, []byte(fmt.Sprintf("%d", common.CmdServerRespondedFromCache)))
 								split = string(ns.Serialized)
 							}
 							logger.GetLogger().Log(logger.Debug, "After ResponseMetadata:", split)
